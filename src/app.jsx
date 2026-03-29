@@ -148,50 +148,20 @@ const LIGHT_THEME = {
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [page,setPage]=useState("home");
-
   const [dark,setDark]=useState(true);
-const [data, setData] = useState(() => {
-  try { return JSON.parse(localStorage.getItem("fh_data")) || EMPTY; }
-  catch { return EMPTY; }
-});
-const [scoreHistory, setScoreHistory] = useState(() => {
-  try { return JSON.parse(localStorage.getItem("fh_scores")) || []; }
-  catch { return []; }
-});
 
-useEffect(() => {
-  localStorage.setItem("fh_data", JSON.stringify(data));
-}, [data]);
+  const [data,setData]=useState(()=>{
+    try { return JSON.parse(localStorage.getItem("fh_data")) || EMPTY; }
+    catch { return EMPTY; }
+  });
+  const [scoreHistory,setScoreHistory]=useState(()=>{
+    try { return JSON.parse(localStorage.getItem("fh_scores")) || []; }
+    catch { return []; }
+  });
 
-useEffect(() => {
-  localStorage.setItem("fh_scores", JSON.stringify(scoreHistory));
-}, [scoreHistory]);
-```
-6. Press **Command + S**
+  useEffect(()=>{ localStorage.setItem("fh_data", JSON.stringify(data)); },[data]);
+  useEffect(()=>{ localStorage.setItem("fh_scores", JSON.stringify(scoreHistory)); },[scoreHistory]);
 
----
-
-**Step 3 — Run the app on your Mac**
-
-1. In VS Code click **Terminal** in the very top menu bar → **New Terminal**
-2. A panel opens at the bottom of VS Code
-3. Type this and press **Enter**:
-```
-npm install
-```
-Wait 1–2 minutes — lots of text will scroll, that's normal.
-
-4. When it stops, type this and press **Enter**:
-```
-npm run dev
-```
-5. You'll see something like:
-```
-➜  Local:   http://localhost:5173/
-```
-6. Open **Chrome** or **Safari** and go to:
-```
-http://localhost:5173
   const saveScore = (score) => {
     if(!score) return;
     const entry = {date:today(),score:score.total,grade:score.grade,gradeColor:score.gradeColor};
