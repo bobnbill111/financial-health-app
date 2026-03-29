@@ -1502,6 +1502,7 @@ function ScoreHistory({history,currentScore,onSave}) {
 // ─── INDIVIDUAL TOOLS HUB ─────────────────────────────────────────────────────
 const TOOLS_LIST = [
   {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
+  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee"},
   {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa"},
   {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15"},
   {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa"},
@@ -1513,6 +1514,7 @@ const TOOLS_LIST = [
 function IndividualTools({onHome,data}) {
   const [tool,setTool]=useState(null);
   if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget/></ToolWrapper>;
+  if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
   if(tool==="networth") return <ToolWrapper title="Net Worth Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth/></ToolWrapper>;
   if(tool==="savings") return <ToolWrapper title="Savings Goal" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc/></ToolWrapper>;
   if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
@@ -1541,6 +1543,759 @@ function IndividualTools({onHome,data}) {
             </button>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── STATEMENT IMPORTER ───────────────────────────────────────────────────────
+const BANK_FORMATS = {
+  bmo:     {name:"BMO",         dateCol:"Transaction Date", descCol:"Description",          amtCol:"Amount",       skipRows:1},
+  td:      {name:"TD",          dateCol:"Date",             descCol:"Description",          amtCol:"Amount",       skipRows:0},
+  rbc:     {name:"RBC",         dateCol:"Transaction Date", descCol:"Description 1",        amtCol:"CAD$",         skipRows:0},
+  scotiabank:{name:"Scotiabank",dateCol:"Date",             descCol:"Description",          amtCol:"Amount",       skipRows:0},
+  tangerine:{name:"Tangerine",  dateCol:"Date",             descCol:"Name",                 amtCol:"Amount",       skipRows:0},
+  generic: {name:"Auto-Detect", dateCol:null,               descCol:null,                   amtCol:null,           skipRows:0},
+};
+
+const DEFAULT_CATS = ["Food","Housing","Transportation","Entertainment","Wellness","Shopping","Utilities","Insurance","Subscriptions","Gifts","Travel","Income","Transfer","Other"];
+
+// ─── UNIVERSAL CSV PARSER ─────────────────────────────────────────────────────
+// Handles any CSV format: any column names, any date format, split debit/credit
+// columns, junk header rows, BOM characters, quoted fields, etc.
+
+function parseCSVLine(line) {
+  const cols = [];
+  let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if ((ch === ',' || ch === '\t') && !inQ) {
+      cols.push(cur.trim());
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cols.push(cur.trim());
+  return cols;
+}
+
+function parseAnyDate(raw) {
+  if (!raw) return null;
+  const s = String(raw).replace(/['"]/g, "").trim();
+  if (!s) return null;
+
+  // YYYYMMDD  e.g. 20260206
+  if (/^\d{8}$/.test(s)) {
+    return new Date(`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`);
+  }
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmy) return new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`);
+  // MM/DD/YYYY
+  const mdy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (mdy) {
+    const d = new Date(`${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`);
+    if (!isNaN(d)) return d;
+  }
+  // YYYY-MM-DD (ISO)
+  const iso = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (iso) return new Date(`${iso[1]}-${iso[2].padStart(2,'0')}-${iso[3].padStart(2,'0')}`);
+  // "Jan 15, 2026" or "15 Jan 2026"
+  const d = new Date(s);
+  if (!isNaN(d)) return d;
+  return null;
+}
+
+function parseAmount(raw) {
+  if (raw === undefined || raw === null) return NaN;
+  const s = String(raw).replace(/['"$, ]/g, "").trim();
+  if (!s || s === '-') return NaN;
+  return parseFloat(s);
+}
+
+function scoreColumnAsDate(values) {
+  let hits = 0;
+  for (const v of values.slice(0, 20)) {
+    if (parseAnyDate(v) !== null) hits++;
+  }
+  return hits;
+}
+
+function scoreColumnAsAmount(values) {
+  let hits = 0;
+  for (const v of values.slice(0, 20)) {
+    const s = String(v||"").replace(/[$, '"]/g,"").trim();
+    if (s && !isNaN(parseFloat(s)) && s !== '0') hits++;
+  }
+  return hits;
+}
+
+function scoreColumnAsDescription(values) {
+  let hits = 0;
+  for (const v of values.slice(0, 20)) {
+    const s = String(v||"").trim();
+    // Descriptions tend to be longer strings with letters
+    if (s.length > 3 && /[a-zA-Z]/.test(s) && !/^\d+$/.test(s)) hits++;
+  }
+  return hits;
+}
+
+function parseCSV(text) {
+  // Strip BOM
+  const clean = text.replace(/^\uFEFF/, "");
+  const allLines = clean.split(/\r?\n/);
+
+  // Detect delimiter (comma or tab or semicolon)
+  const delimiters = [',', '\t', ';'];
+  const sample = allLines.slice(0, 5).join("\n");
+  const delimCounts = delimiters.map(d => (sample.match(new RegExp(`\\${d}`, 'g')) || []).length);
+  const delim = delimiters[delimCounts.indexOf(Math.max(...delimCounts))];
+
+  // Find the real header row: skip blank lines, comments, and info rows
+  // A real header row has multiple columns and at least one alphabetic header
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(15, allLines.length); i++) {
+    const line = allLines[i].trim();
+    if (!line) continue;
+    const cols = parseCSVLine(line);
+    if (cols.length >= 2 && cols.some(c => /[a-zA-Z]{2,}/.test(c)) && !line.match(/^\d{10,}/)) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  const dataLines = allLines.slice(headerIdx);
+  const headers = parseCSVLine(dataLines[0]).map(h => h.replace(/['"]/g, "").trim());
+  const rows = dataLines.slice(1)
+    .map(line => parseCSVLine(line))
+    .filter(r => r.length >= 2 && r.some(c => c.trim()));
+
+  return { headers, rows };
+}
+
+function parseTransactions(headers, rows) {
+  const h = headers.map(x => x.toLowerCase().replace(/['"]/g,"").trim());
+
+  // ── Step 1: Find columns by name keywords ──
+  const DATE_KEYWORDS    = ["transaction date","trans date","transdate","posting date","date","fecha","datum","transaction_date"];
+  const DESC_KEYWORDS    = ["description","description 1","desc","details","narrative","merchant","payee","name","memo","particulars","reference","transaction description","transaction details","store","vendor"];
+  const AMOUNT_KEYWORDS  = ["transaction amount","trans amount","amount","cad$","cad amount","debit amount","debit","charge","withdrawal","payment amount","amt","sum"];
+  const CREDIT_KEYWORDS  = ["credit","credit amount","deposit","deposits","credit cad","income"];
+
+  const findByKeyword = (keywords) => {
+    for (const kw of keywords) {
+      const i = h.findIndex(x => x === kw || x.includes(kw));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+
+  let dateIdx   = findByKeyword(DATE_KEYWORDS);
+  let descIdx   = findByKeyword(DESC_KEYWORDS);
+  let amtIdx    = findByKeyword(AMOUNT_KEYWORDS);
+  let creditIdx = findByKeyword(CREDIT_KEYWORDS);
+
+  // ── Step 2: If columns not found by name, auto-detect by content ──
+  const colValues = h.map((_, ci) => rows.map(r => r[ci] || ""));
+
+  if (dateIdx < 0) {
+    const scores = colValues.map(vals => scoreColumnAsDate(vals));
+    const best = scores.indexOf(Math.max(...scores));
+    if (scores[best] >= 3) dateIdx = best;
+  }
+
+  if (descIdx < 0) {
+    const scores = colValues.map((vals, ci) => ci === dateIdx || ci === amtIdx ? 0 : scoreColumnAsDescription(vals));
+    const best = scores.indexOf(Math.max(...scores));
+    if (scores[best] >= 3) descIdx = best;
+  }
+
+  if (amtIdx < 0) {
+    const scores = colValues.map((vals, ci) => ci === dateIdx || ci === descIdx ? 0 : scoreColumnAsAmount(vals));
+    const best = scores.indexOf(Math.max(...scores));
+    if (scores[best] >= 3) amtIdx = best;
+  }
+
+  // ── Step 3: Parse each row ──
+  return rows.map((row, i) => {
+    const rawDate = dateIdx >= 0 ? String(row[dateIdx] || "").replace(/['"]/g,"").trim() : "";
+    const desc    = descIdx >= 0 ? String(row[descIdx] || "").replace(/['"]/g,"").trim() : `Transaction ${i+1}`;
+
+    // Amount — handle split debit/credit columns
+    let amt = amtIdx >= 0 ? parseAmount(row[amtIdx]) : NaN;
+    let creditAmt = creditIdx >= 0 && creditIdx !== amtIdx ? parseAmount(row[creditIdx]) : NaN;
+
+    // If we have a credit column and debit is 0/NaN but credit has value → it's income (negative spend)
+    let isIncome = false;
+    if (!isNaN(creditAmt) && creditAmt > 0 && (isNaN(amt) || amt === 0)) {
+      amt = -creditAmt;
+      isIncome = true;
+    }
+    // If amount is negative in source, treat as income
+    if (!isNaN(amt) && amt < 0) isIncome = true;
+    if (isNaN(amt)) amt = 0;
+
+    const dateObj = parseAnyDate(rawDate);
+    const month = dateObj && !isNaN(dateObj)
+      ? `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,"0")}`
+      : null;
+
+    return {
+      id: i,
+      date: rawDate,
+      desc: desc || `Transaction ${i+1}`,
+      amount: Math.abs(amt),
+      isIncome,
+      month,
+      monthLabel: dateObj && !isNaN(dateObj)
+        ? dateObj.toLocaleString("default", { month:"long", year:"numeric" })
+        : "Unknown",
+      category: null,
+      ignored: false,
+    };
+  }).filter(t => t.desc && t.amount > 0);
+}
+
+// Keep detectFormat for UI display only (bank selector)
+function detectFormat(headers) {
+  const h = headers.map(x=>x.toLowerCase());
+  if(h.some(x=>x.includes("transaction amount"))) return "bmo";
+  if(h.some(x=>x.includes("description 1"))) return "rbc";
+  if(h.some(x=>x==="name")&&h.some(x=>x==="date")) return "tangerine";
+  if(h.some(x=>x.includes("details"))&&h.some(x=>x.includes("debit"))) return "td";
+  return "generic";
+}
+
+
+function StatementImporter({onBack,onHome,budgetData}) {
+  const [phase, setPhase] = useState("setup"); // setup | classify | summary
+  const [bankFormat, setBankFormat] = useState("generic");
+  const [transactions, setTransactions] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [availableMonths, setAvailableMonths] = useState([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [categories, setCategories] = useState(DEFAULT_CATS);
+  const [newCat, setNewCat] = useState("");
+  const [memory, setMemory] = useState({}); // merchant → category
+  const [budgetCats, setBudgetCats] = useState(
+    budgetData?.categories?.filter(c=>Number(c.amount||0)>0).map(c=>c.name) || []
+  );
+  const [customBudget, setCustomBudget] = useState(
+    budgetData?.categories?.filter(c=>Number(c.amount||0)>0)
+      .reduce((acc,c)=>({...acc,[c.name]:Number(c.amount)}),{}) || {}
+  );
+  const [budgetIncome, setBudgetIncome] = useState(budgetData?.income||"");
+  // Manual entry
+  const [showManual, setShowManual] = useState(false);
+  const [manualDesc, setManualDesc] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualDate, setManualDate] = useState("");
+  const [manualCat, setManualCat] = useState("");
+  const [manualType, setManualType] = useState("debit");
+
+  const addManualTransaction = () => {
+    if(!manualDesc.trim()||!manualAmount) return;
+    const dateStr = manualDate || new Date().toISOString().split("T")[0];
+    const dateObj = new Date(dateStr);
+    const month = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,"0")}`;
+    const monthLab = dateObj.toLocaleString("default",{month:"long",year:"numeric"});
+    const amt = Math.abs(Number(manualAmount)) * (manualType==="debit"?1:-1);
+    const newTxn = {
+      id: Date.now(),
+      date: dateStr,
+      desc: manualDesc.trim(),
+      amount: amt,
+      month, monthLabel: monthLab,
+      category: manualCat||null,
+      ignored: false,
+      manual: true,
+    };
+    setTransactions(prev=>[...prev, newTxn]);
+    if(!availableMonths.includes(month)){
+      setAvailableMonths(prev=>[...prev,month].sort().reverse());
+    }
+    if(!selectedMonth) setSelectedMonth(month);
+    setManualDesc(""); setManualAmount(""); setManualDate(""); setManualCat(""); setManualType("debit");
+    setShowManual(false);
+  };
+
+  const allCats = [...new Set([...budgetCats,...categories])].filter(Boolean);
+
+  const handleFiles = (files) => {
+    const allTxns = [];
+    let remaining = files.length;
+    Array.from(files).forEach(file=>{
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const {headers,rows} = parseCSV(text);
+        const fmt = detectFormat(headers);
+        if(bankFormat==="generic") setBankFormat(fmt);
+        const txns = parseTransactions(headers, rows);
+        allTxns.push(...txns);
+        remaining--;
+        if(remaining===0){
+          // Deduplicate and assign IDs
+          const finalTxns = allTxns.map((t,i)=>({...t,id:i}));
+          // Apply memory
+          const withMemory = finalTxns.map(t=>{
+            const key = t.desc.toLowerCase().slice(0,20);
+            return memory[key] ? {...t,category:memory[key]} : t;
+          });
+          setTransactions(withMemory);
+          const months=[...new Set(withMemory.map(t=>t.month).filter(Boolean))].sort().reverse();
+          setAvailableMonths(months);
+          setSelectedMonth(months[0]||null);
+          setCurrentIdx(0);
+          setPhase("classify");
+        }
+      };
+      reader.readAsText(file);
+    });
+  };
+
+  const monthTxns = transactions.filter(t=>t.month===selectedMonth&&!t.ignored);
+  const unclassified = monthTxns.filter(t=>!t.category);
+  const classified = monthTxns.filter(t=>t.category);
+  const current = unclassified[0];
+  const progress = monthTxns.length>0 ? Math.round((classified.length/monthTxns.length)*100) : 0;
+
+  // Spending by category for donut
+  const spending = {};
+  classified.filter(t=>t.amount>0).forEach(t=>{
+    spending[t.category]=(spending[t.category]||0)+t.amount;
+  });
+  const donutData = Object.entries(spending).map(([name,value])=>({name,value:Math.round(value*100)/100}));
+  const totalSpent = Object.values(spending).reduce((s,v)=>s+v,0);
+
+  const assignCategory = (cat, txn=current) => {
+    if(!txn) return;
+    // Save to memory
+    const key = txn.desc.toLowerCase().slice(0,20);
+    setMemory(m=>({...m,[key]:cat}));
+    setTransactions(prev=>prev.map(t=>{
+      if(t.id===txn.id) return {...t,category:cat};
+      // Auto-apply memory to same merchant name
+      const tk = t.desc.toLowerCase().slice(0,20);
+      if(tk===key&&!t.category) return {...t,category:cat};
+      return t;
+    }));
+  };
+
+  const ignoreTransaction = (txn=current) => {
+    if(!txn) return;
+    setTransactions(prev=>prev.map(t=>t.id===txn.id?{...t,ignored:true}:t));
+  };
+
+  const undoLast = () => {
+    const lastClassified=[...classified].reverse()[0];
+    if(!lastClassified) return;
+    setTransactions(prev=>prev.map(t=>t.id===lastClassified.id?{...t,category:null}:t));
+  };
+
+  const monthLabel = (m) => {
+    if(!m) return "";
+    const [y,mo]=m.split("-");
+    return new Date(y,Number(mo)-1,1).toLocaleString("default",{month:"long",year:"numeric"});
+  };
+
+  // ── PHASE: SETUP ──
+  if(phase==="setup") return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+      <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={onBack} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>Statement Importer</div>
+          </div>
+          <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
+        </div>
+      </div>
+      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
+
+        {/* Step 1: Budget */}
+        <Card>
+          <SecTitle>Step 1 — Set Your Budget</SecTitle>
+          <div style={{fontSize:12,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
+            {budgetCats.length>0 ? "Your budget from the appointment is loaded. You can adjust it here." : "Set a monthly budget to compare against your spending."}
+          </div>
+          <Label>Monthly Income</Label>
+          <NumInput value={budgetIncome} onChange={setBudgetIncome} placeholder="5000"/>
+          <div style={{height:14}}/>
+          <Label>Budget Categories</Label>
+          {allCats.filter(c=>!["Income","Transfer","Other"].includes(c)).map((cat,i)=>(
+            <div key={cat} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length],flexShrink:0}}/>
+                <span style={{fontSize:13,color:"#e8e4d9"}}>{cat}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+                <span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span>
+                <input type="number" value={customBudget[cat]||""} onChange={e=>setCustomBudget(p=>({...p,[cat]:e.target.value}))}
+                  placeholder="0" style={{background:"none",border:"none",outline:"none",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:14,width:"100%",...GS}}/>
+              </div>
+              <button onClick={()=>{setBudgetCats(p=>p.filter(c=>c!==cat));setCategories(p=>p.filter(c=>c!==cat));}}
+                style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>
+            </div>
+          ))}
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Add category..."
+              style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,flex:1,outline:"none",...GS}}/>
+            <button onClick={()=>{if(newCat.trim()){setBudgetCats(p=>[...p,newCat.trim()]);setNewCat("");}}}
+              style={{background:"#1a4080",border:"1px solid #2a4080",borderRadius:8,padding:"8px 14px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>+ Add</button>
+          </div>
+        </Card>
+
+        {/* Step 2: Bank format */}
+        <Card>
+          <SecTitle>Step 2 — Select Your Bank</SecTitle>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {Object.entries(BANK_FORMATS).map(([key,val])=>(
+              <button key={key} onClick={()=>setBankFormat(key)}
+                style={{background:bankFormat===key?"#1a4080":"#0d1b3e",border:`1px solid ${bankFormat===key?"#60a5fa":"#2a4080"}`,borderRadius:8,padding:"10px 6px",cursor:"pointer",color:bankFormat===key?"#60a5fa":"#8fadd4",fontSize:11,textAlign:"center",...GS}}>
+                {val.name}
+              </button>
+            ))}
+          </div>
+          <div style={{marginTop:10,fontSize:11,color:"#6b8cce",lineHeight:1.6}}>
+            Auto-Detect works for most banks. Select your bank for best results. Export as CSV from your online banking.
+          </div>
+        </Card>
+
+        {/* Step 3: Upload */}
+        <Card>
+          <SecTitle>Step 3 — Upload CSV Files</SecTitle>
+          <div style={{fontSize:12,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
+            You can upload multiple files at once (e.g. Visa + chequing). Go to your bank's website → Statements → Download → CSV format.
+          </div>
+          <label style={{display:"block",background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"2px dashed #2a4080",borderRadius:12,padding:"28px",textAlign:"center",cursor:"pointer",transition:"border-color 0.2s"}}
+            onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#22d3ee";}}
+            onDragLeave={e=>{e.currentTarget.style.borderColor="#2a4080";}}
+            onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files);}}>
+            <div style={{fontSize:32,marginBottom:10}}>📂</div>
+            <div style={{fontSize:14,color:"#22d3ee",fontWeight:"bold",marginBottom:6}}>Drop CSV files here</div>
+            <div style={{fontSize:12,color:"#6b8cce"}}>or click to browse</div>
+            <input type="file" accept=".csv" multiple onChange={e=>handleFiles(e.target.files)} style={{display:"none"}}/>
+          </label>
+        </Card>
+      </div>
+    </div>
+  );
+
+  // ── PHASE: CLASSIFY ──
+  if(phase==="classify") return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+      <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>setPhase("setup")} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Classify Transactions</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <div style={{fontSize:11,color:unclassified.length===0?"#4ade80":"#facc15",...GS}}>
+              {unclassified.length===0?"✅ All done!":unclassified.length+" left"}
+            </div>
+            {unclassified.length===0&&<button onClick={()=>setPhase("summary")} style={{background:"#0d2a1a",border:"1px solid #4ade80",borderRadius:8,padding:"5px 12px",color:"#4ade80",cursor:"pointer",fontSize:11,...GS}}>Summary →</button>}
+          </div>
+        </div>
+        {/* Month selector */}
+        <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
+          {availableMonths.map(m=>(
+            <button key={m} onClick={()=>{setSelectedMonth(m);setCurrentIdx(0);}}
+              style={{background:selectedMonth===m?"#1a4080":"#0d1b3e",border:`1px solid ${selectedMonth===m?"#22d3ee":"#2a4080"}`,borderRadius:8,padding:"5px 12px",color:selectedMonth===m?"#22d3ee":"#8fadd4",cursor:"pointer",fontSize:11,whiteSpace:"nowrap",...GS}}>
+              {monthLabel(m)}
+            </button>
+          ))}
+        </div>
+        {/* Progress bar */}
+        <div style={{marginTop:10,background:"#1e3a5f",borderRadius:4,height:5,overflow:"hidden"}}>
+          <div style={{width:progress+"%",height:"100%",background:"linear-gradient(90deg,#22d3ee,#4ade80)",borderRadius:4,transition:"width 0.3s"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <div style={{fontSize:9,color:"#6b8cce"}}>{classified.length} of {monthTxns.length} classified</div>
+          <div style={{fontSize:9,color:"#6b8cce"}}>{progress}%</div>
+        </div>
+      </div>
+
+      <div style={{padding:"14px 16px",maxWidth:520,margin:"0 auto"}}>
+
+        {/* Live donut */}
+        {donutData.length>0&&(
+          <Card style={{padding:"12px 16px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <SecTitle style={{marginBottom:0}}>Spending So Far</SecTitle>
+              <div style={{fontSize:14,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalSpent)}</div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <ResponsiveContainer width={120} height={120}>
+                <PieChart>
+                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={35} outerRadius={55} dataKey="value" strokeWidth={0}>
+                    {donutData.map((_,i)=><Cell key={i} fill={CAT_COLORS[i%CAT_COLORS.length]}/>)}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{flex:1}}>
+                {donutData.slice(0,5).map((x,i)=>{
+                  const budget = customBudget[x.name];
+                  const over = budget&&x.value>Number(budget);
+                  return (
+                    <div key={x.name} style={{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <div style={{width:7,height:7,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length]}}/>
+                        <span style={{fontSize:10,color:"#8fadd4"}}>{x.name}</span>
+                      </div>
+                      <span style={{fontSize:10,color:over?"#f87171":CAT_COLORS[i%CAT_COLORS.length],fontWeight:"bold",...GS}}>
+                        {fmt(x.value)}{budget?` / ${fmt(budget)}`:""}
+                        {over&&" ⚠️"}
+                      </span>
+                    </div>
+                  );
+                })}
+                {donutData.length>5&&<div style={{fontSize:9,color:"#6b8cce"}}>+{donutData.length-5} more...</div>}
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* Current transaction */}
+        {current?(
+          <div>
+            <Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid #22d3ee44"}}>
+              <div style={{fontSize:9,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>CLASSIFY THIS TRANSACTION</div>
+              <div style={{fontSize:18,color:"#e8e4d9",fontWeight:"bold",marginBottom:4,...GS}}>{current.desc}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:12,color:"#6b8cce"}}>{current.date}</div>
+                <div style={{fontSize:22,color:current.amount>0?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>
+                  {current.amount>0?"-":"+"}${Math.abs(current.amount).toFixed(2)}
+                </div>
+              </div>
+              {/* Suggest from memory */}
+              {memory[current.desc.toLowerCase().slice(0,20)]&&(
+                <div style={{marginTop:8,fontSize:11,color:"#facc15"}}>
+                  💡 Previously: {memory[current.desc.toLowerCase().slice(0,20)]}
+                </div>
+              )}
+            </Card>
+
+            {/* Category buttons */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+              {allCats.map((cat,i)=>(
+                <button key={cat} onClick={()=>assignCategory(cat)}
+                  style={{background:"#0d1b3e",border:`1px solid ${CAT_COLORS[i%CAT_COLORS.length]}44`,borderRadius:10,padding:"10px 6px",cursor:"pointer",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:12,textAlign:"center",transition:"background 0.15s,border-color 0.15s",...GS}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=CAT_COLORS[i%CAT_COLORS.length]+"22";e.currentTarget.style.borderColor=CAT_COLORS[i%CAT_COLORS.length];}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="#0d1b3e";e.currentTarget.style.borderColor=CAT_COLORS[i%CAT_COLORS.length]+"44";}}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Action buttons */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <button onClick={()=>ignoreTransaction()} style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+                Skip / Ignore
+              </button>
+              <button onClick={undoLast} style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+                ↩ Undo Last
+              </button>
+            </div>
+
+            {/* Manual entry toggle */}
+            <button onClick={()=>setShowManual(p=>!p)} style={{width:"100%",background:"none",border:"1px dashed #facc1544",borderRadius:10,padding:"10px",color:"#facc15",cursor:"pointer",fontSize:12,marginBottom:14,...GS}}>
+              {showManual?"▲ Cancel":"+ Add Cash / Manual Expense"}
+            </button>
+
+            {/* Manual entry form */}
+            {showManual&&(
+              <Card style={{background:"linear-gradient(135deg,#1a1a0d,#111827)",border:"1px solid #facc1544",marginBottom:14}}>
+                <div style={{fontSize:10,color:"#facc15",letterSpacing:2,marginBottom:12,...GS}}>MANUAL ENTRY</div>
+                {/* Type toggle */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                  {[{val:"debit",label:"💸 Expense"},{val:"credit",label:"💰 Income"}].map(t=>(
+                    <button key={t.val} onClick={()=>setManualType(t.val)} style={{background:manualType===t.val?(t.val==="debit"?"#1a0d0d":"#0d2a1a"):"#0d1b3e",border:`1px solid ${manualType===t.val?(t.val==="debit"?"#f87171":"#4ade80"):"#2a4080"}`,borderRadius:8,padding:"9px",cursor:"pointer",color:t.val==="debit"?"#f87171":"#4ade80",fontSize:12,...GS}}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {/* Description */}
+                <div style={{marginBottom:10}}>
+                  <Label>Description</Label>
+                  <input value={manualDesc} onChange={e=>setManualDesc(e.target.value)} placeholder="e.g. Coffee, Farmer's Market, Cash ATM..."
+                    style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                </div>
+                {/* Amount + Date */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                  <div>
+                    <Label>Amount</Label>
+                    <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                      <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+                      <input type="number" value={manualAmount} onChange={e=>setManualAmount(e.target.value)} placeholder="0.00"
+                        style={{background:"none",border:"none",outline:"none",color:manualType==="debit"?"#f87171":"#4ade80",fontSize:15,width:"100%",...GS}}/>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Date</Label>
+                    <input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)}
+                      style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                  </div>
+                </div>
+                {/* Category (optional) */}
+                <div style={{marginBottom:12}}>
+                  <Label>Category (optional — or classify below)</Label>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {allCats.slice(0,8).map((cat,i)=>(
+                      <button key={cat} onClick={()=>setManualCat(manualCat===cat?"":cat)}
+                        style={{background:manualCat===cat?CAT_COLORS[i%CAT_COLORS.length]+"33":"#0d1b3e",border:`1px solid ${manualCat===cat?CAT_COLORS[i%CAT_COLORS.length]:CAT_COLORS[i%CAT_COLORS.length]+"44"}`,borderRadius:16,padding:"5px 12px",cursor:"pointer",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:11,...GS}}>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={addManualTransaction} style={{width:"100%",background:"linear-gradient(135deg,#1a1a0d,#2a2a0d)",border:"1px solid #facc15",borderRadius:8,color:"#facc15",padding:"12px",fontSize:13,cursor:"pointer",...GS}}>
+                  Add to {monthLabel(selectedMonth)||"Statement"}
+                </button>
+              </Card>
+            )}
+
+            {/* Upcoming transactions preview */}
+            {unclassified.length>1&&(
+              <Card style={{padding:"10px 14px"}}>
+                <div style={{fontSize:9,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>UP NEXT</div>
+                {unclassified.slice(1,4).map((t,i)=>(
+                  <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:i<2?"1px solid #1e3a5f":"none",opacity:1-i*0.25}}>
+                    <div style={{fontSize:12,color:"#6b8cce"}}>{t.desc.slice(0,30)}</div>
+                    <div style={{fontSize:12,color:t.amount>0?"#f87171":"#4ade80",...GS}}>{t.amount>0?"-":"+"}${Math.abs(t.amount).toFixed(2)}</div>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </div>
+        ):(
+          <div style={{textAlign:"center",padding:"30px 0"}}>
+            <div style={{fontSize:48,marginBottom:12}}>✅</div>
+            <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",marginBottom:8,...GS}}>All transactions classified!</div>
+            <div style={{fontSize:13,color:"#8fadd4",marginBottom:24}}>for {monthLabel(selectedMonth)}</div>
+            <button onClick={()=>setShowManual(p=>!p)} style={{width:"100%",background:"none",border:"1px dashed #facc1544",borderRadius:10,padding:"12px",color:"#facc15",cursor:"pointer",fontSize:13,marginBottom:12,...GS}}>
+              {showManual?"▲ Cancel":"+ Add Cash / Manual Expense"}
+            </button>
+            {showManual&&(
+              <Card style={{background:"linear-gradient(135deg,#1a1a0d,#111827)",border:"1px solid #facc1544",textAlign:"left",marginBottom:16}}>
+                <div style={{fontSize:10,color:"#facc15",letterSpacing:2,marginBottom:12,...GS}}>MANUAL ENTRY</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                  {[{val:"debit",label:"💸 Expense"},{val:"credit",label:"💰 Income"}].map(t=>(
+                    <button key={t.val} onClick={()=>setManualType(t.val)} style={{background:manualType===t.val?(t.val==="debit"?"#1a0d0d":"#0d2a1a"):"#0d1b3e",border:`1px solid ${manualType===t.val?(t.val==="debit"?"#f87171":"#4ade80"):"#2a4080"}`,borderRadius:8,padding:"9px",cursor:"pointer",color:t.val==="debit"?"#f87171":"#4ade80",fontSize:12,...GS}}>{t.label}</button>
+                  ))}
+                </div>
+                <div style={{marginBottom:10}}><Label>Description</Label><input value={manualDesc} onChange={e=>setManualDesc(e.target.value)} placeholder="e.g. Cash at market..." style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/></div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                  <div><Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={manualAmount} onChange={e=>setManualAmount(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:manualType==="debit"?"#f87171":"#4ade80",fontSize:15,width:"100%",...GS}}/></div></div>
+                  <div><Label>Date</Label><input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/></div>
+                </div>
+                <div style={{marginBottom:12}}><Label>Category</Label><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{allCats.slice(0,8).map((cat,i)=><button key={cat} onClick={()=>setManualCat(manualCat===cat?"":cat)} style={{background:manualCat===cat?CAT_COLORS[i%CAT_COLORS.length]+"33":"#0d1b3e",border:`1px solid ${manualCat===cat?CAT_COLORS[i%CAT_COLORS.length]:CAT_COLORS[i%CAT_COLORS.length]+"44"}`,borderRadius:16,padding:"5px 12px",cursor:"pointer",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:11,...GS}}>{cat}</button>)}</div></div>
+                <button onClick={addManualTransaction} style={{width:"100%",background:"linear-gradient(135deg,#1a1a0d,#2a2a0d)",border:"1px solid #facc15",borderRadius:8,color:"#facc15",padding:"12px",fontSize:13,cursor:"pointer",...GS}}>Add to Statement</button>
+              </Card>
+            )}
+            <button onClick={()=>setPhase("summary")} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px 32px",color:"#4ade80",fontSize:15,cursor:"pointer",width:"100%",...GS}}>
+              View Summary →
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── PHASE: SUMMARY ──
+  const income = Number(budgetIncome||0);
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+      <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>setPhase("classify")} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Spending Summary</div>
+          </div>
+          <div style={{fontSize:12,color:"#6b8cce",...GS}}>{monthLabel(selectedMonth)}</div>
+        </div>
+      </div>
+      <div style={{padding:"14px 16px",maxWidth:520,margin:"0 auto"}}>
+
+        {/* Hero */}
+        <Card style={{textAlign:"center",padding:"20px 16px",background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717144"}}>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>TOTAL SPENT — {monthLabel(selectedMonth).toUpperCase()}</div>
+          <div style={{fontSize:42,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalSpent)}</div>
+          {income>0&&<div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>{fmt(income-totalSpent)} remaining from {fmt(income)} income</div>}
+        </Card>
+
+        {/* Donut */}
+        {donutData.length>0&&<Card>
+          <SecTitle>Spending Breakdown</SecTitle>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" strokeWidth={0}>
+                {donutData.map((_,i)=><Cell key={i} fill={CAT_COLORS[i%CAT_COLORS.length]}/>)}
+              </Pie>
+              <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:12}} itemStyle={{color:"#e8e4d9"}}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </Card>}
+
+        {/* Budget vs Actual */}
+        <Card>
+          <SecTitle>Budget vs Actual</SecTitle>
+          {donutData.sort((a,b)=>b.value-a.value).map((cat,i)=>{
+            const budget = Number(customBudget[cat.name]||0);
+            const pct = budget>0?Math.min(100,(cat.value/budget)*100):100;
+            const over = budget>0&&cat.value>budget;
+            return (
+              <div key={cat.name} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length]}}/>
+                    <span style={{fontSize:13,color:"#e8e4d9"}}>{cat.name}</span>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{fontSize:12,color:over?"#f87171":CAT_COLORS[i%CAT_COLORS.length],fontWeight:"bold",...GS}}>{fmt(cat.value)}</span>
+                    {budget>0&&<span style={{fontSize:11,color:"#6b8cce"}}>/ {fmt(budget)}</span>}
+                    {over&&<span style={{fontSize:10,color:"#f87171"}}>over by {fmt(cat.value-budget)}</span>}
+                  </div>
+                </div>
+                <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden"}}>
+                  <div style={{width:pct+"%",height:"100%",background:over?"#f87171":CAT_COLORS[i%CAT_COLORS.length],borderRadius:4}}/>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+
+        {/* Transaction list */}
+        <Card>
+          <SecTitle>All Transactions ({classified.length})</SecTitle>
+          {classified.sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t=>(
+            <div key={t.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid #1e3a5f"}}>
+              <div>
+                <div style={{fontSize:12,color:"#e8e4d9"}}>{t.desc.slice(0,32)}</div>
+                <div style={{display:"flex",gap:8,marginTop:2}}>
+                  <span style={{fontSize:10,color:"#6b8cce"}}>{t.date}</span>
+                  <span style={{fontSize:10,color:"#a78bfa",border:"1px solid #a78bfa44",borderRadius:8,padding:"0 6px"}}>{t.category}</span>
+                </div>
+              </div>
+              <div style={{fontSize:13,color:t.amount>0?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>
+                {t.amount>0?"-":"+"}${Math.abs(t.amount).toFixed(2)}
+              </div>
+            </div>
+          ))}
+        </Card>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          <button onClick={()=>setPhase("setup")} style={{background:"#111827",border:"1px solid #2a4080",borderRadius:12,padding:"13px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← New Import</button>
+          <button onClick={()=>setPhase("classify")} style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid #22d3ee",borderRadius:12,padding:"13px",color:"#22d3ee",fontSize:13,cursor:"pointer",...GS}}>Edit ↩</button>
+        </div>
+        <button onClick={()=>{setPhase("classify");setShowManual(true);}} style={{width:"100%",background:"none",border:"1px dashed #facc1544",borderRadius:12,padding:"13px",color:"#facc15",cursor:"pointer",fontSize:13,marginBottom:20,...GS}}>
+          + Add Cash / Manual Expense
+        </button>
       </div>
     </div>
   );
