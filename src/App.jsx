@@ -149,6 +149,7 @@ const LIGHT_THEME = {
 export default function App() {
   const [page,setPage]=useState("home");
   const [dark,setDark]=useState(true);
+  const [beginner,setBeginner]=useState(false);
 
   const [data,setData]=useState(()=>{
     try { return JSON.parse(localStorage.getItem("fh_data")) || EMPTY; }
@@ -177,19 +178,47 @@ export default function App() {
 
   const theme = dark ? DARK_THEME : LIGHT_THEME;
 
-  if(page==="home") return <Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} dark={dark} setDark={setDark} theme={theme}/>;
-  if(page==="appointment") return <Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme}/>;
-  if(page==="checkup") return <Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme}/>;
-  if(page==="tools") return <IndividualTools onHome={()=>setPage("home")} data={data} theme={theme}/>;
+  if(page==="home") return <Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner}/>;
+  if(page==="appointment") return <Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>;
+  if(page==="checkup") return <Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner}/>;
+  if(page==="tools") return <IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner}/>;
+}
+
+// ─── BEGINNER TOOLTIP ─────────────────────────────────────────────────────────
+function Tip({text,beginner}) {
+  const [show,setShow]=useState(false);
+  if(!beginner) return null;
+  return (
+    <span style={{position:"relative",display:"inline-block",marginLeft:6}}>
+      <button onClick={()=>setShow(p=>!p)} style={{background:"#1e3a5f",border:"1px solid #2a4080",borderRadius:"50%",width:18,height:18,color:"#6b8cce",cursor:"pointer",fontSize:10,padding:0,lineHeight:"18px",textAlign:"center",...GS}}>?</button>
+      {show&&<div style={{position:"absolute",left:24,top:-4,background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"10px 12px",fontSize:12,color:"#e8e4d9",width:220,zIndex:200,lineHeight:1.6,boxShadow:"0 8px 24px #00000066",...GS}}>
+        {text}
+        <button onClick={()=>setShow(false)} style={{display:"block",marginTop:8,background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>Got it ✓</button>
+      </div>}
+    </span>
+  );
+}
+
+// ─── BEGINNER SECTION WRAPPER ──────────────────────────────────────────────────
+function BeginnerCard({beginner,tip,title,children}) {
+  if(!beginner) return <>{children}</>;
+  return (
+    <div style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:13,color:"#22d3ee",fontWeight:"bold",...GS}}>{title}</div>
+        {tip&&<Tip text={tip} beginner={beginner}/>}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 // ─── HOMEPAGE ─────────────────────────────────────────────────────────────────
-function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme}) {
+function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,setBeginner}) {
   const [vis,setVis]=useState(false);
   useEffect(()=>{setTimeout(()=>setVis(true),80);},[]);
   const fade = d=>({opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:`opacity 0.7s ease ${d}s,transform 0.7s ease ${d}s`});
 
-  // Inject heartbeat keyframes
   useEffect(()=>{
     const id="hb-style";
     if(document.getElementById(id)) return;
@@ -212,66 +241,55 @@ function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme}) {
         40%  { opacity:0.35; transform:translate(-50%,-60%) scale(1);   }
         100% { opacity:0.35; transform:translate(-50%,-60%) scale(1);   }
       }
-      @keyframes slideToggle {
-        from { transform: translateX(0); }
-        to   { transform: translateX(32px); }
-      }
     `;
     document.head.appendChild(style);
   },[]);
 
-  const isLight = !dark;
-
   return (
     <div style={{minHeight:"100vh",background:theme.bg,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",...GS,color:theme.text,transition:"background 0.4s"}}>
-      {/* Background grid */}
       <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(${theme.gridLine} 1px,transparent 1px),linear-gradient(90deg,${theme.gridLine} 1px,transparent 1px)`,backgroundSize:"60px 60px",pointerEvents:"none"}}/>
-      {/* Pulsing glow behind cross */}
       <div style={{position:"absolute",top:"50%",left:"50%",width:340,height:340,background:`radial-gradient(circle,${theme.glow} 0%,transparent 70%)`,pointerEvents:"none",animation:"hbglow 3.5s ease-in-out infinite"}}/>
 
-      {/* Theme toggle — top right, large */}
-      <div style={{position:"absolute",top:24,right:24,zIndex:10}}>
-        <button onClick={()=>setDark(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
-          {/* Toggle pill */}
+      {/* Toggles — top right */}
+      <div style={{position:"absolute",top:24,right:24,zIndex:10,display:"flex",flexDirection:"column",gap:10,alignItems:"flex-end"}}>
+        {/* Dark/Light */}
+        <button onClick={()=>setDark(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
           <div style={{width:64,height:32,borderRadius:16,background:dark?"#1e3a5f":"#e2e8f0",border:`2px solid ${dark?"#2a4080":"#cbd5e1"}`,position:"relative",transition:"background 0.3s,border 0.3s",display:"flex",alignItems:"center",padding:"0 4px"}}>
             <div style={{width:22,height:22,borderRadius:"50%",background:dark?"#4ade80":"#facc15",position:"absolute",left:dark?4:36,transition:"left 0.3s,background 0.3s",boxShadow:`0 2px 8px ${dark?"#4ade8066":"#facc1566"}`}}/>
             <span style={{position:"absolute",left:dark?32:6,fontSize:13,transition:"left 0.3s"}}>{dark?"☀️":"🌙"}</span>
           </div>
           <div style={{fontSize:9,color:theme.textDim,letterSpacing:2,textTransform:"uppercase",...GS}}>{dark?"Light":"Dark"}</div>
         </button>
+        {/* Beginner mode */}
+        <button onClick={()=>setBeginner(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+          <div style={{width:64,height:32,borderRadius:16,background:beginner?"#1a2a0a":"#1e1e2e",border:`2px solid ${beginner?"#84cc16":"#2a4080"}`,position:"relative",transition:"background 0.3s,border 0.3s",display:"flex",alignItems:"center",padding:"0 4px"}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:beginner?"#84cc16":"#475569",position:"absolute",left:beginner?36:4,transition:"left 0.3s,background 0.3s",boxShadow:`0 2px 8px ${beginner?"#84cc1666":"#00000033"}`}}/>
+            <span style={{position:"absolute",left:beginner?6:30,fontSize:13,transition:"left 0.3s"}}>{beginner?"🌱":"🎓"}</span>
+          </div>
+          <div style={{fontSize:9,color:beginner?"#84cc16":theme.textDim,letterSpacing:2,textTransform:"uppercase",...GS}}>Beginner</div>
+        </button>
       </div>
 
       <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:420,padding:"0 24px",display:"flex",flexDirection:"column",alignItems:"center"}}>
-
-        {/* Pulsing red cross */}
         <div style={{...fade(0),marginBottom:24}}>
           <svg width="140" height="140" viewBox="0 0 160 160" style={{animation:"heartbeat 3.5s ease-in-out infinite",display:"block"}}>
             <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
             <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
             <rect x="52" y="8" width="56" height="144" rx="10" fill="url(#sh)" opacity="0.25"/>
-            <defs>
-              <linearGradient id="sh" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#ffffff"/>
-                <stop offset="100%" stopColor="transparent"/>
-              </linearGradient>
-            </defs>
+            <defs><linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#ffffff"/><stop offset="100%" stopColor="transparent"/></linearGradient></defs>
           </svg>
         </div>
-
-        {/* Title */}
         <div style={{...fade(0.15),textAlign:"center",marginBottom:32}}>
-          <h1 style={{fontSize:36,margin:"0 0 8px",color:theme.text,fontWeight:"normal",letterSpacing:1}}>
-            Financial <span style={{color:theme.titleAccent}}>Health</span>
-          </h1>
+          <h1 style={{fontSize:36,margin:"0 0 8px",color:theme.text,fontWeight:"normal",letterSpacing:1}}>Financial <span style={{color:theme.titleAccent}}>Health</span></h1>
           <div style={{fontSize:12,color:theme.textDim,letterSpacing:2,textTransform:"uppercase"}}>Your complete financial picture</div>
+          {beginner&&<div style={{marginTop:10,background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:10,padding:"8px 16px",fontSize:12,color:"#84cc16",...GS}}>🌱 Beginner Mode is ON — we'll guide you every step</div>}
         </div>
 
-        {/* Buttons — centred, no icons */}
         <div style={{...fade(0.3),width:"100%",display:"flex",flexDirection:"column",gap:12}}>
           {[
-            {label:"Financial Check-up",sub:"View your dashboard — net worth, investments & goals",badge:"RETURNING",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
-            {label:"Initial Appointment",sub:"Enter your financial info — takes about 10 minutes",badge:"NEW",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
-            {label:"Individual Tools",sub:"Budget, net worth, savings goals, simulators & more",badge:"TOOLS",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
+            {label:beginner?"See My Financial Picture":"Financial Check-up",sub:beginner?"See everything about your money in one place — net worth, savings, debts and more":"View your dashboard — net worth, investments & goals",badge:"RETURNING",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
+            {label:beginner?"Set Up My Profile":"Initial Appointment",sub:beginner?"Answer some simple questions about your money — takes about 10 minutes":"Enter your financial info — takes about 10 minutes",badge:beginner?"START HERE":"NEW",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
+            {label:beginner?"Financial Calculators":"Individual Tools",sub:beginner?"Simple calculators for budgeting, saving goals, loans and more":"Budget, net worth, savings goals, simulators & more",badge:"TOOLS",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
           ].map(btn=>(
             <button key={btn.label} onClick={btn.fn}
               style={{background:btn.bg,border:`1px solid ${btn.border}`,borderRadius:14,padding:"20px 24px",cursor:"pointer",textAlign:"center",color:btn.textColor,width:"100%",transition:"transform 0.2s,box-shadow 0.2s",...GS}}
@@ -283,10 +301,127 @@ function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme}) {
             </button>
           ))}
         </div>
-
         <div style={{...fade(0.5),marginTop:28,fontSize:10,color:theme.tagline,letterSpacing:2,textTransform:"uppercase"}}>Private · Secure · Instant</div>
       </div>
     </div>
+  );
+}
+
+// ─── SCORE GUIDANCE ───────────────────────────────────────────────────────────
+function ScoreGuidance({score,data,totalInv}) {
+  const isStruggling = score.total < 55; // below B
+  const income = Number(data.budget.income||0);
+  const totalAlloc = data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+  const surplus = income - totalAlloc;
+  const totalCC = data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalOD = (data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
+  const efund = (data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const monthlyExp = totalAlloc;
+  const efundMonths = monthlyExp>0?(efund/monthlyExp).toFixed(1):0;
+  const invCat = data.budget.categories.find(c=>c.name==="Investments");
+  const invAmount = Number(invCat?.amount||0);
+
+  // Build specific action items based on what scored lowest
+  const weakest = [...score.scores].sort((a,b)=>(a.score/a.max)-(b.score/b.max));
+
+  const ACTIONS = {
+    "Investment Rate": {
+      icon:"📈",
+      struggling:`Your investment rate is one of the most powerful levers in personal finance. Even starting with ${surplus>0?fmt(Math.min(surplus*0.5,200)):fmt(200)}/month can make a huge difference over time. Open a TFSA if you don't have one and set up an automatic contribution.`,
+      good:`Keep growing your investment rate. Your goal should be ${score.band==="20s"?"15":"20"}% of gross income. ${invAmount>0?`You're currently investing ${fmt(invAmount)}/mo — try increasing by even $50/month.`:""}`
+    },
+    "Portfolio Size": {
+      icon:"💼",
+      struggling:`Your portfolio is smaller than average for your age group in Ontario. The most important step is consistency — investing a fixed amount every single month, even a small amount, builds powerful habits. Consider opening a TFSA first (${score.band==="20s"?"$7,000":"$7,000"} annual limit) or FHSA if you're saving for a home.`,
+      good:`Your portfolio is on track. Focus on tax-sheltered accounts (TFSA, RRSP, FHSA) before non-registered. Make sure your investments are diversified across Canadian, US, and international markets.`
+    },
+    "Emergency Fund": {
+      icon:"🛡️",
+      struggling:`An emergency fund is the foundation of financial health — without it, one unexpected expense derails everything else. Your target is ${score.band==="20s"?"3":"5"} months of expenses (${fmt(monthlyExp*(score.band==="20s"?3:5))}). ${surplus>0?`With your current surplus of ${fmt(surplus)}/mo, you could hit this goal in ${Math.ceil(Math.max(0,monthlyExp*(score.band==="20s"?3:5)-efund)/surplus)} months.`:"Start by cutting one recurring expense and redirecting it to savings."}`,
+      good:`Your emergency fund is solid. Make sure it's in a high-interest savings account (EQ Bank, Oaken Financial offer 3%+) so it's working for you while it sits.`
+    },
+    "Debt Management": {
+      icon:"💳",
+      struggling:`High-interest debt is the single biggest drag on wealth building. ${totalCC>0?`Your credit card balance of ${fmt(totalCC)} is costing you roughly ${fmt((totalCC*0.1999)/12)}/month in interest alone.`:""} Focus on paying off your highest-rate debt first (avalanche method) while making minimum payments on everything else. The Debt Optimizer tool can build your exact payoff plan.`,
+      good:`Your debt levels are manageable. Keep paying down any remaining balances and avoid carrying credit card balances month-to-month — credit card interest (typically 19.99%) cancels out investment gains.`
+    },
+    "Monthly Surplus": {
+      icon:"💰",
+      struggling:`Your budget has little or no surplus, which means you have nothing left over to save or invest. Review your top 3 spending categories — even reducing one by $100/month frees up $1,200/year. Use the Budget Builder tool to find where your money is actually going.`,
+      good:`You have a healthy monthly surplus. Make sure it's not just sitting in a chequing account — automate transfers to your TFSA or savings the same day you get paid.`
+    },
+  };
+
+  const steps = isStruggling ? [
+    {priority:"HIGH",icon:"🚨",title:"Step 1 — Stop the bleeding",desc:"Make a list of every debt and its interest rate. Stop adding to any credit card balances. Pay only minimums on low-rate debt."},
+    {priority:"HIGH",icon:"🛡️",title:"Step 2 — Build a small starter emergency fund",desc:`Save $1,000 first as a buffer. This prevents small emergencies from turning into new debt. ${surplus>0?`At your current surplus of ${fmt(surplus)}/mo, this takes ${Math.ceil(1000/surplus)} months.`:""}`},
+    {priority:"HIGH",icon:"💳",title:"Step 3 — Attack high-interest debt",desc:`Pay every extra dollar toward your highest-rate debt. ${totalCC>0?`Your credit cards (${fmt(totalCC)} at ~19.99%) should be priority one.`:""} Use the Debt Optimizer in Individual Tools for your exact plan.`},
+    {priority:"MEDIUM",icon:"📈",title:"Step 4 — Start investing, even small amounts",desc:"Once high-interest debt is gone, open a TFSA and invest even $50–$100/month. Time in the market matters more than the amount."},
+    {priority:"MEDIUM",icon:"📊",title:"Step 5 — Track your spending for 30 days",desc:"Use the Statement Importer to upload your bank statement and categorize every expense. Most people are surprised where their money actually goes."},
+  ] : [
+    {priority:"GREAT",icon:"✅",title:"Maintain your investment consistency",desc:`You're investing regularly — don't stop, even when markets drop. ${invAmount>0?`Increasing your ${fmt(invAmount)}/mo by even 1% of income per year accelerates your wealth significantly.`:""}`},
+    {priority:"GREAT",icon:"🎯",title:"Max out your registered accounts",desc:"Prioritize TFSA → FHSA (if applicable) → RRSP in that order. Tax sheltering your investments is free money — take full advantage."},
+    {priority:"GREAT",icon:"📈",title:"Increase your investment rate toward 20%",desc:`The target for long-term wealth is 20% of gross income invested. ${invAmount>0&&income>0?`You're at ${((invAmount/income)*100).toFixed(1)}% — aim to close the gap by $${Math.round((income*0.20-invAmount)>0?income*0.20-invAmount:0)}/mo.`:""}`},
+    {priority:"GOOD",icon:"🛡️",title:"Review your insurance coverage",desc:"As your wealth grows, make sure your life insurance, disability insurance, and home/tenant insurance keep pace. A financial advisor can help size this correctly."},
+    {priority:"GOOD",icon:"🔄",title:"Automate everything",desc:"Set up automatic transfers on payday for investments, savings, and debt payments. Remove the decision — what's automated gets done."},
+  ];
+
+  return (
+    <Card style={{background:isStruggling?"linear-gradient(135deg,#1a0505,#0d1b3e)":"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:`1px solid ${isStruggling?"#f8717144":"#4ade8044"}`}}>
+      <div style={{fontSize:11,letterSpacing:3,color:isStruggling?"#f87171":"#4ade80",marginBottom:12}}>
+        {isStruggling?"⚠️ AREAS TO IMPROVE":"✅ KEEP UP THE MOMENTUM"}
+      </div>
+      <div style={{fontSize:14,color:"#e8e4d9",lineHeight:1.8,marginBottom:16,...GS}}>
+        {isStruggling
+          ? `Your score of ${score.total}/100 (${score.grade}) means there are meaningful opportunities to strengthen your financial position. Here's exactly what to focus on — in order of priority.`
+          : `Your score of ${score.total}/100 (${score.grade}) puts you ahead of most Canadians in your age group. Here's how to keep building on this foundation.`
+        }
+      </div>
+
+      {/* Weakest areas callout */}
+      {isStruggling&&weakest.slice(0,2).filter(s=>s.score/s.max<0.6).map((s,i)=>{
+        const action = ACTIONS[s.label];
+        if(!action) return null;
+        return (
+          <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"14px",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <span style={{fontSize:18}}>{action.icon}</span>
+              <div style={{fontSize:13,color:"#f87171",fontWeight:"bold",...GS}}>{s.label} — Your weakest area</div>
+            </div>
+            <div style={{fontSize:12,color:"#8fadd4",lineHeight:1.8}}>{action.struggling}</div>
+          </div>
+        );
+      })}
+
+      {/* Steps */}
+      <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:12,marginTop:4}}>
+        {isStruggling?"YOUR ACTION PLAN":"NEXT STEPS"}
+      </div>
+      {steps.map((step,i)=>(
+        <div key={i} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:i<steps.length-1?"1px solid #1e3a5f":"none",alignItems:"flex-start"}}>
+          <div style={{fontSize:20,flexShrink:0,width:28,textAlign:"center"}}>{step.icon}</div>
+          <div style={{flex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+              <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>{step.title}</div>
+              <div style={{fontSize:9,color:step.priority==="HIGH"?"#f87171":step.priority==="GREAT"?"#4ade80":"#facc15",border:`1px solid ${step.priority==="HIGH"?"#f8717144":step.priority==="GREAT"?"#4ade8044":"#facc1544"}`,borderRadius:8,padding:"1px 7px",flexShrink:0}}>{step.priority}</div>
+            </div>
+            <div style={{fontSize:12,color:"#8fadd4",lineHeight:1.7}}>{step.desc}</div>
+          </div>
+        </div>
+      ))}
+
+      {/* Good scores callout */}
+      {!isStruggling&&weakest.filter(s=>s.score/s.max>=0.7).length>0&&(
+        <div style={{marginTop:14,background:"#0d1b3e",borderRadius:10,padding:"12px 14px"}}>
+          <div style={{fontSize:11,color:"#4ade80",marginBottom:8}}>🌟 What you're doing well:</div>
+          {weakest.filter(s=>s.score/s.max>=0.7).map((s,i)=>{
+            const action=ACTIONS[s.label];
+            if(!action) return null;
+            return <div key={i} style={{fontSize:12,color:"#8fadd4",lineHeight:1.7,marginBottom:6}}><span style={{color:"#4ade80"}}>✓ {s.label}:</span> {action.good}</div>;
+          })}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -634,6 +769,10 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
                   </div>
                 ))}
               </Card>
+
+              {/* Score guidance */}
+              <ScoreGuidance score={score} data={d} totalInv={totalInv}/>
+
               <PDFBtn title={`Financial Score - ${d.clientName||"Report"}`} contentId="score-content"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
                 <button onClick={()=>{saveScore(score);onCheckup();}} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>Save & Dashboard →</button>
@@ -1501,42 +1640,47 @@ function ScoreHistory({history,currentScore,onSave}) {
 
 // ─── INDIVIDUAL TOOLS HUB ─────────────────────────────────────────────────────
 const TOOLS_LIST = [
-  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
-  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee"},
-  {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa"},
-  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15"},
-  {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa"},
-  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Calculate payments and interest on any loan",color:"#fb923c"},
-  {id:"cashflow",label:"Cash Flow Calendar",icon:"📅",sub:"Map your income and bills through the month",color:"#22d3ee"},
-  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Avalanche vs snowball — find your best payoff path",color:"#f87171"},
+  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80",beginnerLabel:"How do I budget my money?",beginnerSub:"Enter what you earn and we'll show you where it goes"},
+  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee",beginnerLabel:"Analyze my spending",beginnerSub:"Upload your bank statement and see where your money went"},
+  {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Canadian housing market comparison — is buying worth it?",color:"#a78bfa",beginnerLabel:"Should I rent or buy a home?",beginnerSub:"We'll compare the real costs of renting vs buying in Canada"},
+  {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa",beginnerLabel:"What is my net worth?",beginnerSub:"Add up what you own and subtract what you owe"},
+  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15",beginnerLabel:"How much do I need to save?",beginnerSub:"Enter your goal and deadline — we'll tell you how much per month"},
+  {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa",beginnerLabel:"What happens if I invest more?",beginnerSub:"Try out financial decisions before you make them"},
+  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Calculate payments and interest on any loan",color:"#fb923c",beginnerLabel:"How much will a loan cost me?",beginnerSub:"See your monthly payment and total interest on any loan"},
+  {id:"cashflow",label:"Cash Flow Calendar",icon:"📅",sub:"Map your income and bills through the month",color:"#22d3ee",beginnerLabel:"Map my bills through the month",beginnerSub:"See when money comes in and goes out each month"},
+  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Avalanche vs snowball — find your best payoff path",color:"#f87171",beginnerLabel:"How do I pay off my debt fastest?",beginnerSub:"Find the fastest and cheapest way to become debt-free"},
 ];
 
-function IndividualTools({onHome,data}) {
+function IndividualTools({onHome,data,beginner}) {
   const [tool,setTool]=useState(null);
-  if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget/></ToolWrapper>;
+  if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget beginner={beginner}/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
-  if(tool==="networth") return <ToolWrapper title="Net Worth Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth/></ToolWrapper>;
-  if(tool==="savings") return <ToolWrapper title="Savings Goal" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc/></ToolWrapper>;
+  if(tool==="rentvsbuy") return <ToolWrapper title={beginner?"Should I Rent or Buy?":"Rent vs. Buy"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy beginner={beginner}/></ToolWrapper>;
+  if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth beginner={beginner}/></ToolWrapper>;
+  if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc beginner={beginner}/></ToolWrapper>;
   if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
-  if(tool==="loc") return <ToolWrapper title="Loan Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate=""/></ToolWrapper>;
+  if(tool==="loc") return <ToolWrapper title={beginner?"How Much Will a Loan Cost?":"Loan Simulator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate="" beginner={beginner}/></ToolWrapper>;
   if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
-  if(tool==="debtopt") return <ToolWrapper title="Debt Optimizer" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
+  if(tool==="debtopt") return <ToolWrapper title={beginner?"How Do I Pay Off Debt?":"Debt Optimizer"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
 
   return (
     <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
-      <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
+      <NavBar title={beginner?"Financial Calculators":"Individual Tools"} subtitle="FinHealth" onHome={onHome}/>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
-        <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:24}}>Standalone financial tools — no appointment needed. Use these to run quick calculations and simulations.</div>
+        {beginner
+          ? <div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:20,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 <b>Beginner Mode</b> — tap any tool below. Each one walks you through with plain English explanations.</div>
+          : <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Standalone financial tools — no appointment needed.</div>
+        }
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {TOOLS_LIST.map(tool=>(
-            <button key={tool.id} onClick={()=>setTool(tool.id)} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:14,padding:"18px 20px",cursor:"pointer",textAlign:"left",color:"#e8e4d9",width:"100%",transition:"transform 0.2s,box-shadow 0.2s,border-color 0.2s",...GS}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 32px ${tool.color}22`;e.currentTarget.style.borderColor=tool.color+"44";}}
+          {TOOLS_LIST.map(t=>(
+            <button key={t.id} onClick={()=>setTool(t.id)} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:14,padding:"18px 20px",cursor:"pointer",textAlign:"left",color:"#e8e4d9",width:"100%",transition:"transform 0.2s,box-shadow 0.2s,border-color 0.2s",...GS}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 32px ${t.color}22`;e.currentTarget.style.borderColor=t.color+"44";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#1e3a5f";}}>
               <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <div style={{fontSize:28,flexShrink:0,width:40,textAlign:"center"}}>{tool.icon}</div>
+                <div style={{fontSize:28,flexShrink:0,width:40,textAlign:"center"}}>{t.icon}</div>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:16,fontWeight:"bold",color:tool.color,marginBottom:3}}>{tool.label}</div>
-                  <div style={{fontSize:12,color:"#8fadd4",lineHeight:1.5}}>{tool.sub}</div>
+                  <div style={{fontSize:16,fontWeight:"bold",color:t.color,marginBottom:3}}>{beginner&&t.beginnerLabel?t.beginnerLabel:t.label}</div>
+                  <div style={{fontSize:12,color:"#8fadd4",lineHeight:1.5}}>{beginner&&t.beginnerSub?t.beginnerSub:t.sub}</div>
                 </div>
                 <div style={{fontSize:18,color:"#2a4080"}}>›</div>
               </div>
@@ -1548,7 +1692,286 @@ function IndividualTools({onHome,data}) {
   );
 }
 
-// ─── STATEMENT IMPORTER ───────────────────────────────────────────────────────
+// ─── RENT VS BUY ─────────────────────────────────────────────────────────────
+function RentVsBuy({beginner}) {
+  const [homePrice,setHomePrice]=useState("600000");
+  const [downMode,setDownMode]=useState("pct"); // "pct" or "dollar"
+  const [downPct,setDownPct]=useState("10");
+  const [downDollar,setDownDollar]=useState("");
+  const [rate,setRate]=useState("5.25");
+  const [amort,setAmort]=useState("25");
+  const [propTax,setPropTax]=useState("");
+  const [maintenance,setMaintenance]=useState("");
+  const [homeIns,setHomeIns]=useState("150");
+  const [appreciation,setAppreciation]=useState("2");
+  const [rent,setRent]=useState("2200");
+  const [rentIncrease,setRentIncrease]=useState("2.5");
+  const [tenantIns,setTenantIns]=useState("30");
+  const [utilities,setUtilities]=useState("0");
+  const [investReturn,setInvestReturn]=useState("7");
+  const [years,setYears]=useState("10");
+  const [toronto,setToronto]=useState(false);
+  const [firstTime,setFirstTime]=useState(false);
+  const [showVariance,setShowVariance]=useState(false);
+
+  const hp=Number(homePrice||0);
+  // Down payment — dollar or percent
+  const dp = downMode==="dollar"
+    ? Number(downDollar||0)
+    : hp*(Number(downPct||0)/100);
+  const downPctNum = hp>0 ? (dp/hp)*100 : Number(downPct||0);
+  // Keep both inputs in sync
+  const handleDownPct = (v) => { setDownPct(v); setDownDollar(String(Math.round(hp*(Number(v||0)/100))));};
+  const handleDownDollar = (v) => { setDownDollar(v); setDownPct(hp>0?String(((Number(v||0)/hp)*100).toFixed(2)):""); };
+
+  const principal=Math.max(0,hp-dp);
+  const r=Number(rate||0)/100/12,n=Number(amort||25)*12;
+
+  const cmhcRate=downPctNum<5?0:downPctNum<10?0.04:downPctNum<15?0.031:downPctNum<20?0.028:0;
+  const cmhc=principal*cmhcRate;
+  const totalMortgage=principal+cmhc;
+  const mpWithCMHC=totalMortgage>0&&r>0?totalMortgage*r/(1-Math.pow(1+r,-n)):totalMortgage/n||0;
+
+  const ltt=(v)=>{let t=0;if(v>400000)t+=v*0.02-6475;else if(v>250000)t+=(v-250000)*0.015+2975;else if(v>55000)t+=(v-55000)*0.01+275;else if(v>40000)t+=(v-40000)*0.005+100;else t=v*0.005;return Math.round(t);};
+  const ontLTT=ltt(hp),torontoLTT=toronto?ltt(hp):0;
+  const lttRebate=firstTime?Math.min(ontLTT,4000):0;
+  const torontoRebate=firstTime&&toronto?Math.min(torontoLTT,4475):0;
+  const totalLTT=ontLTT+torontoLTT-lttRebate-torontoRebate;
+
+  const autoMaintenance=hp*0.01/12,autoPropTax=hp*0.01/12;
+  const actualMaintenance=maintenance?Number(maintenance):autoMaintenance;
+  const actualPropTax=propTax?Number(propTax):autoPropTax;
+  const totalMonthlyCost=mpWithCMHC+actualPropTax+actualMaintenance+Number(homeIns||0);
+  const totalMonthlyRent=Number(rent||0)+Number(tenantIns||0)+Number(utilities||0);
+
+  const yrs=Number(years||10);
+  const rentIncRate=Number(rentIncrease||2.5)/100;
+
+  // Scenario calculator — accepts custom rates
+  const calcScenario=(appRatePct,invReturnPct)=>{
+    const appRate=appRatePct/100,invRate=invReturnPct/100/12;
+    const futureHomeValue=hp*Math.pow(1+appRate,yrs);
+    let mortBal=totalMortgage;
+    for(let i=0;i<yrs*12;i++){const interest=mortBal*r;mortBal=Math.max(0,mortBal-(mpWithCMHC-interest));}
+    const buyEquity=futureHomeValue-mortBal;
+    const monthlyDiff=Math.max(0,totalMonthlyCost-totalMonthlyRent);
+    const dpInvested=dp*Math.pow(1+invRate,yrs*12);
+    const monthlyInvFV=monthlyDiff>0?monthlyDiff*((Math.pow(1+invRate,yrs*12)-1)/invRate):0;
+    const rentNetPosition=dpInvested+monthlyInvFV;
+    return {buyEquity,rentNetPosition,futureHomeValue,buyWins:buyEquity>rentNetPosition};
+  };
+
+  const baseApp=Number(appreciation||2),baseInv=Number(investReturn||7);
+  const base=calcScenario(baseApp,baseInv);
+  const bestBuy=calcScenario(baseApp+3,baseInv-2);   // home appreciates more, investments less
+  const worstBuy=calcScenario(Math.max(0,baseApp-2),baseInv+2); // home flat, investments thrive
+  const bestRent=worstBuy,worstRent=bestBuy; // inverse
+
+  let totalRentPaid=0,curRent=Number(rent||0);
+  for(let i=0;i<yrs;i++){totalRentPaid+=curRent*12;curRent*=(1+rentIncRate);}
+
+  return (
+    <div>
+      {beginner&&<div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:20,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 Fill in your numbers below and we'll tell you whether renting or buying makes more financial sense for your situation.</div>}
+
+      {/* Location */}
+      <Card>
+        <SecTitle>{beginner?"Where Are You Located?":"Location"}</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          {[{val:false,label:"Outside Toronto",sub:"Ontario LTT only"},{val:true,label:"Toronto",sub:"Ontario + Toronto LTT"}].map(o=>(
+            <button key={String(o.val)} onClick={()=>setToronto(o.val)} style={{background:toronto===o.val?"#1a2a3e":"#0d1b3e",border:`1px solid ${toronto===o.val?"#60a5fa":"#2a4080"}`,borderRadius:10,padding:"12px",cursor:"pointer",color:toronto===o.val?"#60a5fa":"#8fadd4",textAlign:"center",...GS}}>
+              <div style={{fontSize:13,fontWeight:"bold",marginBottom:3}}>{o.label}</div>
+              <div style={{fontSize:10,color:"#6b8cce"}}>{o.sub}</div>
+            </button>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={()=>setFirstTime(p=>!p)} style={{width:22,height:22,borderRadius:6,background:firstTime?"#4ade80":"#0d1b3e",border:`2px solid ${firstTime?"#4ade80":"#2a4080"}`,cursor:"pointer",flexShrink:0,color:firstTime?"#0a0f1e":"transparent",fontSize:13,padding:0}}>✓</button>
+          <span style={{fontSize:13,color:"#e8e4d9"}}>First-time home buyer{beginner&&<Tip text="First-time buyers in Ontario get a rebate of up to $4,000 on Land Transfer Tax. In Toronto, an additional rebate of up to $4,475 applies." beginner={true}/>}</span>
+        </div>
+      </Card>
+
+      {/* Buying inputs */}
+      <Card>
+        <SecTitle>{beginner?"The Home You Want to Buy":"Buying — Home Details"}</SecTitle>
+        <div style={{marginBottom:12}}>
+          <Label>Home Price</Label>
+          <NumInput value={homePrice} onChange={v=>{setHomePrice(v);if(downMode==="dollar"&&downDollar)setDownPct(Number(v)>0?String(((Number(downDollar)/Number(v))*100).toFixed(2)):"");else setDownDollar(String(Math.round(Number(v)*(Number(downPct||0)/100))));}} placeholder="600000"/>
+        </div>
+        {/* Down payment — toggle $ or % */}
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+            <Label style={{marginBottom:0}}>Down Payment{beginner&&<Tip text="The down payment is the upfront cash you pay toward the home. In Canada you need at least 5% for homes under $500K." beginner={true}/>}</Label>
+            <div style={{display:"flex",background:"#0d1b3e",borderRadius:8,overflow:"hidden",border:"1px solid #2a4080"}}>
+              {[{val:"pct",label:"%"},{val:"dollar",label:"$"}].map(m=>(
+                <button key={m.val} onClick={()=>setDownMode(m.val)} style={{background:downMode===m.val?"#1a4080":"transparent",border:"none",color:downMode===m.val?"#4ade80":"#6b8cce",padding:"4px 12px",cursor:"pointer",fontSize:12,...GS}}>{m.label}</button>
+              ))}
+            </div>
+          </div>
+          {downMode==="pct"
+            ? <PctInput value={downPct} onChange={handleDownPct} placeholder="10"/>
+            : <NumInput value={downDollar} onChange={handleDownDollar} placeholder="60000"/>
+          }
+          {hp>0&&dp>0&&(
+            <div style={{marginTop:6,fontSize:11,color:"#6b8cce",display:"flex",justifyContent:"space-between"}}>
+              <span>{downMode==="pct"?`= ${fmt(dp)}`:`= ${downPctNum.toFixed(1)}% of home price`}</span>
+              {downPctNum<20&&<span style={{color:"#facc15"}}>⚠️ CMHC insurance required (under 20%)</span>}
+            </div>
+          )}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div><Label>Mortgage Rate %</Label><PctInput value={rate} onChange={setRate} placeholder="5.25"/></div>
+          <div><Label>Amortization{beginner&&<Tip text="How many years to pay off the mortgage. Max 25 yrs if under 20% down, 30 yrs if 20%+." beginner={true}/>}</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>yrs</span></div></div>
+          <div><Label>Property Tax /mo{beginner&&<Tip text="~1% of home value per year. Leave blank to auto-estimate." beginner={true}/>}</Label><NumInput value={propTax} onChange={setPropTax} placeholder={`~${fmt(autoPropTax)}/mo`}/></div>
+          <div><Label>Maintenance /mo{beginner&&<Tip text="Budget ~1% of home value per year for repairs. Leave blank to auto-estimate." beginner={true}/>}</Label><NumInput value={maintenance} onChange={setMaintenance} placeholder={`~${fmt(autoMaintenance)}/mo`}/></div>
+        </div>
+        <Label>Home Insurance /mo</Label><NumInput value={homeIns} onChange={setHomeIns} placeholder="150"/>
+        <div style={{height:10}}/>
+        <Label>Annual Home Appreciation %{beginner&&<Tip text="How much the home grows in value each year. The long-term Canadian average is about 4–6%, but in recent years it has varied widely. We default to 2% (conservative)." beginner={true}/>}</Label>
+        <PctInput value={appreciation} onChange={setAppreciation} placeholder="2"/>
+      </Card>
+
+      {/* Renting inputs */}
+      <Card>
+        <SecTitle>{beginner?"What You'd Pay to Rent Instead":"Renting — Monthly Costs"}</SecTitle>
+        <Label>Monthly Rent</Label><NumInput value={rent} onChange={setRent} placeholder="2200"/>
+        <div style={{height:10}}/>
+        <Label>Annual Rent Increase %{beginner&&<Tip text="Ontario rent control caps increases at 2.5%/yr for most units. Newer buildings (built after 2018) may have no cap." beginner={true}/>}</Label>
+        <PctInput value={rentIncrease} onChange={setRentIncrease} placeholder="2.5"/>
+        <div style={{height:10}}/>
+        <Label>Tenant Insurance /mo</Label><NumInput value={tenantIns} onChange={setTenantIns} placeholder="30"/>
+        <div style={{height:10}}/>
+        <Label>Utilities /mo (if not included)</Label><NumInput value={utilities} onChange={setUtilities} placeholder="0"/>
+        <div style={{height:10}}/>
+        <Label>Investment Return % (if you invest down payment instead){beginner&&<Tip text="If you rent, you can invest your down payment. A diversified Canadian portfolio has historically returned about 7%/yr." beginner={true}/>}</Label>
+        <PctInput value={investReturn} onChange={setInvestReturn} placeholder="7"/>
+      </Card>
+
+      {/* Projection period */}
+      <Card>
+        <Label>Compare Over How Many Years?</Label>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:6}}>
+          {[5,10,15,20,25].map(y=>(
+            <button key={y} onClick={()=>setYears(String(y))} style={{background:years===String(y)?"#1a4080":"#0d1b3e",border:`1px solid ${years===String(y)?"#60a5fa":"#2a4080"}`,borderRadius:8,padding:"7px 16px",cursor:"pointer",color:years===String(y)?"#60a5fa":"#8fadd4",fontSize:12,...GS}}>{y} yrs</button>
+          ))}
+        </div>
+      </Card>
+
+      {/* RESULTS */}
+      {hp>0&&Number(rent)>0&&dp>0&&(
+        <div>
+          {/* Verdict */}
+          <Card style={{background:base.buyWins?"linear-gradient(135deg,#0d2a1a,#0d1b3e)":"linear-gradient(135deg,#1a0d2a,#0d1b3e)",border:`1px solid ${base.buyWins?"#4ade80":"#a78bfa"}44`,textAlign:"center",padding:"24px 16px"}}>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:3,marginBottom:8}}>BASE CASE — {years} YEARS · {appreciation}% appreciation · {investReturn}% investment return</div>
+            <div style={{fontSize:32,fontWeight:"bold",color:base.buyWins?"#4ade80":"#a78bfa",marginBottom:8,...GS}}>{base.buyWins?"🏠 Buying Wins":"🏢 Renting Wins"}</div>
+            <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.8}}>
+              {base.buyWins
+                ?`Buying puts you ${fmtShort(base.buyEquity-base.rentNetPosition)} ahead after ${years} years`
+                :`Renting + investing puts you ${fmtShort(base.rentNetPosition-base.buyEquity)} ahead after ${years} years`}
+            </div>
+          </Card>
+
+          {/* Monthly side by side */}
+          <Card>
+            <SecTitle>Monthly Cost Comparison</SecTitle>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+              <div style={{background:"#0d1b3e",borderRadius:10,padding:"14px"}}>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:8,letterSpacing:1}}>🏠 BUYING</div>
+                {[{l:"Mortgage",v:mpWithCMHC},{l:"Property Tax",v:actualPropTax},{l:"Maintenance",v:actualMaintenance},{l:"Home Ins.",v:Number(homeIns||0)}].map(x=>(
+                  <div key={x.l} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:11,color:"#8fadd4"}}>{x.l}</span><span style={{fontSize:11,color:"#4ade80",...GS}}>{fmt(x.v)}</span></div>
+                ))}
+                <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#e8e4d9",fontWeight:"bold"}}>Total</span><span style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalMonthlyCost)}</span></div>
+              </div>
+              <div style={{background:"#0d1b3e",borderRadius:10,padding:"14px"}}>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:8,letterSpacing:1}}>🏢 RENTING</div>
+                {[{l:"Rent",v:Number(rent||0)},{l:"Tenant Ins.",v:Number(tenantIns||0)},{l:"Utilities",v:Number(utilities||0)}].map(x=>(
+                  <div key={x.l} style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{fontSize:11,color:"#8fadd4"}}>{x.l}</span><span style={{fontSize:11,color:"#a78bfa",...GS}}>{fmt(x.v)}</span></div>
+                ))}
+                <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#e8e4d9",fontWeight:"bold"}}>Total</span><span style={{fontSize:14,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(totalMonthlyRent)}</span></div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Upfront costs */}
+          <Card>
+            <SecTitle>Upfront Buying Costs</SecTitle>
+            {[
+              {l:"Down Payment",v:dp,color:"#60a5fa"},
+              {l:`CMHC Insurance${cmhc>0?" (added to mortgage)":""}`,v:cmhc,color:"#facc15"},
+              {l:`Ontario Land Transfer Tax${firstTime?" (after rebate)":""}`,v:ontLTT-lttRebate,color:"#f87171"},
+              ...(toronto?[{l:`Toronto LTT${firstTime?" (after rebate)":""}`,v:torontoLTT-torontoRebate,color:"#f87171"}]:[]),
+            ].filter(x=>x.v>0).map(x=>(
+              <div key={x.l} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #1e3a5f"}}>
+                <span style={{fontSize:12,color:"#8fadd4"}}>{x.l}</span>
+                <span style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmt(x.v)}</span>
+              </div>
+            ))}
+            <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",marginTop:4}}>
+              <span style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>Total Upfront Cash Needed</span>
+              <span style={{fontSize:16,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(dp+totalLTT)}</span>
+            </div>
+            {cmhc>0&&<div style={{marginTop:10,background:"#1a1a0a",border:"1px solid #facc1544",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#facc15",lineHeight:1.6}}>⚠️ CMHC insurance of {fmt(cmhc)} gets added to your mortgage. To avoid it you need {fmt(hp*0.2)} (20% down).</div>}
+          </Card>
+
+          {/* Net position */}
+          <Card>
+            <SecTitle>{years}-Year Net Position</SecTitle>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+              <div style={{background:"#0d2a1a",border:"1px solid #4ade8044",borderRadius:10,padding:"14px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:6}}>🏠 BUY — NET EQUITY</div>
+                <div style={{fontSize:22,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(base.buyEquity)}</div>
+                <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Home worth {fmtShort(base.futureHomeValue)}</div>
+              </div>
+              <div style={{background:"#1a0d2a",border:"1px solid #a78bfa44",borderRadius:10,padding:"14px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:6}}>🏢 RENT — INVESTED</div>
+                <div style={{fontSize:22,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmtShort(base.rentNetPosition)}</div>
+                <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Down pmt + savings at {investReturn}%</div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Variance / Best+Worst */}
+          <button onClick={()=>setShowVariance(p=>!p)} style={{width:"100%",background:"none",border:"1px dashed #60a5fa44",borderRadius:10,padding:"11px",color:"#60a5fa",cursor:"pointer",fontSize:13,marginBottom:14,...GS}}>
+            {showVariance?"▲ Hide Scenarios":"📊 Show Best & Worst Case Scenarios"}
+          </button>
+          {showVariance&&(
+            <Card>
+              <SecTitle>Best & Worst Case Scenarios</SecTitle>
+              <div style={{fontSize:12,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
+                Real estate and investment returns are unpredictable. Here's how the outcome changes under different market conditions.
+              </div>
+
+              {/* Buying scenarios */}
+              <div style={{fontSize:11,color:"#4ade80",letterSpacing:2,marginBottom:10}}>🏠 BUYING SCENARIOS</div>
+              {[
+                {label:"Best Case for Buying",desc:`Home appreciates ${baseApp+3}%/yr, investments return ${Math.max(1,baseInv-2)}%/yr`,equity:bestBuy.buyEquity,rent:bestBuy.rentNetPosition,color:"#4ade80"},
+                {label:"Base Case",desc:`${baseApp}% home appreciation, ${baseInv}% investment return`,equity:base.buyEquity,rent:base.rentNetPosition,color:"#facc15"},
+                {label:"Worst Case for Buying",desc:`Home appreciates ${Math.max(0,baseApp-2)}%/yr, investments return ${baseInv+2}%/yr`,equity:worstBuy.buyEquity,rent:worstBuy.rentNetPosition,color:"#f87171"},
+              ].map((s,i)=>(
+                <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <div style={{fontSize:13,color:s.color,fontWeight:"bold",...GS}}>{s.label}</div>
+                    <div style={{fontSize:12,color:s.equity>s.rent?"#4ade80":"#f87171",fontWeight:"bold",...GS}}>{s.equity>s.rent?"Buy wins":"Rent wins"}</div>
+                  </div>
+                  <div style={{fontSize:11,color:"#6b8cce",marginBottom:8}}>{s.desc}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>Buy Equity</div><div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(s.equity)}</div></div>
+                    <div style={{textAlign:"center"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>Rent+Invest</div><div style={{fontSize:15,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmtShort(s.rent)}</div></div>
+                  </div>
+                </div>
+              ))}
+
+              <div style={{marginTop:14,background:"#0d1b3e",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#8fadd4",lineHeight:1.8}}>
+                💡 <strong style={{color:"#e8e4d9"}}>Key insight:</strong> The rent vs. buy decision is highly sensitive to home appreciation and investment returns. When home prices are flat and markets are strong, renting and investing usually wins. When home prices rise faster than markets, buying wins.
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const BANK_FORMATS = {
   bmo:     {name:"BMO",         dateCol:"Transaction Date", descCol:"Description",          amtCol:"Amount",       skipRows:1},
   td:      {name:"TD",          dateCol:"Date",             descCol:"Description",          amtCol:"Amount",       skipRows:0},
@@ -2333,8 +2756,6 @@ function WhatIfSimulator({data}) {
   const scenarios=[
     {id:"invest",label:"💹 Invest More",sub:"What if I increased my monthly investment?"},
     {id:"paydebt",label:"💳 Pay Off Debt",sub:"What if I aggressively paid down debt?"},
-    {id:"salary",label:"💼 Salary Raise",sub:"What if my income increased?"},
-    {id:"buyhome",label:"🏠 Buy a Home",sub:"What would homeownership cost me?"},
   ];
 
   return (
@@ -2349,8 +2770,6 @@ function WhatIfSimulator({data}) {
       </div>
       {scenario==="invest"&&<InvestMoreSim totalInv={totalInv} surplus={surplus}/>}
       {scenario==="paydebt"&&<PayDebtSim creditCards={data.creditCards} otherDebts={data.otherDebts}/>}
-      {scenario==="salary"&&<SalarySim income={income} totalAlloc={totalAlloc} totalInv={totalInv}/>}
-      {scenario==="buyhome"&&<BuyHomeSim income={income}/>}
     </div>
   );
 }
