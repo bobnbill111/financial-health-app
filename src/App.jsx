@@ -1828,22 +1828,24 @@ function SuperModeLightning() {
   const [flash,setFlash]=useState(false);
   const [pos,setPos]=useState({x:50,y:0});
   useEffect(()=>{
-    const interval=setInterval(()=>{
+    const trigger=()=>{
       setPos({x:Math.random()*80+10,y:Math.random()*60});
       setFlash(true);
       setTimeout(()=>setFlash(false),120);
-    },Math.random()*4000+6000);
-    return ()=>clearInterval(interval);
+      setTimeout(trigger,Math.random()*5000+7000);
+    };
+    const t=setTimeout(trigger,Math.random()*4000+6000);
+    return ()=>clearTimeout(t);
   },[]);
   return (
     <>
-      {/* Stormy background */}
-      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse at 50% 0%,#0a0f2a 0%,transparent 70%)",opacity:0.6}}/>
-      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,backgroundImage:"linear-gradient(#60a5fa08 1px,transparent 1px),linear-gradient(90deg,#60a5fa08 1px,transparent 1px)",backgroundSize:"40px 40px"}}/>
-      {/* Lightning flash */}
-      {flash&&<div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1000,background:`radial-gradient(ellipse at ${pos.x}% ${pos.y}%,rgba(148,200,255,0.08) 0%,transparent 60%)`,transition:"opacity 0.05s"}}/>}
-      {/* Blue border glow on body */}
-      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,boxShadow:"inset 0 0 60px #60a5fa18",borderRadius:0}}/>
+      {/* Deep red storm background */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse at 50% 0%,#1a0505 0%,transparent 70%)",opacity:0.5}}/>
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,backgroundImage:"linear-gradient(#cc000010 1px,transparent 1px),linear-gradient(90deg,#cc000010 1px,transparent 1px)",backgroundSize:"40px 40px"}}/>
+      {/* Red lightning flash */}
+      {flash&&<div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1000,background:`radial-gradient(ellipse at ${pos.x}% ${pos.y}%,rgba(255,80,80,0.07) 0%,transparent 60%)`,transition:"opacity 0.05s"}}/>}
+      {/* Red inner glow */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,boxShadow:"inset 0 0 60px #cc000022",borderRadius:0}}/>
     </>
   );
 }
@@ -1901,7 +1903,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
   return (
     <div>
       {/* Chart 1: Equity vs Rent+Invest over time */}
-      <Card style={{border:"1px solid #60a5fa44"}}>
+      <Card style={{border:"1px solid #cc000044"}}>
         <SecTitle>⚡ Wealth Building — Buy vs Rent Over 25 Years</SecTitle>
         <div style={{fontSize:11,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>Home equity (🏠) vs. what your down payment and monthly savings would be worth if invested (🏢).</div>
         <ResponsiveContainer width="100%" height={220}>
@@ -1912,11 +1914,11 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
             <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
             <Line type="monotone" dataKey="homeEquity" stroke="#4ade80" strokeWidth={2} dot={false} name="🏠 Home Equity"/>
             <Line type="monotone" dataKey="rentInvested" stroke="#a78bfa" strokeWidth={2} dot={false} name="🏢 Rent + Invest"/>
-            <Line type="monotone" dataKey="homeValue" stroke="#60a5fa" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Home Value"/>
+            <Line type="monotone" dataKey="homeValue" stroke="#fb923c" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Home Value"/>
           </LineChart>
         </ResponsiveContainer>
         <div style={{display:"flex",gap:16,marginTop:8,flexWrap:"wrap"}}>
-          {[{label:"🏠 Home Equity",color:"#4ade80"},{label:"🏢 Rent + Invest",color:"#a78bfa"},{label:"Home Value",color:"#60a5fa",dash:true}].map(x=>(
+          {[{label:"🏠 Home Equity",color:"#4ade80"},{label:"🏢 Rent + Invest",color:"#a78bfa"},{label:"Home Value",color:"#fb923c",dash:true}].map(x=>(
             <div key={x.label} style={{display:"flex",alignItems:"center",gap:5}}>
               <div style={{width:20,height:3,background:x.color,borderRadius:2,borderTop:x.dash?"1px dashed "+x.color:"none",opacity:x.dash?0.6:1}}/>
               <span style={{fontSize:10,color:"#6b8cce"}}>{x.label}</span>
@@ -1926,7 +1928,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
       </Card>
 
       {/* Chart 2: Mortgage paydown vs appreciation */}
-      <Card style={{border:"1px solid #60a5fa44"}}>
+      <Card style={{border:"1px solid #cc000044"}}>
         <SecTitle>⚡ Mortgage Paydown vs Home Value</SecTitle>
         <div style={{fontSize:11,color:"#6b8cce",marginBottom:12}}>How your mortgage balance shrinks as your home value grows.</div>
         <ResponsiveContainer width="100%" height={200}>
@@ -1935,14 +1937,14 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
             <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:10,...GS}}/>
             <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
             <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
-            <Bar dataKey="homeValue" name="Home Value" fill="#60a5fa" radius={[4,4,0,0]}/>
+            <Bar dataKey="homeValue" name="Home Value" fill="#fb923c" radius={[4,4,0,0]}/>
             <Bar dataKey="mortgageBal" name="Mortgage Balance" fill="#f87171" radius={[4,4,0,0]}/>
           </BarChart>
         </ResponsiveContainer>
       </Card>
 
       {/* Sensitivity Table */}
-      <Card style={{border:"1px solid #60a5fa44"}}>
+      <Card style={{border:"1px solid #cc000044"}}>
         <SecTitle>⚡ Sensitivity Analysis — 10-Year Outcomes</SecTitle>
         <div style={{fontSize:11,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
           Each cell shows whether <span style={{color:"#4ade80"}}>Buying wins</span> or <span style={{color:"#a78bfa"}}>Renting wins</span> under different appreciation and investment return assumptions.
@@ -1952,7 +1954,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
             <thead>
               <tr>
                 <td style={{fontSize:10,color:"#6b8cce",padding:"6px 8px",borderBottom:"1px solid #1e3a5f"}}>Home Appr. ↓ / Inv. Return →</td>
-                {invRates.map(iv=><td key={iv} style={{fontSize:10,color:"#60a5fa",padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #1e3a5f"}}>{iv}%</td>)}
+                {invRates.map(iv=><td key={iv} style={{fontSize:10,color:"#cc0000",padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #1e3a5f"}}>{iv}%</td>)}
               </tr>
             </thead>
             <tbody>
@@ -1976,7 +1978,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
       </Card>
 
       {/* True cost of ownership */}
-      <Card style={{border:"1px solid #60a5fa44"}}>
+      <Card style={{border:"1px solid #cc000044"}}>
         <SecTitle>⚡ True Cost of Ownership vs Renting — 10 Years</SecTitle>
         {(()=>{
           const buyTotalOut=(totalMonthlyCost*120)+dp+totalLTT+extraUpfront+cmhc;
@@ -2132,16 +2134,16 @@ function RentVsBuy({beginner}) {
       {beginner&&<div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 Fill in your numbers below and we'll tell you whether renting or buying makes more financial sense for your situation.</div>}
 
       {/* Super In-Depth Toggle */}
-      <button onClick={()=>toggleSuper(!superMode)} style={{width:"100%",background:superMode?"linear-gradient(135deg,#0d0d1a,#1a1a3e)":"#0d1b3e",border:`2px solid ${superMode?"#60a5fa":"#2a4080"}`,borderRadius:14,padding:"14px 18px",cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",...GS,transition:"all 0.3s"}}>
+      <button onClick={()=>toggleSuper(!superMode)} style={{width:"100%",background:superMode?"linear-gradient(135deg,#1a0505,#0d1b3e)":"#0d1b3e",border:`2px solid ${superMode?"#cc0000":"#2a4080"}`,borderRadius:14,padding:"14px 18px",cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",...GS,transition:"all 0.3s"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <span style={{fontSize:22}}>⚡</span>
           <div style={{textAlign:"left"}}>
-            <div style={{fontSize:14,color:superMode?"#60a5fa":"#8fadd4",fontWeight:"bold"}}>Super In-Depth Mode</div>
+            <div style={{fontSize:14,color:superMode?"#cc0000":"#8fadd4",fontWeight:"bold"}}>Super In-Depth Mode</div>
             <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>{superMode?"Every variable, charts, sensitivity analysis":"Toggle for the full professional analysis"}</div>
           </div>
         </div>
-        <div style={{width:48,height:26,borderRadius:13,background:superMode?"#1a3a5e":"#1e1e2e",border:`2px solid ${superMode?"#60a5fa":"#2a4080"}`,position:"relative",transition:"all 0.3s"}}>
-          <div style={{width:18,height:18,borderRadius:"50%",background:superMode?"#60a5fa":"#475569",position:"absolute",top:2,left:superMode?26:2,transition:"left 0.3s,background 0.3s"}}/>
+        <div style={{width:48,height:26,borderRadius:13,background:superMode?"#1a0505":"#1e1e2e",border:`2px solid ${superMode?"#cc0000":"#2a4080"}`,position:"relative",transition:"all 0.3s"}}>
+          <div style={{width:18,height:18,borderRadius:"50%",background:superMode?"#cc0000":"#475569",position:"absolute",top:2,left:superMode?26:2,transition:"left 0.3s,background 0.3s"}}/>
         </div>
       </button>
 
@@ -2230,10 +2232,10 @@ function RentVsBuy({beginner}) {
 
       {/* Super In-Depth Additional Inputs */}
       {superMode&&(
-        <Card style={{background:"linear-gradient(135deg,#0a0d1a,#0d1b3e)",border:"2px solid #60a5fa44"}}>
+        <Card style={{background:"linear-gradient(135deg,#0a0d1a,#0d1b3e)",border:"2px solid #cc000044"}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
             <span style={{fontSize:18}}>⚡</span>
-            <div style={{fontSize:12,color:"#60a5fa",letterSpacing:2,...GS}}>SUPER IN-DEPTH — ADDITIONAL COSTS</div>
+            <div style={{fontSize:12,color:"#cc0000",letterSpacing:2,...GS}}>SUPER IN-DEPTH — ADDITIONAL COSTS</div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div>
@@ -2328,12 +2330,12 @@ function RentVsBuy({beginner}) {
 
           {/* Break-even callout */}
           {breakEvenYear!==null&&(
-            <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #60a5fa44",marginBottom:14}}>
+            <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #cc000044",marginBottom:14}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:22}}>⏱</span>
                 <div>
                   <div style={{fontSize:12,color:"#6b8cce",marginBottom:3,letterSpacing:1}}>BREAK-EVEN POINT</div>
-                  <div style={{fontSize:16,color:"#60a5fa",fontWeight:"bold",...GS}}>
+                  <div style={{fontSize:16,color:"#cc0000",fontWeight:"bold",...GS}}>
                     Buying beats renting at <span style={{color:"#4ade80"}}>year {breakEvenYear}</span>
                   </div>
                   <div style={{fontSize:11,color:"#6b8cce",marginTop:3}}>
@@ -2382,7 +2384,7 @@ function RentVsBuy({beginner}) {
           />}
 
           {/* Variance / Best+Worst */}
-          <button onClick={()=>setShowVariance(p=>!p)} style={{width:"100%",background:"none",border:"1px dashed #60a5fa44",borderRadius:10,padding:"11px",color:"#60a5fa",cursor:"pointer",fontSize:13,marginBottom:14,...GS}}>
+          <button onClick={()=>setShowVariance(p=>!p)} style={{width:"100%",background:"none",border:"1px dashed #cc000044",borderRadius:10,padding:"11px",color:"#cc0000",cursor:"pointer",fontSize:13,marginBottom:14,...GS}}>
             {showVariance?"▲ Hide Scenarios":"📊 Show Best & Worst Case Scenarios"}
           </button>
           {showVariance&&(
@@ -3372,10 +3374,49 @@ function StandaloneBudget({prefill=null}) {
     setNewNames(p=>({...p,[bucket]:""}));
   };
 
+  // Fixed and Estimated get unique colours per item; Subscriptions all share purple
+  const FIXED_COLORS=["#f87171","#ef4444","#fb923c","#f97316","#fca5a5","#fcd34d","#ff6b6b","#fc8181"];
+  const EST_COLORS=["#facc15","#fbbf24","#34d399","#22d3ee","#a3e635","#4ade80","#86efac","#6ee7b7"];
+  const SUB_COLOR="#a78bfa";
+
+  const getItemColor=(cat,itemIndexWithinBucket)=>{
+    if(cat.bucket==="subscription") return SUB_COLOR;
+    if(cat.bucket==="fixed") return FIXED_COLORS[itemIndexWithinBucket%FIXED_COLORS.length];
+    return EST_COLORS[itemIndexWithinBucket%EST_COLORS.length];
+  };
+
+  // Track per-bucket index for colour assignment
+  const bucketCounters={fixed:0,subscription:0,estimated:0};
+  const catsWithColors=cats.map(c=>{
+    const idx=bucketCounters[c.bucket]||0;
+    bucketCounters[c.bucket]=(bucketCounters[c.bucket]||0)+1;
+    return {...c,_color:getItemColor(c,idx),_bucketIdx:idx};
+  });
+
   const donutData=[
-    ...cats.filter(c=>Number(c.amount||0)>0).map((c,i)=>({name:c.name,value:Number(c.amount),bucket:c.bucket})),
-    remaining>0?{name:"Remaining",value:remaining,bucket:"remaining"}:null
+    ...catsWithColors.filter(c=>Number(c.amount||0)>0).map(c=>({
+      name:c.bucket==="subscription"?"Subscriptions":c.name,
+      value:Number(c.amount),
+      bucket:c.bucket,
+      _color:c._color,
+    })),
+    remaining>0?{name:"Remaining",value:remaining,bucket:"remaining",_color:"#1e3a5f"}:null
   ].filter(Boolean);
+
+  // Collapse subscription segments into one for the donut
+  const collapsedDonut=[];
+  let subTotal=0;
+  donutData.forEach(d=>{
+    if(d.bucket==="subscription"){subTotal+=d.value;}
+    else collapsedDonut.push(d);
+  });
+  if(subTotal>0) collapsedDonut.splice(
+    collapsedDonut.findIndex(d=>d.bucket==="fixed")>=0
+      ? collapsedDonut.findLastIndex(d=>d.bucket==="fixed")+1
+      : 0,
+    0,
+    {name:"Subscriptions",value:subTotal,bucket:"subscription",_color:SUB_COLOR}
+  );
 
   const BUCKET_COLORS={"fixed":"#f87171","subscription":"#a78bfa","estimated":"#facc15","remaining":"#1e3a5f"};
 
@@ -3421,15 +3462,16 @@ function StandaloneBudget({prefill=null}) {
             </div>}
             {bucketCats.map((cat,i)=>{
               const globalIdx=cats.indexOf(cat);
+              const itemColor=catsWithColors[globalIdx]?._color||bucket.color;
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"10px 12px"}}>
-                  <div style={{width:7,height:7,borderRadius:"50%",background:bucket.color,flexShrink:0}}/>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:itemColor,flexShrink:0}}/>
                   <input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,name:e.target.value}:c))}
                     style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
                     <span style={{color:"#6b8cce",fontSize:13}}>$</span>
                     <input type="number" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,amount:e.target.value}:c))}
-                      style={{background:"none",border:"none",outline:"none",color:bucket.color,fontSize:16,width:80,textAlign:"right",...GS}}/>
+                      style={{background:"none",border:"none",outline:"none",color:itemColor,fontSize:16,width:80,textAlign:"right",...GS}}/>
                   </div>
                   {inc>0&&Number(cat.amount)>0&&<span style={{fontSize:10,color:"#6b8cce",minWidth:36,textAlign:"right"}}>{((Number(cat.amount)/inc)*100).toFixed(0)}%</span>}
                   <button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==globalIdx))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:0}}>×</button>
@@ -3448,20 +3490,33 @@ function StandaloneBudget({prefill=null}) {
       })}
 
       {/* Donut chart */}
-      {donutData.length>0&&(
+      {collapsedDonut.filter(d=>d.value>0).length>0&&(
         <Card>
           <SecTitle>Spending Breakdown</SecTitle>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
-              <Pie data={donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" strokeWidth={0}>
-                {donutData.map((d,i)=><Cell key={i} fill={BUCKET_COLORS[d.bucket]||CAT_COLORS[i%CAT_COLORS.length]}/>)}
+              <Pie data={collapsedDonut} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" strokeWidth={0}>
+                {collapsedDonut.map((d,i)=><Cell key={i} fill={d._color||CAT_COLORS[i%CAT_COLORS.length]}/>)}
               </Pie>
               <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
             </PieChart>
           </ResponsiveContainer>
-          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:4,justifyContent:"center"}}>
-            {[{label:"Fixed",color:"#f87171",val:totalFixed},{label:"Subscriptions",color:"#a78bfa",val:totalSub},{label:"Estimated",color:"#facc15",val:totalEst}].map(x=>(
-              <div key={x.label} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:x.color}}/><span style={{fontSize:11,color:"#8fadd4"}}>{x.label}: {fmt(x.val)}</span></div>
+          {/* Legend — grouped buckets in sticky bar style */}
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,justifyContent:"center"}}>
+            {collapsedDonut.filter(d=>d.bucket!=="remaining"&&d.value>0).map((d,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:4}}>
+                <div style={{width:9,height:9,borderRadius:d.bucket==="subscription"?3:50,background:d._color}}/>
+                <span style={{fontSize:10,color:"#8fadd4"}}>{d.name}</span>
+              </div>
+            ))}
+          </div>
+          {/* Bucket totals summary */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
+            {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subscriptions 🔄",val:totalSub,color:"#a78bfa"},{label:"Estimated 📊",val:totalEst,color:"#facc15"}].filter(x=>x.val>0).map(x=>(
+              <div key={x.label} style={{background:"#0d1b3e",borderRadius:8,padding:"8px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:3,...GS}}>{x.label}</div>
+                <div style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmt(x.val)}</div>
+              </div>
             ))}
           </div>
         </Card>
