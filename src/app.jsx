@@ -195,7 +195,7 @@ const LIGHT_THEME = {
 };
 
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
-function AuthScreen({onAuth}) {
+function AuthScreen({onAuth,onGuest}) {
   const [mode,setMode]=useState("login"); // login | signup | forgot
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
@@ -361,6 +361,17 @@ function AuthScreen({onAuth}) {
         <div style={{textAlign:"center",marginTop:20,fontSize:10,color:"#2a4080",letterSpacing:2}}>
           PRIVATE · SECURE · CANADA 🇨🇦
         </div>
+
+        {/* Guest access */}
+        <div style={{textAlign:"center",marginTop:20}}>
+          <div style={{fontSize:12,color:"#2a4080",marginBottom:10}}>— or —</div>
+          <button onClick={onGuest} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px 24px",color:"#6b8cce",cursor:"pointer",fontSize:13,width:"100%",...GS}}>
+            Continue as Guest
+          </button>
+          <div style={{fontSize:11,color:"#1e3a5f",marginTop:8,lineHeight:1.6}}>
+            No account needed — but your data won't be saved between sessions.
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -371,6 +382,7 @@ export default function App() {
   const [user,setUser]=useState(null);
   const [token,setToken]=useState(null);
   const [authChecked,setAuthChecked]=useState(false);
+  const [isGuest,setIsGuest]=useState(false);
   const [page,setPage]=useState("home");
   const [dark,setDark]=useState(true);
   const [beginner,setBeginner]=useState(false);
@@ -432,7 +444,7 @@ export default function App() {
     localStorage.removeItem("fh_email");
     setUser(null);setToken(null);
     setData(EMPTY);setScoreHistory([]);
-    setPage("home");setIsNewUser(false);
+    setPage("home");setIsNewUser(false);setIsGuest(false);
   };
 
   const saveScore=(score)=>{
@@ -466,10 +478,10 @@ export default function App() {
     </div>
   );
 
-  if(!user) return <AuthScreen onAuth={handleAuth}/>;
+  if(!user&&!isGuest) return <AuthScreen onAuth={handleAuth} onGuest={()=>setIsGuest(true)}/>;
 
   // New user — show onboarding welcome screen
-  if(isNewUser) return <OnboardingScreen displayName={displayName} userEmail={user.email} onStart={()=>{setIsNewUser(false);setPage("appointment");}} onSkip={()=>setIsNewUser(false)}/>;
+  if(isNewUser&&!isGuest) return <OnboardingScreen displayName={displayName} userEmail={user?.email} onStart={()=>{setIsNewUser(false);setPage("appointment");}} onSkip={()=>setIsNewUser(false)}/>;
 
   const signOutBtn=(
     <div style={{position:"fixed",bottom:20,right:16,zIndex:500}}>
@@ -480,7 +492,7 @@ export default function App() {
   return (
     <>
       {signOutBtn}
-      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user.email} displayName={displayName} latestScore={latestScore}/>}
+      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
       {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>}
       {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner}/>}
       {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner}/>}
@@ -682,7 +694,7 @@ function BeginnerCard({beginner,tip,title,children}) {
 }
 
 // ─── HOMEPAGE ─────────────────────────────────────────────────────────────────
-function Homepage({onAppointment,onCheckup,onTools,onProfile,dark,setDark,theme,beginner,setBeginner,userEmail,displayName,latestScore}) {
+function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDark,theme,beginner,setBeginner,userEmail,displayName,latestScore,isGuest}) {
   const [vis,setVis]=useState(false);
   useEffect(()=>{setTimeout(()=>setVis(true),80);},[]);
   const fade = d=>({opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:`opacity 0.7s ease ${d}s,transform 0.7s ease ${d}s`});
@@ -720,22 +732,28 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,dark,setDark,theme,
       <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(${theme.gridLine} 1px,transparent 1px),linear-gradient(90deg,${theme.gridLine} 1px,transparent 1px)`,backgroundSize:"60px 60px",pointerEvents:"none"}}/>
       <div style={{position:"absolute",top:"50%",left:"50%",width:340,height:340,background:`radial-gradient(circle,${theme.glow} 0%,transparent 70%)`,pointerEvents:"none",animation:"hbglow 3.5s ease-in-out infinite"}}/>
 
-      {/* Profile icon — top left */}
+      {/* Profile icon / Guest sign-in — top left */}
       <div style={{position:"absolute",top:24,left:24,zIndex:10}}>
-        <button onClick={onProfile} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:10,padding:0}}>
-          <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#cc0000,#8b0000)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:"bold",color:"#fff",flexShrink:0,...GS}}>
-            {initials}
-          </div>
-          <div style={{textAlign:"left"}}>
-            <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>{name}</div>
-            {latestScore&&(
-              <div style={{display:"flex",alignItems:"center",gap:4,marginTop:1}}>
-                <span style={{fontSize:11,color:latestScore.gradeColor,fontWeight:"bold",...GS}}>{latestScore.grade}</span>
-                <span style={{fontSize:10,color:"#6b8cce"}}>{latestScore.score}/100</span>
-              </div>
-            )}
-          </div>
-        </button>
+        {isGuest?(
+          <button onClick={onSignIn} style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000066",borderRadius:10,padding:"8px 14px",color:"#cc0000",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
+            Sign In / Sign Up
+          </button>
+        ):(
+          <button onClick={onProfile} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:10,padding:0}}>
+            <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#cc0000,#8b0000)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:"bold",color:"#fff",flexShrink:0,...GS}}>
+              {initials}
+            </div>
+            <div style={{textAlign:"left"}}>
+              <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>{name}</div>
+              {latestScore&&(
+                <div style={{display:"flex",alignItems:"center",gap:4,marginTop:1}}>
+                  <span style={{fontSize:11,color:latestScore.gradeColor,fontWeight:"bold",...GS}}>{latestScore.grade}</span>
+                  <span style={{fontSize:10,color:"#6b8cce"}}>{latestScore.score}/100</span>
+                </div>
+              )}
+            </div>
+          </button>
+        )}
       </div>
 
       {/* Toggles — top right */}
