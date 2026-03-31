@@ -395,13 +395,15 @@ export default function App() {
   useEffect(()=>{
     const savedToken=localStorage.getItem("fh_token");
     const savedUid=localStorage.getItem("fh_uid");
+    const savedEmail=localStorage.getItem("fh_email")||"";
     if(savedToken&&savedUid){
       supa.loadData(savedUid,savedToken).then(row=>{
         if(row){
-          setUser({id:savedUid,email:localStorage.getItem("fh_email")||""});
+          setUser({id:savedUid,email:savedEmail});
           setToken(savedToken);
           try{if(row.data)setData(JSON.parse(row.data));}catch(e){}
           try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
+          setIsNewUser(false);
         } else {
           localStorage.removeItem("fh_token");
           localStorage.removeItem("fh_uid");
@@ -424,16 +426,23 @@ export default function App() {
   },[data,scoreHistory]);
 
   const handleAuth=async(authUser,authToken,newUser=false)=>{
-    setUser(authUser);
-    setToken(authToken);
-    localStorage.setItem("fh_email",authUser.email||"");
-    const row=await supa.loadData(authUser.id,authToken);
-    if(row){
-      try{if(row.data)setData(JSON.parse(row.data));}catch(e){}
-      try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
-      setIsNewUser(false);
-    } else {
-      setIsNewUser(newUser||true);
+    try {
+      const safeUser={id:authUser.id,email:authUser.email||localStorage.getItem("fh_email")||""};
+      setUser(safeUser);
+      setToken(authToken);
+      localStorage.setItem("fh_email",safeUser.email);
+      const row=await supa.loadData(authUser.id,authToken);
+      if(row&&row.data){
+        try{setData(JSON.parse(row.data));}catch(e){}
+        try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
+        setIsNewUser(false);
+      } else {
+        // No data row = new user
+        setIsNewUser(true);
+      }
+    } catch(e) {
+      // If anything fails, still let them in
+      setIsNewUser(newUser);
     }
   };
 
@@ -481,7 +490,7 @@ export default function App() {
   if(!user&&!isGuest) return <AuthScreen onAuth={handleAuth} onGuest={()=>setIsGuest(true)}/>;
 
   // New user — show onboarding welcome screen
-  if(isNewUser&&!isGuest) return <OnboardingScreen displayName={displayName} userEmail={user?.email} onStart={()=>{setIsNewUser(false);setPage("appointment");}} onSkip={()=>setIsNewUser(false)}/>;
+  if(isNewUser&&!isGuest) return <OnboardingScreen displayName={displayName} userEmail={user?.email||""} onStart={()=>{setIsNewUser(false);setPage("home");}} onSkip={()=>setIsNewUser(false)}/>;
 
   const signOutBtn=(
     <div style={{position:"fixed",bottom:20,right:16,zIndex:500}}>
