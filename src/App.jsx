@@ -1,7 +1,56 @@
 import { useState, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from "recharts";
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
+const SUPA_URL = "https://ovtzvxfghsplgrabkswn.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92dHp2eGZnaHNwbGdyYWJrc3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5MDU3MTcsImV4cCI6MjA5MDQ4MTcxN30.SIRYKTrYE39Qamw7McvufBpDOwI_Th2fcye6A4wgS6Y";
+
+const supa = {
+  async signUp(email, password) {
+    const r = await fetch(`${SUPA_URL}/auth/v1/signup`, {
+      method:"POST", headers:{"apikey":SUPA_KEY,"Content-Type":"application/json"},
+      body: JSON.stringify({email, password})
+    });
+    return r.json();
+  },
+  async signIn(email, password) {
+    const r = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
+      method:"POST", headers:{"apikey":SUPA_KEY,"Content-Type":"application/json"},
+      body: JSON.stringify({email, password})
+    });
+    return r.json();
+  },
+  async signOut(token) {
+    await fetch(`${SUPA_URL}/auth/v1/logout`, {
+      method:"POST", headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
+    });
+  },
+  async resetPassword(email) {
+    const r = await fetch(`${SUPA_URL}/auth/v1/recover`, {
+      method:"POST", headers:{"apikey":SUPA_KEY,"Content-Type":"application/json"},
+      body: JSON.stringify({email})
+    });
+    return r.json();
+  },
+  async loadData(userId, token) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/user_data?user_id=eq.${userId}&select=*`, {
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json"}
+    });
+    const rows = await r.json();
+    return rows[0] || null;
+  },
+  async saveData(userId, token, data, scores) {
+    // Upsert
+    const r = await fetch(`${SUPA_URL}/rest/v1/user_data`, {
+      method:"POST",
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},
+      body: JSON.stringify({user_id:userId, data:JSON.stringify(data), scores:JSON.stringify(scores)})
+    });
+    return r;
+  }
+};
+
+
 const fmt = (n) => "$" + Number(n||0).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtShort = (n) => { const v=Number(n||0); if(v>=1e6) return "$"+(v/1e6).toFixed(1)+"M"; if(v>=1000) return "$"+(v/1000).toFixed(1)+"K"; return fmt(v); };
 const CAT_COLORS = ["#4ade80","#60a5fa","#facc15","#f87171","#a78bfa","#34d399","#fb923c","#e879f9","#94a3b8","#22d3ee"];
@@ -145,27 +194,248 @@ const LIGHT_THEME = {
   tagline:"#94a3b8", titleAccent:"#cc0000",
 };
 
+// ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+function AuthScreen({onAuth}) {
+  const [mode,setMode]=useState("login"); // login | signup | forgot
+  const [email,setEmail]=useState("");
+  const [password,setPassword]=useState("");
+  const [confirm,setConfirm]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState(null); // {type:"error"|"success", text}
+  const [showPw,setShowPw]=useState(false);
+
+  const reset=()=>{setMsg(null);setPassword("");setConfirm("");};
+
+  const handleSubmit=async()=>{
+    setMsg(null);
+    if(!email.trim()){setMsg({type:"error",text:"Please enter your email."});return;}
+    if(mode==="forgot"){
+      setLoading(true);
+      await supa.resetPassword(email.trim());
+      setLoading(false);
+      setMsg({type:"success",text:"Check your email for a password reset link!"});
+      return;
+    }
+    if(!password){setMsg({type:"error",text:"Please enter a password."});return;}
+    if(mode==="signup"){
+      if(password.length<8){setMsg({type:"error",text:"Password must be at least 8 characters."});return;}
+      if(password!==confirm){setMsg({type:"error",text:"Passwords don't match."});return;}
+      setLoading(true);
+      const res=await supa.signUp(email.trim(),password);
+      setLoading(false);
+      if(res.error){setMsg({type:"error",text:res.error.message||"Sign up failed."});return;}
+      if(res.user&&!res.session){
+        setMsg({type:"success",text:"Account created! Check your email to confirm, then log in."});
+        setMode("login");reset();return;
+      }
+      if(res.access_token){
+        localStorage.setItem("fh_token",res.access_token);
+        localStorage.setItem("fh_uid",res.user.id);
+        onAuth(res.user,res.access_token);return;
+      }
+      setMsg({type:"success",text:"Account created! Please log in."});
+      setMode("login");reset();
+    } else {
+      setLoading(true);
+      const res=await supa.signIn(email.trim(),password);
+      setLoading(false);
+      if(res.error){setMsg({type:"error",text:"Incorrect email or password."});return;}
+      if(res.access_token){
+        localStorage.setItem("fh_token",res.access_token);
+        localStorage.setItem("fh_uid",res.user.id);
+        onAuth(res.user,res.access_token);
+      }
+    }
+  };
+
+  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"13px 14px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+      {/* Background grid */}
+      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
+      {/* Glow */}
+      <div style={{position:"fixed",top:"30%",left:"50%",width:300,height:300,background:"radial-gradient(circle,#7f000033 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)"}}/>
+
+      <div style={{position:"relative",width:"100%",maxWidth:400}}>
+        {/* Logo */}
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <svg width="64" height="64" viewBox="0 0 160 160" style={{marginBottom:12}}>
+            <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
+            <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
+          </svg>
+          <div style={{fontSize:26,color:"#e8e4d9",fontWeight:"normal",letterSpacing:1}}>Financial <span style={{color:"#cc0000"}}>Health</span></div>
+          <div style={{fontSize:11,color:"#2a4080",letterSpacing:3,textTransform:"uppercase",marginTop:4}}>
+            {mode==="login"?"Welcome back":mode==="signup"?"Create your account":"Reset your password"}
+          </div>
+        </div>
+
+        {/* Card */}
+        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:18,padding:"28px 24px"}}>
+          {/* Tabs */}
+          {mode!=="forgot"&&(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:24}}>
+              {[{val:"login",label:"Log In"},{val:"signup",label:"Sign Up"}].map(t=>(
+                <button key={t.val} onClick={()=>{setMode(t.val);reset();}}
+                  style={{background:mode===t.val?"#cc0000":"transparent",border:`1px solid ${mode===t.val?"#cc0000":"#2a4080"}`,borderRadius:10,padding:"10px",color:mode===t.val?"#fff":"#8fadd4",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Fields */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>EMAIL</div>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+              placeholder="you@example.com" style={inp} autoComplete="email"/>
+          </div>
+
+          {mode!=="forgot"&&(
+            <div style={{marginBottom:mode==="signup"?14:8}}>
+              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>PASSWORD</div>
+              <div style={{position:"relative"}}>
+                <input type={showPw?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+                  placeholder="••••••••" style={{...inp,paddingRight:44}}/>
+                <button onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:14}}>
+                  {showPw?"🙈":"👁"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode==="signup"&&(
+            <div style={{marginBottom:8}}>
+              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>CONFIRM PASSWORD</div>
+              <input type="password" value={confirm} onChange={e=>setConfirm(e.target.value)}
+                onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+                placeholder="••••••••" style={inp}/>
+            </div>
+          )}
+
+          {/* Forgot link */}
+          {mode==="login"&&(
+            <div style={{textAlign:"right",marginBottom:20}}>
+              <button onClick={()=>{setMode("forgot");reset();}} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>
+                Forgot password?
+              </button>
+            </div>
+          )}
+
+          {/* Message */}
+          {msg&&(
+            <div style={{background:msg.type==="error"?"#1a0505":"#0d2a1a",border:`1px solid ${msg.type==="error"?"#f8717144":"#4ade8044"}`,borderRadius:10,padding:"10px 14px",fontSize:13,color:msg.type==="error"?"#f87171":"#4ade80",marginBottom:16,lineHeight:1.5}}>
+              {msg.text}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button onClick={handleSubmit} disabled={loading}
+            style={{width:"100%",background:loading?"#1a0505":"linear-gradient(135deg,#cc0000,#8b0000)",border:"1px solid #cc000066",borderRadius:12,padding:"14px",color:"#fff",fontSize:15,fontWeight:"bold",cursor:loading?"not-allowed":"pointer",opacity:loading?0.7:1,...GS}}>
+            {loading?"Please wait..."
+              :mode==="login"?"Log In →"
+              :mode==="signup"?"Create Account →"
+              :"Send Reset Email →"}
+          </button>
+
+          {/* Back link for forgot */}
+          {mode==="forgot"&&(
+            <button onClick={()=>{setMode("login");reset();}} style={{width:"100%",background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:13,marginTop:14,...GS}}>
+              ← Back to Log In
+            </button>
+          )}
+
+          {/* Sign up prompt */}
+          {mode==="login"&&(
+            <div style={{textAlign:"center",marginTop:18,fontSize:12,color:"#6b8cce"}}>
+              Don't have an account?{" "}
+              <button onClick={()=>{setMode("signup");reset();}} style={{background:"none",border:"none",color:"#cc0000",cursor:"pointer",fontSize:12,...GS}}>
+                Sign up free
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div style={{textAlign:"center",marginTop:20,fontSize:10,color:"#2a4080",letterSpacing:2}}>
+          PRIVATE · SECURE · CANADA 🇨🇦
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 export default function App() {
+  const [user,setUser]=useState(null);
+  const [token,setToken]=useState(null);
+  const [authChecked,setAuthChecked]=useState(false);
   const [page,setPage]=useState("home");
   const [dark,setDark]=useState(true);
   const [beginner,setBeginner]=useState(false);
+  const [saving,setSaving]=useState(false);
 
-  const [data,setData]=useState(()=>{
-    try { return JSON.parse(localStorage.getItem("fh_data")) || EMPTY; }
-    catch { return EMPTY; }
-  });
-  const [scoreHistory,setScoreHistory]=useState(()=>{
-    try { return JSON.parse(localStorage.getItem("fh_scores")) || []; }
-    catch { return []; }
-  });
+  const [data,setData]=useState(EMPTY);
+  const [scoreHistory,setScoreHistory]=useState([]);
 
-  useEffect(()=>{ localStorage.setItem("fh_data", JSON.stringify(data)); },[data]);
-  useEffect(()=>{ localStorage.setItem("fh_scores", JSON.stringify(scoreHistory)); },[scoreHistory]);
+  // On mount — check for saved session
+  useEffect(()=>{
+    const savedToken=localStorage.getItem("fh_token");
+    const savedUid=localStorage.getItem("fh_uid");
+    if(savedToken&&savedUid){
+      // Verify token is still valid by loading data
+      supa.loadData(savedUid,savedToken).then(row=>{
+        if(row){
+          setUser({id:savedUid});
+          setToken(savedToken);
+          try{if(row.data)setData(JSON.parse(row.data));}catch(e){}
+          try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
+        } else {
+          // Token expired
+          localStorage.removeItem("fh_token");
+          localStorage.removeItem("fh_uid");
+        }
+        setAuthChecked(true);
+      }).catch(()=>{setAuthChecked(true);});
+    } else {
+      setAuthChecked(true);
+    }
+  },[]);
 
-  const saveScore = (score) => {
+  // Auto-save data to Supabase whenever it changes
+  useEffect(()=>{
+    if(!user||!token) return;
+    const t=setTimeout(()=>{
+      setSaving(true);
+      supa.saveData(user.id,token,data,scoreHistory).finally(()=>setSaving(false));
+    },1500); // debounce 1.5s
+    return ()=>clearTimeout(t);
+  },[data,scoreHistory]);
+
+  const handleAuth=async(authUser,authToken)=>{
+    setUser(authUser);
+    setToken(authToken);
+    // Load their existing data
+    const row=await supa.loadData(authUser.id,authToken);
+    if(row){
+      try{if(row.data)setData(JSON.parse(row.data));}catch(e){}
+      try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
+    }
+  };
+
+  const handleSignOut=async()=>{
+    if(token) await supa.signOut(token);
+    localStorage.removeItem("fh_token");
+    localStorage.removeItem("fh_uid");
+    setUser(null);setToken(null);
+    setData(EMPTY);setScoreHistory([]);
+    setPage("home");
+  };
+
+  const saveScore=(score)=>{
     if(!score) return;
-    const entry = {date:today(),score:score.total,grade:score.grade,gradeColor:score.gradeColor};
+    const entry={date:today(),score:score.total,grade:score.grade,gradeColor:score.gradeColor};
     setScoreHistory(prev=>{
       const existing=prev.findIndex(x=>x.date===entry.date);
       if(existing>=0){const n=[...prev];n[existing]=entry;return n;}
@@ -173,15 +443,45 @@ export default function App() {
     });
   };
 
-  const sumGroup = arr=>arr.reduce((s,x)=>s+Number(x.amount||0),0);
-  const totalInv = sumGroup(data.investments.tfsa)+sumGroup(data.investments.fhsa)+sumGroup(data.investments.rrsp)+sumGroup(data.investments.alternatives)+sumGroup(data.investments.nonReg);
+  const sumGroup=arr=>arr.reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalInv=sumGroup(data.investments.tfsa)+sumGroup(data.investments.fhsa)+sumGroup(data.investments.rrsp)+sumGroup(data.investments.alternatives)+sumGroup(data.investments.nonReg);
+  const theme=dark?DARK_THEME:LIGHT_THEME;
 
-  const theme = dark ? DARK_THEME : LIGHT_THEME;
+  // Loading check
+  if(!authChecked) return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
+      <div style={{textAlign:"center"}}>
+        <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16,animation:"heartbeat 1.5s ease-in-out infinite"}}>
+          <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
+          <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
+        </svg>
+        <div style={{color:"#6b8cce",fontSize:13,letterSpacing:2}}>LOADING...</div>
+      </div>
+    </div>
+  );
 
-  if(page==="home") return <Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner}/>;
-  if(page==="appointment") return <Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>;
-  if(page==="checkup") return <Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner}/>;
-  if(page==="tools") return <IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner}/>;
+  // Not logged in
+  if(!user) return <AuthScreen onAuth={handleAuth}/>;
+
+  // Logged in — show app with sign out button injected via context
+  const signOutBtn=(
+    <div style={{position:"fixed",bottom:20,right:16,zIndex:500}}>
+      {saving&&<div style={{fontSize:10,color:"#6b8cce",textAlign:"center",marginBottom:4,letterSpacing:1}}>saving...</div>}
+      <button onClick={handleSignOut} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"8px 14px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+        Sign Out
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      {signOutBtn}
+      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user.email}/>}
+      {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>}
+      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner}/>}
+      {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner}/>}
+    </>
+  );
 }
 
 // ─── BEGINNER TOOLTIP ─────────────────────────────────────────────────────────
@@ -214,7 +514,7 @@ function BeginnerCard({beginner,tip,title,children}) {
 }
 
 // ─── HOMEPAGE ─────────────────────────────────────────────────────────────────
-function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,setBeginner}) {
+function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,setBeginner,userEmail}) {
   const [vis,setVis]=useState(false);
   useEffect(()=>{setTimeout(()=>setVis(true),80);},[]);
   const fade = d=>({opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:`opacity 0.7s ease ${d}s,transform 0.7s ease ${d}s`});
@@ -302,6 +602,7 @@ function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,s
           ))}
         </div>
         <div style={{...fade(0.5),marginTop:28,fontSize:10,color:theme.tagline,letterSpacing:2,textTransform:"uppercase"}}>Private · Secure · Instant</div>
+        {userEmail&&<div style={{...fade(0.6),marginTop:8,fontSize:11,color:theme.textDim}}>Signed in as {userEmail}</div>}
       </div>
     </div>
   );
