@@ -231,7 +231,7 @@ function AuthScreen({onAuth}) {
       if(res.access_token){
         localStorage.setItem("fh_token",res.access_token);
         localStorage.setItem("fh_uid",res.user.id);
-        onAuth(res.user,res.access_token);return;
+        onAuth(res.user,res.access_token,true);return;
       }
       setMsg({type:"success",text:"Account created! Please log in."});
       setMode("login");reset();
@@ -375,26 +375,25 @@ export default function App() {
   const [dark,setDark]=useState(true);
   const [beginner,setBeginner]=useState(false);
   const [saving,setSaving]=useState(false);
+  const [isNewUser,setIsNewUser]=useState(false);
 
   const [data,setData]=useState(EMPTY);
   const [scoreHistory,setScoreHistory]=useState([]);
 
-  // On mount — check for saved session
   useEffect(()=>{
     const savedToken=localStorage.getItem("fh_token");
     const savedUid=localStorage.getItem("fh_uid");
     if(savedToken&&savedUid){
-      // Verify token is still valid by loading data
       supa.loadData(savedUid,savedToken).then(row=>{
         if(row){
-          setUser({id:savedUid});
+          setUser({id:savedUid,email:localStorage.getItem("fh_email")||""});
           setToken(savedToken);
           try{if(row.data)setData(JSON.parse(row.data));}catch(e){}
           try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
         } else {
-          // Token expired
           localStorage.removeItem("fh_token");
           localStorage.removeItem("fh_uid");
+          localStorage.removeItem("fh_email");
         }
         setAuthChecked(true);
       }).catch(()=>{setAuthChecked(true);});
@@ -403,24 +402,26 @@ export default function App() {
     }
   },[]);
 
-  // Auto-save data to Supabase whenever it changes
   useEffect(()=>{
     if(!user||!token) return;
     const t=setTimeout(()=>{
       setSaving(true);
       supa.saveData(user.id,token,data,scoreHistory).finally(()=>setSaving(false));
-    },1500); // debounce 1.5s
+    },1500);
     return ()=>clearTimeout(t);
   },[data,scoreHistory]);
 
-  const handleAuth=async(authUser,authToken)=>{
+  const handleAuth=async(authUser,authToken,newUser=false)=>{
     setUser(authUser);
     setToken(authToken);
-    // Load their existing data
+    localStorage.setItem("fh_email",authUser.email||"");
     const row=await supa.loadData(authUser.id,authToken);
     if(row){
       try{if(row.data)setData(JSON.parse(row.data));}catch(e){}
       try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
+      setIsNewUser(false);
+    } else {
+      setIsNewUser(newUser||true);
     }
   };
 
@@ -428,9 +429,10 @@ export default function App() {
     if(token) await supa.signOut(token);
     localStorage.removeItem("fh_token");
     localStorage.removeItem("fh_uid");
+    localStorage.removeItem("fh_email");
     setUser(null);setToken(null);
     setData(EMPTY);setScoreHistory([]);
-    setPage("home");
+    setPage("home");setIsNewUser(false);
   };
 
   const saveScore=(score)=>{
@@ -447,11 +449,15 @@ export default function App() {
   const totalInv=sumGroup(data.investments.tfsa)+sumGroup(data.investments.fhsa)+sumGroup(data.investments.rrsp)+sumGroup(data.investments.alternatives)+sumGroup(data.investments.nonReg);
   const theme=dark?DARK_THEME:LIGHT_THEME;
 
-  // Loading check
+  // Derive display name — appointment name first, fallback to email
+  const displayName=data.clientName||user?.email?.split("@")[0]||"";
+  // Latest score
+  const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
+
   if(!authChecked) return (
     <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
       <div style={{textAlign:"center"}}>
-        <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16,animation:"heartbeat 1.5s ease-in-out infinite"}}>
+        <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16}}>
           <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
           <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
         </svg>
@@ -460,27 +466,189 @@ export default function App() {
     </div>
   );
 
-  // Not logged in
   if(!user) return <AuthScreen onAuth={handleAuth}/>;
 
-  // Logged in — show app with sign out button injected via context
+  // New user — show onboarding welcome screen
+  if(isNewUser) return <OnboardingScreen displayName={displayName} userEmail={user.email} onStart={()=>{setIsNewUser(false);setPage("appointment");}} onSkip={()=>setIsNewUser(false)}/>;
+
   const signOutBtn=(
     <div style={{position:"fixed",bottom:20,right:16,zIndex:500}}>
       {saving&&<div style={{fontSize:10,color:"#6b8cce",textAlign:"center",marginBottom:4,letterSpacing:1}}>saving...</div>}
-      <button onClick={handleSignOut} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"8px 14px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
-        Sign Out
-      </button>
     </div>
   );
 
   return (
     <>
       {signOutBtn}
-      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user.email}/>}
+      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user.email} displayName={displayName} latestScore={latestScore}/>}
       {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>}
       {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner}/>}
       {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner}/>}
+      {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>setPage("home")} onSignOut={handleSignOut} data={data}/>}
     </>
+  );
+}
+
+// ─── ONBOARDING SCREEN ────────────────────────────────────────────────────────
+function OnboardingScreen({displayName,userEmail,onStart,onSkip}) {
+  const [vis,setVis]=useState(false);
+  useEffect(()=>setTimeout(()=>setVis(true),80),[]);
+  const fade={opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:"opacity 0.6s ease 0.1s,transform 0.6s ease 0.1s"};
+  const name=displayName||userEmail?.split("@")[0]||"there";
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
+      <div style={{position:"fixed",top:"40%",left:"50%",width:400,height:400,background:"radial-gradient(circle,#cc000022 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)"}}/>
+      <div style={{...fade,position:"relative",width:"100%",maxWidth:440,textAlign:"center"}}>
+        {/* Cross */}
+        <svg width="72" height="72" viewBox="0 0 160 160" style={{marginBottom:20}}>
+          <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
+          <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
+        </svg>
+        <div style={{fontSize:28,color:"#e8e4d9",fontWeight:"normal",marginBottom:8,letterSpacing:1}}>
+          Welcome, <span style={{color:"#cc0000"}}>{name}</span> 👋
+        </div>
+        <div style={{fontSize:14,color:"#8fadd4",lineHeight:1.8,marginBottom:32}}>
+          Financial Health helps you track your net worth, build a budget, analyze your investments, and get a personalized financial score — all in one place.
+        </div>
+        {/* Steps preview */}
+        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px",marginBottom:24,textAlign:"left"}}>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:14}}>HERE'S HOW IT WORKS</div>
+          {[
+            {icon:"📋",title:"Initial Appointment",desc:"Answer ~10 minutes of questions about your finances — income, savings, debts and investments."},
+            {icon:"🏆",title:"Get Your Score",desc:"Receive a personalized Financial Health Score (A+ to D) based on Ontario benchmarks for your age group."},
+            {icon:"📊",title:"Track & Improve",desc:"Use your dashboard and tools to track progress, optimize your budget, and improve your score over time."},
+          ].map((s,i)=>(
+            <div key={i} style={{display:"flex",gap:12,marginBottom:i<2?16:0,alignItems:"flex-start"}}>
+              <span style={{fontSize:22,flexShrink:0}}>{s.icon}</span>
+              <div>
+                <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",marginBottom:3,...GS}}>{s.title}</div>
+                <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.6}}>{s.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={onStart} style={{width:"100%",background:"linear-gradient(135deg,#cc0000,#8b0000)",border:"1px solid #cc000066",borderRadius:14,padding:"16px",color:"#fff",fontSize:16,fontWeight:"bold",cursor:"pointer",marginBottom:12,...GS}}>
+          Let's Get Started →
+        </button>
+        <button onClick={onSkip} style={{width:"100%",background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:13,...GS}}>
+          Skip for now — take me to the homepage
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── PROFILE PAGE ─────────────────────────────────────────────────────────────
+function ProfilePage({user,token,onHome,onSignOut,data}) {
+  const [pwMode,setPwMode]=useState(false);
+  const [newPw,setNewPw]=useState("");
+  const [confirmPw,setConfirmPw]=useState("");
+  const [pwMsg,setPwMsg]=useState(null);
+  const [pwLoading,setPwLoading]=useState(false);
+  const [showDelete,setShowDelete]=useState(false);
+  const name=data.clientName||user?.email?.split("@")[0]||"";
+  const initials=(name||"?").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
+
+  const handleChangePw=async()=>{
+    if(newPw.length<8){setPwMsg({type:"error",text:"Password must be at least 8 characters."});return;}
+    if(newPw!==confirmPw){setPwMsg({type:"error",text:"Passwords don't match."});return;}
+    setPwLoading(true);
+    try{
+      const r=await fetch(`${SUPA_URL}/auth/v1/user`,{
+        method:"PUT",headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+        body:JSON.stringify({password:newPw})
+      });
+      const res=await r.json();
+      if(res.error){setPwMsg({type:"error",text:res.error.message});}
+      else{setPwMsg({type:"success",text:"Password updated successfully!"});setNewPw("");setConfirmPw("");setPwMode(false);}
+    }catch(e){setPwMsg({type:"error",text:"Something went wrong."});}
+    setPwLoading(false);
+  };
+
+  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"12px 14px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+      <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:520,margin:"0 auto"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <div style={{fontSize:18,fontWeight:"bold",color:"#fff"}}>My Profile</div>
+          </div>
+        </div>
+      </div>
+      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
+        {/* Avatar */}
+        <div style={{textAlign:"center",marginBottom:24}}>
+          <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#cc0000,#8b0000)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:"bold",color:"#fff",margin:"0 auto 12px",...GS}}>
+            {initials}
+          </div>
+          <div style={{fontSize:20,color:"#e8e4d9",fontWeight:"bold",...GS}}>{name||"Your Account"}</div>
+          <div style={{fontSize:13,color:"#6b8cce",marginTop:4}}>{user?.email}</div>
+        </div>
+
+        {/* Account info */}
+        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:14}}>ACCOUNT</div>
+          <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1e3a5f"}}>
+            <span style={{fontSize:13,color:"#8fadd4"}}>Email</span>
+            <span style={{fontSize:13,color:"#e8e4d9"}}>{user?.email}</span>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0"}}>
+            <span style={{fontSize:13,color:"#8fadd4"}}>Name on file</span>
+            <span style={{fontSize:13,color:"#e8e4d9"}}>{data.clientName||"Not set — complete Initial Appointment"}</span>
+          </div>
+        </div>
+
+        {/* Change password */}
+        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:pwMode?16:0}}>
+            <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>Change Password</div>
+            <button onClick={()=>{setPwMode(p=>!p);setPwMsg(null);}} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"5px 12px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+              {pwMode?"Cancel":"Change"}
+            </button>
+          </div>
+          {pwMode&&(
+            <div>
+              <div style={{marginBottom:10}}>
+                <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>NEW PASSWORD</div>
+                <input type="password" value={newPw} onChange={e=>setNewPw(e.target.value)} placeholder="Min. 8 characters" style={inp}/>
+              </div>
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>CONFIRM NEW PASSWORD</div>
+                <input type="password" value={confirmPw} onChange={e=>setConfirmPw(e.target.value)} placeholder="Repeat password" style={inp}/>
+              </div>
+              {pwMsg&&<div style={{background:pwMsg.type==="error"?"#1a0505":"#0d2a1a",border:`1px solid ${pwMsg.type==="error"?"#f8717144":"#4ade8044"}`,borderRadius:8,padding:"8px 12px",fontSize:12,color:pwMsg.type==="error"?"#f87171":"#4ade80",marginBottom:10}}>{pwMsg.text}</div>}
+              <button onClick={handleChangePw} disabled={pwLoading} style={{width:"100%",background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:10,padding:"12px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>
+                {pwLoading?"Updating...":"Update Password"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sign out */}
+        <button onClick={onSignOut} style={{width:"100%",background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000044",borderRadius:14,padding:"14px",color:"#f87171",fontSize:14,cursor:"pointer",marginBottom:10,...GS}}>
+          Sign Out
+        </button>
+
+        {/* Delete account */}
+        {!showDelete?(
+          <button onClick={()=>setShowDelete(true)} style={{width:"100%",background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,padding:"8px",...GS}}>
+            Delete my account
+          </button>
+        ):(
+          <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:14,padding:"16px",textAlign:"center"}}>
+            <div style={{fontSize:14,color:"#f87171",fontWeight:"bold",marginBottom:8}}>Are you sure?</div>
+            <div style={{fontSize:12,color:"#8fadd4",marginBottom:14,lineHeight:1.6}}>This will permanently delete your account and all your financial data. This cannot be undone.</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <button onClick={()=>setShowDelete(false)} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"10px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>Cancel</button>
+              <button onClick={onSignOut} style={{background:"#cc0000",border:"none",borderRadius:10,padding:"10px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>Delete</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -514,10 +682,12 @@ function BeginnerCard({beginner,tip,title,children}) {
 }
 
 // ─── HOMEPAGE ─────────────────────────────────────────────────────────────────
-function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,setBeginner,userEmail}) {
+function Homepage({onAppointment,onCheckup,onTools,onProfile,dark,setDark,theme,beginner,setBeginner,userEmail,displayName,latestScore}) {
   const [vis,setVis]=useState(false);
   useEffect(()=>{setTimeout(()=>setVis(true),80);},[]);
   const fade = d=>({opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:`opacity 0.7s ease ${d}s,transform 0.7s ease ${d}s`});
+  const name=displayName||userEmail?.split("@")[0]||"";
+  const initials=(name||"?").split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
 
   useEffect(()=>{
     const id="hb-style";
@@ -549,6 +719,24 @@ function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,s
     <div style={{minHeight:"100vh",background:theme.bg,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",...GS,color:theme.text,transition:"background 0.4s"}}>
       <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(${theme.gridLine} 1px,transparent 1px),linear-gradient(90deg,${theme.gridLine} 1px,transparent 1px)`,backgroundSize:"60px 60px",pointerEvents:"none"}}/>
       <div style={{position:"absolute",top:"50%",left:"50%",width:340,height:340,background:`radial-gradient(circle,${theme.glow} 0%,transparent 70%)`,pointerEvents:"none",animation:"hbglow 3.5s ease-in-out infinite"}}/>
+
+      {/* Profile icon — top left */}
+      <div style={{position:"absolute",top:24,left:24,zIndex:10}}>
+        <button onClick={onProfile} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:10,padding:0}}>
+          <div style={{width:40,height:40,borderRadius:"50%",background:"linear-gradient(135deg,#cc0000,#8b0000)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:"bold",color:"#fff",flexShrink:0,...GS}}>
+            {initials}
+          </div>
+          <div style={{textAlign:"left"}}>
+            <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>{name}</div>
+            {latestScore&&(
+              <div style={{display:"flex",alignItems:"center",gap:4,marginTop:1}}>
+                <span style={{fontSize:11,color:latestScore.gradeColor,fontWeight:"bold",...GS}}>{latestScore.grade}</span>
+                <span style={{fontSize:10,color:"#6b8cce"}}>{latestScore.score}/100</span>
+              </div>
+            )}
+          </div>
+        </button>
+      </div>
 
       {/* Toggles — top right */}
       <div style={{position:"absolute",top:24,right:24,zIndex:10,display:"flex",flexDirection:"column",gap:10,alignItems:"flex-end"}}>
@@ -602,7 +790,6 @@ function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,s
           ))}
         </div>
         <div style={{...fade(0.5),marginTop:28,fontSize:10,color:theme.tagline,letterSpacing:2,textTransform:"uppercase"}}>Private · Secure · Instant</div>
-        {userEmail&&<div style={{...fade(0.6),marginTop:8,fontSize:11,color:theme.textDim}}>Signed in as {userEmail}</div>}
       </div>
     </div>
   );
@@ -2074,6 +2261,7 @@ const TOOLS_LIST = [
   {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80",beginnerLabel:"How do I budget my money?",beginnerSub:"Enter what you earn and we'll show you where it goes"},
   {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee",beginnerLabel:"Analyze my spending",beginnerSub:"Upload your bank statement and see where your money went"},
   {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Canadian housing market comparison — is buying worth it?",color:"#a78bfa",beginnerLabel:"Should I rent or buy a home?",beginnerSub:"We'll compare the real costs of renting vs buying in Canada"},
+  {id:"news",label:"Financial News",icon:"📰",sub:"Live Canadian financial news — rates, markets & economy",color:"#fb923c",beginnerLabel:"What's happening in Canadian finance?",beginnerSub:"Today's top stories on money, rates and the economy"},
   {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa",beginnerLabel:"What is my net worth?",beginnerSub:"Add up what you own and subtract what you owe"},
   {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15",beginnerLabel:"How much do I need to save?",beginnerSub:"Enter your goal and deadline — we'll tell you how much per month"},
   {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa",beginnerLabel:"What happens if I invest more?",beginnerSub:"Try out financial decisions before you make them"},
@@ -2086,7 +2274,7 @@ function IndividualTools({onHome,data,beginner}) {
   const [tool,setTool]=useState(null);
   if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget}/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
-  if(tool==="rentvsbuy") return <ToolWrapper title={beginner?"Should I Rent or Buy?":"Rent vs. Buy"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy beginner={beginner}/></ToolWrapper>;
+  if(tool==="news") return <ToolWrapper title="Financial News" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-news"><FinancialNews/></ToolWrapper>;
   if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data} beginner={beginner}/></ToolWrapper>;
   if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data} beginner={beginner}/></ToolWrapper>;
   if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
@@ -2718,6 +2906,125 @@ function RentVsBuy({beginner}) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── FINANCIAL NEWS ───────────────────────────────────────────────────────────
+const NEWS_FEEDS = [
+  {label:"CBC Business",url:"https://www.cbc.ca/cmlink/rss-business",color:"#f87171"},
+  {label:"Globe & Mail",url:"https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/business/",color:"#4ade80"},
+  {label:"Financial Post",url:"https://financialpost.com/feed",color:"#facc15"},
+  {label:"Bank of Canada",url:"https://www.bankofcanada.ca/feed/",color:"#60a5fa"},
+];
+const RSS_PROXY="https://api.rss2json.com/v1/api.json?rss_url=";
+
+function FinancialNews() {
+  const [articles,setArticles]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  const [activeSource,setActiveSource]=useState("all");
+  const [sourceName,setSourceName]=useState({});
+
+  useEffect(()=>{
+    const fetchAll=async()=>{
+      setLoading(true);setError(null);
+      const results=[];
+      await Promise.all(NEWS_FEEDS.map(async feed=>{
+        try{
+          const r=await fetch(`${RSS_PROXY}${encodeURIComponent(feed.url)}&count=8`);
+          const json=await r.json();
+          if(json.items){
+            json.items.forEach(item=>{
+              results.push({
+                title:item.title?.replace(/&amp;/g,"&").replace(/&#039;/g,"'").replace(/&quot;/g,'"').trim(),
+                link:item.link,
+                date:item.pubDate?new Date(item.pubDate):new Date(),
+                source:feed.label,
+                color:feed.color,
+                desc:item.description?.replace(/<[^>]+>/g,"").slice(0,120).trim()+"...",
+              });
+            });
+          }
+        }catch(e){}
+      }));
+      // Sort by date desc, deduplicate similar titles
+      const seen=new Set();
+      const deduped=results
+        .sort((a,b)=>b.date-a.date)
+        .filter(a=>{
+          const key=a.title?.slice(0,40).toLowerCase();
+          if(seen.has(key))return false;
+          seen.add(key);return true;
+        });
+      if(deduped.length===0)setError("Unable to load news right now. Please try again later.");
+      setArticles(deduped);
+      setLoading(false);
+    };
+    fetchAll();
+  },[]);
+
+  const filtered=activeSource==="all"?articles:articles.filter(a=>a.source===activeSource);
+  const formatDate=(d)=>{
+    const now=new Date(),diff=Math.floor((now-d)/1000/60);
+    if(diff<60)return `${diff}m ago`;
+    if(diff<1440)return `${Math.floor(diff/60)}h ago`;
+    return d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
+  };
+
+  return (
+    <div>
+      {/* Source filter */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+        <button onClick={()=>setActiveSource("all")} style={{background:activeSource==="all"?"#1a4080":"#0d1b3e",border:`1px solid ${activeSource==="all"?"#60a5fa":"#2a4080"}`,borderRadius:20,padding:"5px 14px",cursor:"pointer",color:activeSource==="all"?"#60a5fa":"#8fadd4",fontSize:11,...GS}}>
+          All Sources
+        </button>
+        {NEWS_FEEDS.map(f=>(
+          <button key={f.label} onClick={()=>setActiveSource(f.label)} style={{background:activeSource===f.label?f.color+"22":"#0d1b3e",border:`1px solid ${activeSource===f.label?f.color:"#2a4080"}`,borderRadius:20,padding:"5px 14px",cursor:"pointer",color:activeSource===f.label?f.color:"#8fadd4",fontSize:11,...GS}}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {loading&&(
+        <div style={{textAlign:"center",padding:"40px 0"}}>
+          <div style={{fontSize:32,marginBottom:12}}>📰</div>
+          <div style={{fontSize:13,color:"#6b8cce"}}>Loading latest Canadian financial news...</div>
+        </div>
+      )}
+
+      {error&&(
+        <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:12,padding:"16px",fontSize:13,color:"#f87171",textAlign:"center"}}>
+          {error}
+        </div>
+      )}
+
+      {!loading&&!error&&filtered.length===0&&(
+        <div style={{textAlign:"center",padding:"40px 0",fontSize:13,color:"#6b8cce"}}>No articles found for this source.</div>
+      )}
+
+      {!loading&&filtered.map((a,i)=>(
+        <a key={i} href={a.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",display:"block",marginBottom:10}}>
+          <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderLeft:`3px solid ${a.color}`,borderRadius:12,padding:"14px 16px",transition:"border-color 0.2s,transform 0.2s",cursor:"pointer"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=a.color;e.currentTarget.style.transform="translateY(-1px)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e3a5f";e.currentTarget.style.transform="";}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:6}}>
+              <div style={{fontSize:14,color:"#e8e4d9",lineHeight:1.5,fontWeight:"bold",...GS}}>{a.title}</div>
+              <div style={{fontSize:10,color:"#6b8cce",flexShrink:0,marginTop:2}}>{formatDate(a.date)}</div>
+            </div>
+            {a.desc&&<div style={{fontSize:11,color:"#6b8cce",lineHeight:1.6,marginBottom:6}}>{a.desc}</div>}
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:a.color}}/>
+              <span style={{fontSize:10,color:a.color,letterSpacing:1}}>{a.source}</span>
+              <span style={{fontSize:10,color:"#2a4080",marginLeft:"auto"}}>Read →</span>
+            </div>
+          </div>
+        </a>
+      ))}
+
+      <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#2a4080"}}>
+        Live feeds from CBC, Globe & Mail, Financial Post, Bank of Canada
+      </div>
     </div>
   );
 }
