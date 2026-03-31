@@ -29,9 +29,9 @@ const EMPTY = {
   otherDebts:[],
   lifeInsurance:"",
   budget:{income:"",categories:[
-    {name:"Investments",amount:""},{name:"Housing",amount:""},{name:"Food",amount:""},
-    {name:"Transportation",amount:""},{name:"Recurring",amount:""},{name:"Insurance",amount:""},
-    {name:"Entertainment",amount:""},{name:"Wellness",amount:""},
+    {name:"Investments",amount:"",bucket:"fixed"},{name:"Housing",amount:"",bucket:"fixed"},{name:"Food",amount:"",bucket:"estimated"},
+    {name:"Transportation",amount:"",bucket:"estimated"},{name:"Recurring",amount:"",bucket:"subscription"},{name:"Insurance",amount:"",bucket:"fixed"},
+    {name:"Entertainment",amount:"",bucket:"estimated"},{name:"Wellness",amount:"",bucket:"estimated"},
   ]},
   billCalendar:[],
 };
@@ -302,6 +302,130 @@ function Homepage({onAppointment,onCheckup,onTools,dark,setDark,theme,beginner,s
           ))}
         </div>
         <div style={{...fade(0.5),marginTop:28,fontSize:10,color:theme.tagline,letterSpacing:2,textTransform:"uppercase"}}>Private · Secure · Instant</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FINANCIAL PRESCRIPTION ───────────────────────────────────────────────────
+function FinancialPrescription({score,data,totalInv}) {
+  const income=Number(data.budget.income||0);
+  const totalAlloc=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+  const surplus=income-totalAlloc;
+  const totalCC=data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const invCat=data.budget.categories.find(c=>c.name==="Investments");
+  const invAmt=Number(invCat?.amount||0);
+  const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const monthlyExp=totalAlloc;
+  const efundMonths=monthlyExp>0?(efund/monthlyExp):0;
+
+  // Generate 3 hyper-specific prescriptions based on their actual numbers
+  const rxItems=[];
+
+  // Investment rate Rx
+  if(income>0&&invAmt/income<0.10){
+    const target=Math.round(income*0.10);
+    const gap=target-invAmt;
+    rxItems.push({icon:"💊",color:"#4ade80",title:"Boost your investment rate",action:`Transfer ${fmt(gap)}/mo more into your TFSA — bringing you from ${((invAmt/income)*100).toFixed(1)}% to 10% of your income invested. Set this up as an automatic transfer on payday so it never gets spent.`});
+  }
+
+  // Emergency fund Rx
+  if(efundMonths<3&&monthlyExp>0){
+    const target=monthlyExp*3;
+    const gap=target-efund;
+    const months=surplus>0?Math.ceil(gap/surplus):null;
+    rxItems.push({icon:"💊",color:"#60a5fa",title:"Build your emergency fund to 3 months",action:`You have ${efundMonths.toFixed(1)} months saved — the minimum is 3. You need ${fmt(gap)} more.${months?` At your current surplus of ${fmt(surplus)}/mo, you're ${months} months away. Automate ${fmt(Math.min(surplus*0.5,gap/6))}/mo to savings first.`:""}`});
+  }
+
+  // Credit card debt Rx
+  if(totalCC>0){
+    const monthlyInterest=(totalCC*0.1999)/12;
+    rxItems.push({icon:"💊",color:"#f87171",title:"Eliminate credit card debt",action:`Your ${fmt(totalCC)} in credit card balances costs you roughly ${fmt(monthlyInterest)}/mo in interest — money that builds zero wealth. Pay every dollar beyond minimums toward the highest-rate card. The Debt Optimizer tool below has your exact payoff plan.`});
+  }
+
+  // Surplus Rx
+  if(surplus>0&&invAmt/income>=0.10&&efundMonths>=3&&totalCC===0){
+    rxItems.push({icon:"💊",color:"#facc15",title:"Put your surplus to work",action:`You have a ${fmt(surplus)}/mo surplus. If invested at 7%/yr for 10 years, that's ${fmtShort(surplus*((Math.pow(1+0.07/12,120)-1)/(0.07/12)))} in additional wealth. Max TFSA → FHSA → RRSP → non-registered, in that order.`});
+  }
+
+  // Always add one more if we only have 1-2
+  if(rxItems.length<2&&totalInv>0){
+    rxItems.push({icon:"💊",color:"#a78bfa",title:"Review your investment allocation",action:`Your ${fmtShort(totalInv)} portfolio is your biggest asset. Make sure it's diversified — a simple three-fund portfolio (Canadian, US, International index ETFs) is a low-cost, proven approach.`});
+  }
+
+  const top3=rxItems.slice(0,3);
+
+  return (
+    <Card style={{background:"linear-gradient(135deg,#0a0f1e,#0d1b3e)",border:"1px solid #cc000044"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <span style={{fontSize:22}}>🩺</span>
+        <div>
+          <div style={{fontSize:13,color:"#cc0000",fontWeight:"bold",letterSpacing:1,...GS}}>FINANCIAL PRESCRIPTION</div>
+          <div style={{fontSize:11,color:"#6b8cce"}}>Your personalized action items based on your numbers</div>
+        </div>
+      </div>
+      {top3.map((rx,i)=>(
+        <div key={i} style={{background:"#0d1b3e",borderRadius:12,padding:"14px",marginBottom:10,borderLeft:`3px solid ${rx.color}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <span style={{fontSize:16}}>{rx.icon}</span>
+            <div style={{fontSize:13,color:rx.color,fontWeight:"bold",...GS}}>Rx {i+1}: {rx.title}</div>
+          </div>
+          <div style={{fontSize:12,color:"#8fadd4",lineHeight:1.8,paddingLeft:24}}>{rx.action}</div>
+        </div>
+      ))}
+    </Card>
+  );
+}
+
+// ─── POST-SCORE TOOLS ─────────────────────────────────────────────────────────
+function PostScoreTools({data,onCheckup,saveScore,score}) {
+  const [openTool,setOpenTool]=useState(null);
+  const totalCC=data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalOD=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
+  const hasDebts=totalCC>0||totalOD>0||(data.locs||[]).some(l=>Number(l.balance||0)>0);
+  const hasSavings=(data.savingsAccounts||[]).some(a=>Number(a.goal||0)>0);
+
+  const TOOLS=[
+    {id:"budget",icon:"💰",color:"#4ade80",label:"Review Your Budget",sub:"Pre-loaded with your income and categories"},
+    {id:"networth",icon:"📊",color:"#60a5fa",label:"See Your Net Worth",sub:"Pre-loaded with all your assets and debts"},
+    ...(hasSavings?[{id:"savings",icon:"🎯",color:"#facc15",label:"Track Your Savings Goals",sub:"Pre-loaded with your savings accounts"}]:[]),
+    ...(hasDebts?[{id:"debtopt",icon:"⚡",color:"#f87171",label:"Optimize Your Debt Payoff",sub:"Pre-loaded with your credit cards and loans"}]:[]),
+  ];
+
+  return (
+    <div style={{marginTop:8}}>
+      <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:14,...GS}}>YOUR PERSONALIZED TOOLS</div>
+      <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:16}}>These tools are pre-loaded with the information you just entered. Tap any to explore.</div>
+
+      {TOOLS.map(tool=>(
+        <div key={tool.id} style={{marginBottom:12}}>
+          <button onClick={()=>setOpenTool(openTool===tool.id?null:tool.id)}
+            style={{width:"100%",background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid ${openTool===tool.id?tool.color:"#1e3a5f"}`,borderRadius:14,padding:"16px 20px",cursor:"pointer",textAlign:"left",color:"#e8e4d9",transition:"border-color 0.2s",...GS}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <span style={{fontSize:24}}>{tool.icon}</span>
+                <div>
+                  <div style={{fontSize:15,fontWeight:"bold",color:tool.color,marginBottom:3}}>{tool.label}</div>
+                  <div style={{fontSize:11,color:"#6b8cce"}}>{tool.sub}</div>
+                </div>
+              </div>
+              <div style={{fontSize:18,color:openTool===tool.id?tool.color:"#2a4080",transition:"transform 0.2s",transform:openTool===tool.id?"rotate(90deg)":"none"}}>›</div>
+            </div>
+          </button>
+
+          {openTool===tool.id&&(
+            <div style={{background:"#0d1b3e",borderRadius:"0 0 14px 14px",border:`1px solid ${tool.color}44`,borderTop:"none",padding:"16px"}}>
+              {tool.id==="budget"&&<StandaloneBudget prefill={data.budget}/>}
+              {tool.id==="networth"&&<StandaloneNetWorth prefill={data}/>}
+              {tool.id==="savings"&&<SavingsGoalCalc prefill={data}/>}
+              {tool.id==="debtopt"&&<DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/>}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <button onClick={()=>{saveScore(score);onCheckup();}} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>View Full Dashboard →</button>
       </div>
     </div>
   );
@@ -770,6 +894,9 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
                 ))}
               </Card>
 
+              {/* Financial Prescription */}
+              <FinancialPrescription score={score} data={d} totalInv={totalInv}/>
+
               {/* Score guidance */}
               <ScoreGuidance score={score} data={d} totalInv={totalInv}/>
 
@@ -778,6 +905,9 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
                 <button onClick={()=>{saveScore(score);onCheckup();}} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>Save & Dashboard →</button>
                 <button onClick={onHome} style={{background:"none",border:"1px solid #2a4080",borderRadius:12,padding:"14px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← Home</button>
               </div>
+
+              {/* Post-score personalized tools */}
+              <PostScoreTools data={d} onCheckup={onCheckup} saveScore={saveScore} score={score}/>
             </div>
           ):(
             <div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:40,marginBottom:16}}>⚠️</div><p style={{color:"#8fadd4"}}>Please enter your age in the Start section to generate a score.</p><NextBtn onClick={()=>setStep("Start")}>Go to Start</NextBtn></div>
@@ -1653,11 +1783,11 @@ const TOOLS_LIST = [
 
 function IndividualTools({onHome,data,beginner}) {
   const [tool,setTool]=useState(null);
-  if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget beginner={beginner}/></ToolWrapper>;
+  if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget}/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
   if(tool==="rentvsbuy") return <ToolWrapper title={beginner?"Should I Rent or Buy?":"Rent vs. Buy"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy beginner={beginner}/></ToolWrapper>;
-  if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth beginner={beginner}/></ToolWrapper>;
-  if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc beginner={beginner}/></ToolWrapper>;
+  if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data} beginner={beginner}/></ToolWrapper>;
+  if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data} beginner={beginner}/></ToolWrapper>;
   if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
   if(tool==="loc") return <ToolWrapper title={beginner?"How Much Will a Loan Cost?":"Loan Simulator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate="" beginner={beginner}/></ToolWrapper>;
   if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
@@ -1693,6 +1823,198 @@ function IndividualTools({onHome,data,beginner}) {
 }
 
 // ─── RENT VS BUY ─────────────────────────────────────────────────────────────
+// ─── SUPER MODE LIGHTNING ─────────────────────────────────────────────────────
+function SuperModeLightning() {
+  const [flash,setFlash]=useState(false);
+  const [pos,setPos]=useState({x:50,y:0});
+  useEffect(()=>{
+    const interval=setInterval(()=>{
+      setPos({x:Math.random()*80+10,y:Math.random()*60});
+      setFlash(true);
+      setTimeout(()=>setFlash(false),120);
+    },Math.random()*4000+6000);
+    return ()=>clearInterval(interval);
+  },[]);
+  return (
+    <>
+      {/* Stormy background */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(ellipse at 50% 0%,#0a0f2a 0%,transparent 70%)",opacity:0.6}}/>
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,backgroundImage:"linear-gradient(#60a5fa08 1px,transparent 1px),linear-gradient(90deg,#60a5fa08 1px,transparent 1px)",backgroundSize:"40px 40px"}}/>
+      {/* Lightning flash */}
+      {flash&&<div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1000,background:`radial-gradient(ellipse at ${pos.x}% ${pos.y}%,rgba(148,200,255,0.08) 0%,transparent 60%)`,transition:"opacity 0.05s"}}/>}
+      {/* Blue border glow on body */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,boxShadow:"inset 0 0 60px #60a5fa18",borderRadius:0}}/>
+    </>
+  );
+}
+
+// ─── SUPER IN-DEPTH CHARTS ─────────────────────────────────────────────────────
+function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,investReturn,totalMonthlyCost,totalMonthlyRent,extraUpfront,totalLTT,cmhc,baseApp,baseInv}) {
+  // Build year-by-year data for charts
+  const invRate=investReturn/100/12;
+  const appRate=appreciation/100;
+  const monthlyDiff=Math.max(0,totalMonthlyCost-totalMonthlyRent);
+  const totalDP=dp+extraUpfront;
+
+  const yearData=[];
+  let mortBal=totalMortgage;
+  let rentInv=totalDP;
+  let rentMonthlyAcc=0;
+
+  for(let y=0;y<=25;y++){
+    const fhv=hp*Math.pow(1+appRate,y);
+    const eq=Math.max(0,fhv-mortBal);
+    const ri=rentInv+rentMonthlyAcc;
+    yearData.push({
+      year:y===0?"Now":`Yr ${y}`,
+      homeEquity:Math.round(eq),
+      rentInvested:Math.round(ri),
+      homeValue:Math.round(fhv),
+      mortgageBal:Math.round(mortBal),
+    });
+    // Advance 12 months
+    for(let m=0;m<12;m++){
+      const interest=mortBal*r;
+      mortBal=Math.max(0,mortBal-(mpWithCMHC-interest));
+      rentInv*=(1+invRate);
+      rentMonthlyAcc=rentMonthlyAcc*(1+invRate)+monthlyDiff;
+    }
+  }
+
+  // Sensitivity table: appreciation vs investment return
+  const appRates=[0,2,4,6,8];
+  const invRates=[4,6,8,10];
+  const sensitivityData=appRates.map(a=>({
+    app:a,
+    results:invRates.map(iv=>{
+      const ar=a/100,ir=iv/100/12,yrs=10;
+      const fhv=hp*Math.pow(1+ar,yrs);
+      let mb=totalMortgage;
+      for(let i=0;i<yrs*12;i++){const int=mb*r;mb=Math.max(0,mb-(mpWithCMHC-int));}
+      const eq=fhv-mb;
+      const md=Math.max(0,totalMonthlyCost-totalMonthlyRent);
+      const ri=totalDP*Math.pow(1+ir,yrs*12)+md*((Math.pow(1+ir,yrs*12)-1)/ir);
+      return {inv:iv,buyWins:eq>ri,diff:eq-ri};
+    })
+  }));
+
+  return (
+    <div>
+      {/* Chart 1: Equity vs Rent+Invest over time */}
+      <Card style={{border:"1px solid #60a5fa44"}}>
+        <SecTitle>⚡ Wealth Building — Buy vs Rent Over 25 Years</SecTitle>
+        <div style={{fontSize:11,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>Home equity (🏠) vs. what your down payment and monthly savings would be worth if invested (🏢).</div>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={yearData} margin={{top:5,right:10,left:0,bottom:5}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
+            <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:9,...GS}} interval={4}/>
+            <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+            <Line type="monotone" dataKey="homeEquity" stroke="#4ade80" strokeWidth={2} dot={false} name="🏠 Home Equity"/>
+            <Line type="monotone" dataKey="rentInvested" stroke="#a78bfa" strokeWidth={2} dot={false} name="🏢 Rent + Invest"/>
+            <Line type="monotone" dataKey="homeValue" stroke="#60a5fa" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Home Value"/>
+          </LineChart>
+        </ResponsiveContainer>
+        <div style={{display:"flex",gap:16,marginTop:8,flexWrap:"wrap"}}>
+          {[{label:"🏠 Home Equity",color:"#4ade80"},{label:"🏢 Rent + Invest",color:"#a78bfa"},{label:"Home Value",color:"#60a5fa",dash:true}].map(x=>(
+            <div key={x.label} style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{width:20,height:3,background:x.color,borderRadius:2,borderTop:x.dash?"1px dashed "+x.color:"none",opacity:x.dash?0.6:1}}/>
+              <span style={{fontSize:10,color:"#6b8cce"}}>{x.label}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Chart 2: Mortgage paydown vs appreciation */}
+      <Card style={{border:"1px solid #60a5fa44"}}>
+        <SecTitle>⚡ Mortgage Paydown vs Home Value</SecTitle>
+        <div style={{fontSize:11,color:"#6b8cce",marginBottom:12}}>How your mortgage balance shrinks as your home value grows.</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={yearData.filter((_,i)=>i%5===0)} margin={{top:5,right:10,left:0,bottom:5}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
+            <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:10,...GS}}/>
+            <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+            <Bar dataKey="homeValue" name="Home Value" fill="#60a5fa" radius={[4,4,0,0]}/>
+            <Bar dataKey="mortgageBal" name="Mortgage Balance" fill="#f87171" radius={[4,4,0,0]}/>
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* Sensitivity Table */}
+      <Card style={{border:"1px solid #60a5fa44"}}>
+        <SecTitle>⚡ Sensitivity Analysis — 10-Year Outcomes</SecTitle>
+        <div style={{fontSize:11,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
+          Each cell shows whether <span style={{color:"#4ade80"}}>Buying wins</span> or <span style={{color:"#a78bfa"}}>Renting wins</span> under different appreciation and investment return assumptions.
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",...GS}}>
+            <thead>
+              <tr>
+                <td style={{fontSize:10,color:"#6b8cce",padding:"6px 8px",borderBottom:"1px solid #1e3a5f"}}>Home Appr. ↓ / Inv. Return →</td>
+                {invRates.map(iv=><td key={iv} style={{fontSize:10,color:"#60a5fa",padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #1e3a5f"}}>{iv}%</td>)}
+              </tr>
+            </thead>
+            <tbody>
+              {sensitivityData.map(row=>(
+                <tr key={row.app}>
+                  <td style={{fontSize:11,color:"#facc15",padding:"6px 8px",borderBottom:"1px solid #0f1929",fontWeight:"bold"}}>{row.app}% appreciation</td>
+                  {row.results.map((cell,i)=>(
+                    <td key={i} style={{padding:"6px 8px",textAlign:"center",borderBottom:"1px solid #0f1929",background:cell.buyWins?"#0d2a1a":"#1a0d2a",borderRadius:4}}>
+                      <div style={{fontSize:11,color:cell.buyWins?"#4ade80":"#a78bfa",fontWeight:"bold"}}>{cell.buyWins?"🏠 Buy":"🏢 Rent"}</div>
+                      <div style={{fontSize:9,color:"#6b8cce"}}>{cell.buyWins?"+":"-"}{fmtShort(Math.abs(cell.diff))}</div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{marginTop:12,fontSize:11,color:"#6b8cce",lineHeight:1.7}}>
+          💡 The crossover point — where buying and renting break even — shifts dramatically with even 1-2% changes in home appreciation or investment returns.
+        </div>
+      </Card>
+
+      {/* True cost of ownership */}
+      <Card style={{border:"1px solid #60a5fa44"}}>
+        <SecTitle>⚡ True Cost of Ownership vs Renting — 10 Years</SecTitle>
+        {(()=>{
+          const buyTotalOut=(totalMonthlyCost*120)+dp+totalLTT+extraUpfront+cmhc;
+          const rentTotalOut=totalMonthlyRent*120;
+          const buyEquityGained=yearData[10]?.homeEquity||0;
+          const buyNetCost=buyTotalOut-buyEquityGained;
+          const rentNetCost=rentTotalOut-(yearData[10]?.rentInvested||0);
+          return (
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                {[
+                  {label:"🏠 Buying",items:[{l:"Mortgage + costs (10yr)",v:totalMonthlyCost*120},{l:"Down payment + upfront",v:dp+totalLTT+extraUpfront},{l:"Less: equity built",v:-buyEquityGained},{l:"Net true cost",v:buyNetCost,bold:true}],color:"#4ade80"},
+                  {label:"🏢 Renting",items:[{l:"Rent payments (10yr)",v:rentTotalOut},{l:"Less: investment growth",v:-(yearData[10]?.rentInvested||0)},{l:"",v:0},{l:"Net true cost",v:rentTotalOut-(yearData[10]?.rentInvested||0),bold:true}],color:"#a78bfa"},
+                ].map(col=>(
+                  <div key={col.label} style={{background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
+                    <div style={{fontSize:11,color:col.color,fontWeight:"bold",marginBottom:8,...GS}}>{col.label}</div>
+                    {col.items.filter(x=>x.l).map((x,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:4,borderTop:x.bold?"1px solid #1e3a5f":"none",paddingTop:x.bold?6:0}}>
+                        <span style={{fontSize:10,color:"#6b8cce"}}>{x.l}</span>
+                        <span style={{fontSize:11,color:x.bold?col.color:x.v<0?"#4ade80":"#e8e4d9",fontWeight:x.bold?"bold":"normal",...GS}}>{x.v<0?"- ":""}{fmt(Math.abs(x.v))}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#8fadd4",lineHeight:1.8}}>
+                {buyNetCost<rentTotalOut-(yearData[10]?.rentInvested||0)
+                  ?`🏠 After accounting for equity built, buying costs ${fmt(Math.abs(buyNetCost-(rentTotalOut-(yearData[10]?.rentInvested||0))))} less than renting over 10 years.`
+                  :`🏢 After accounting for investment growth, renting costs ${fmt(Math.abs((rentTotalOut-(yearData[10]?.rentInvested||0))-buyNetCost))} less than buying over 10 years.`}
+              </div>
+            </div>
+          );
+        })()}
+      </Card>
+    </div>
+  );
+}
+
 function RentVsBuy({beginner}) {
   const [homePrice,setHomePrice]=useState("600000");
   const [downMode,setDownMode]=useState("pct"); // "pct" or "dollar"
@@ -1713,6 +2035,18 @@ function RentVsBuy({beginner}) {
   const [toronto,setToronto]=useState(false);
   const [firstTime,setFirstTime]=useState(false);
   const [showVariance,setShowVariance]=useState(false);
+  const [superMode,setSuperMode]=useState(()=>{try{return JSON.parse(localStorage.getItem("rvb_super")||"false");}catch{return false;}});
+  // Super in-depth additional inputs
+  const [condoFee,setCondoFee]=useState("0");
+  const [closingCosts,setClosingCosts]=useState("3500");
+  const [movingCosts,setMovingCosts]=useState("2000");
+  const [renobudget,setRenobudget]=useState("0");
+  const [propTaxGrowth,setPropTaxGrowth]=useState("2");
+  const [rentalIncome,setRentalIncome]=useState("0");
+  const [mortgagePenalty,setMortgagePenalty]=useState("0");
+  const [variableRate,setVariableRate]=useState(false);
+
+  const toggleSuper=(v)=>{setSuperMode(v);try{localStorage.setItem("rvb_super",JSON.stringify(v));}catch{}};
 
   const hp=Number(homePrice||0);
   // Down payment — dollar or percent
@@ -1741,13 +2075,14 @@ function RentVsBuy({beginner}) {
   const autoMaintenance=hp*0.01/12,autoPropTax=hp*0.01/12;
   const actualMaintenance=maintenance?Number(maintenance):autoMaintenance;
   const actualPropTax=propTax?Number(propTax):autoPropTax;
-  const totalMonthlyCost=mpWithCMHC+actualPropTax+actualMaintenance+Number(homeIns||0);
+  const superCosts=superMode?(Number(condoFee||0)+Number(rentalIncome||0)*-1):0;
+  const totalMonthlyCost=mpWithCMHC+actualPropTax+actualMaintenance+Number(homeIns||0)+superCosts;
   const totalMonthlyRent=Number(rent||0)+Number(tenantIns||0)+Number(utilities||0);
+  const extraUpfront=superMode?(Number(closingCosts||0)+Number(movingCosts||0)+Number(renobudget||0)+Number(mortgagePenalty||0)):0;
 
   const yrs=Number(years||10);
   const rentIncRate=Number(rentIncrease||2.5)/100;
 
-  // Scenario calculator — accepts custom rates
   const calcScenario=(appRatePct,invReturnPct)=>{
     const appRate=appRatePct/100,invRate=invReturnPct/100/12;
     const futureHomeValue=hp*Math.pow(1+appRate,yrs);
@@ -1755,11 +2090,30 @@ function RentVsBuy({beginner}) {
     for(let i=0;i<yrs*12;i++){const interest=mortBal*r;mortBal=Math.max(0,mortBal-(mpWithCMHC-interest));}
     const buyEquity=futureHomeValue-mortBal;
     const monthlyDiff=Math.max(0,totalMonthlyCost-totalMonthlyRent);
-    const dpInvested=dp*Math.pow(1+invRate,yrs*12);
+    const totalDP=dp+extraUpfront;
+    const dpInvested=totalDP*Math.pow(1+invRate,yrs*12);
     const monthlyInvFV=monthlyDiff>0?monthlyDiff*((Math.pow(1+invRate,yrs*12)-1)/invRate):0;
     const rentNetPosition=dpInvested+monthlyInvFV;
     return {buyEquity,rentNetPosition,futureHomeValue,buyWins:buyEquity>rentNetPosition};
   };
+
+  // Break-even: find year where buy equity > rent invested
+  const findBreakEven=()=>{
+    const invRate=Number(investReturn||7)/100/12;
+    const appRate=Number(appreciation||2)/100;
+    for(let y=1;y<=30;y++){
+      const fhv=hp*Math.pow(1+appRate,y);
+      let mb=totalMortgage;
+      for(let i=0;i<y*12;i++){const interest=mb*r;mb=Math.max(0,mb-(mpWithCMHC-interest));}
+      const eq=fhv-mb;
+      const md=Math.max(0,totalMonthlyCost-totalMonthlyRent);
+      const totalDP=dp+extraUpfront;
+      const ri=totalDP*Math.pow(1+invRate,y*12)+md*((Math.pow(1+invRate,y*12)-1)/invRate);
+      if(eq>ri) return y;
+    }
+    return null;
+  };
+  const breakEvenYear=hp>0&&Number(rent||0)>0?findBreakEven():null;
 
   const baseApp=Number(appreciation||2),baseInv=Number(investReturn||7);
   const base=calcScenario(baseApp,baseInv);
@@ -1771,8 +2125,25 @@ function RentVsBuy({beginner}) {
   for(let i=0;i<yrs;i++){totalRentPaid+=curRent*12;curRent*=(1+rentIncRate);}
 
   return (
-    <div>
-      {beginner&&<div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:20,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 Fill in your numbers below and we'll tell you whether renting or buying makes more financial sense for your situation.</div>}
+    <div style={{position:"relative",minHeight:"100%"}}>
+      {/* Lightning flashes for super mode */}
+      {superMode&&<SuperModeLightning/>}
+
+      {beginner&&<div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 Fill in your numbers below and we'll tell you whether renting or buying makes more financial sense for your situation.</div>}
+
+      {/* Super In-Depth Toggle */}
+      <button onClick={()=>toggleSuper(!superMode)} style={{width:"100%",background:superMode?"linear-gradient(135deg,#0d0d1a,#1a1a3e)":"#0d1b3e",border:`2px solid ${superMode?"#60a5fa":"#2a4080"}`,borderRadius:14,padding:"14px 18px",cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",...GS,transition:"all 0.3s"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:22}}>⚡</span>
+          <div style={{textAlign:"left"}}>
+            <div style={{fontSize:14,color:superMode?"#60a5fa":"#8fadd4",fontWeight:"bold"}}>Super In-Depth Mode</div>
+            <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>{superMode?"Every variable, charts, sensitivity analysis":"Toggle for the full professional analysis"}</div>
+          </div>
+        </div>
+        <div style={{width:48,height:26,borderRadius:13,background:superMode?"#1a3a5e":"#1e1e2e",border:`2px solid ${superMode?"#60a5fa":"#2a4080"}`,position:"relative",transition:"all 0.3s"}}>
+          <div style={{width:18,height:18,borderRadius:"50%",background:superMode?"#60a5fa":"#475569",position:"absolute",top:2,left:superMode?26:2,transition:"left 0.3s,background 0.3s"}}/>
+        </div>
+      </button>
 
       {/* Location */}
       <Card>
@@ -1857,6 +2228,48 @@ function RentVsBuy({beginner}) {
         </div>
       </Card>
 
+      {/* Super In-Depth Additional Inputs */}
+      {superMode&&(
+        <Card style={{background:"linear-gradient(135deg,#0a0d1a,#0d1b3e)",border:"2px solid #60a5fa44"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+            <span style={{fontSize:18}}>⚡</span>
+            <div style={{fontSize:12,color:"#60a5fa",letterSpacing:2,...GS}}>SUPER IN-DEPTH — ADDITIONAL COSTS</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <Label>Condo / HOA Fees /mo</Label>
+              <NumInput value={condoFee} onChange={setCondoFee} placeholder="0"/>
+            </div>
+            <div>
+              <Label>Rental Income /mo (if applicable)</Label>
+              <NumInput value={rentalIncome} onChange={setRentalIncome} placeholder="0"/>
+            </div>
+            <div>
+              <Label>Closing Costs (lawyer, inspection)</Label>
+              <NumInput value={closingCosts} onChange={setClosingCosts} placeholder="3500"/>
+            </div>
+            <div>
+              <Label>Moving Costs</Label>
+              <NumInput value={movingCosts} onChange={setMovingCosts} placeholder="2000"/>
+            </div>
+            <div>
+              <Label>Immediate Renovation Budget</Label>
+              <NumInput value={renobudget} onChange={setRenobudget} placeholder="0"/>
+            </div>
+            <div>
+              <Label>Mortgage Penalty (if breaking early)</Label>
+              <NumInput value={mortgagePenalty} onChange={setMortgagePenalty} placeholder="0"/>
+            </div>
+          </div>
+          {(Number(condoFee||0)>0||Number(closingCosts||0)>0||Number(movingCosts||0)>0)&&(
+            <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",fontSize:12,color:"#8fadd4",lineHeight:1.8}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span>Additional Monthly Cost (condo - rental)</span><span style={{color:"#f87171",...GS}}>{fmt(superCosts)}/mo</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span>Extra Upfront (closing + moving + reno)</span><span style={{color:"#f87171",...GS}}>{fmt(extraUpfront)}</span></div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* RESULTS */}
       {hp>0&&Number(rent)>0&&dp>0&&(
         <div>
@@ -1913,6 +2326,35 @@ function RentVsBuy({beginner}) {
             {cmhc>0&&<div style={{marginTop:10,background:"#1a1a0a",border:"1px solid #facc1544",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#facc15",lineHeight:1.6}}>⚠️ CMHC insurance of {fmt(cmhc)} gets added to your mortgage. To avoid it you need {fmt(hp*0.2)} (20% down).</div>}
           </Card>
 
+          {/* Break-even callout */}
+          {breakEvenYear!==null&&(
+            <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #60a5fa44",marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>⏱</span>
+                <div>
+                  <div style={{fontSize:12,color:"#6b8cce",marginBottom:3,letterSpacing:1}}>BREAK-EVEN POINT</div>
+                  <div style={{fontSize:16,color:"#60a5fa",fontWeight:"bold",...GS}}>
+                    Buying beats renting at <span style={{color:"#4ade80"}}>year {breakEvenYear}</span>
+                  </div>
+                  <div style={{fontSize:11,color:"#6b8cce",marginTop:3}}>
+                    Based on {appreciation}% home appreciation and {investReturn}% investment return. Before year {breakEvenYear}, renting and investing the difference wins.
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+          {hp>0&&Number(rent||0)>0&&breakEvenYear===null&&(
+            <Card style={{background:"linear-gradient(135deg,#1a0d0d,#0d1b3e)",border:"1px solid #f8717144",marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>⚠️</span>
+                <div>
+                  <div style={{fontSize:13,color:"#f87171",fontWeight:"bold",...GS}}>Buying doesn't break even within 30 years</div>
+                  <div style={{fontSize:11,color:"#6b8cce",marginTop:3}}>At {appreciation}% appreciation and {investReturn}% investment return, renting and investing consistently outperforms buying over this time horizon.</div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Net position */}
           <Card>
             <SecTitle>{years}-Year Net Position</SecTitle>
@@ -1930,6 +2372,15 @@ function RentVsBuy({beginner}) {
             </div>
           </Card>
 
+          {/* Super In-Depth Charts */}
+          {superMode&&<SuperInDepthCharts
+            hp={hp} dp={dp} totalMortgage={totalMortgage} mpWithCMHC={mpWithCMHC}
+            r={r} appreciation={Number(appreciation||2)} investReturn={Number(investReturn||7)}
+            totalMonthlyCost={totalMonthlyCost} totalMonthlyRent={totalMonthlyRent}
+            extraUpfront={extraUpfront} totalLTT={totalLTT} cmhc={cmhc}
+            baseApp={baseApp} baseInv={baseInv}
+          />}
+
           {/* Variance / Best+Worst */}
           <button onClick={()=>setShowVariance(p=>!p)} style={{width:"100%",background:"none",border:"1px dashed #60a5fa44",borderRadius:10,padding:"11px",color:"#60a5fa",cursor:"pointer",fontSize:13,marginBottom:14,...GS}}>
             {showVariance?"▲ Hide Scenarios":"📊 Show Best & Worst Case Scenarios"}
@@ -1940,9 +2391,6 @@ function RentVsBuy({beginner}) {
               <div style={{fontSize:12,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
                 Real estate and investment returns are unpredictable. Here's how the outcome changes under different market conditions.
               </div>
-
-              {/* Buying scenarios */}
-              <div style={{fontSize:11,color:"#4ade80",letterSpacing:2,marginBottom:10}}>🏠 BUYING SCENARIOS</div>
               {[
                 {label:"Best Case for Buying",desc:`Home appreciates ${baseApp+3}%/yr, investments return ${Math.max(1,baseInv-2)}%/yr`,equity:bestBuy.buyEquity,rent:bestBuy.rentNetPosition,color:"#4ade80"},
                 {label:"Base Case",desc:`${baseApp}% home appreciation, ${baseInv}% investment return`,equity:base.buyEquity,rent:base.rentNetPosition,color:"#facc15"},
@@ -1960,7 +2408,6 @@ function RentVsBuy({beginner}) {
                   </div>
                 </div>
               ))}
-
               <div style={{marginTop:14,background:"#0d1b3e",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#8fadd4",lineHeight:1.8}}>
                 💡 <strong style={{color:"#e8e4d9"}}>Key insight:</strong> The rent vs. buy decision is highly sensitive to home appreciation and investment returns. When home prices are flat and markets are strong, renting and investing usually wins. When home prices rise faster than markets, buying wins.
               </div>
@@ -2888,36 +3335,180 @@ function BuyHomeSim({income}) {
 }
 
 // ─── STANDALONE TOOLS ─────────────────────────────────────────────────────────
-function StandaloneBudget() {
-  const [income,setIncome]=useState("");
-  const [cats,setCats]=useState([{name:"Housing",amount:""},{name:"Food",amount:""},{name:"Transportation",amount:""},{name:"Investments",amount:""},{name:"Entertainment",amount:""},{name:"Utilities",amount:""},{name:"Insurance",amount:""}]);
-  const total=cats.reduce((s,c)=>s+Number(c.amount||0),0),inc=Number(income||0),remaining=inc-total;
-  const donutData=[...cats.filter(c=>Number(c.amount||0)>0).map(c=>({name:c.name,value:Number(c.amount)})),remaining>0?{name:"Remaining",value:remaining}:null].filter(Boolean);
+function StandaloneBudget({prefill=null}) {
+  const [income,setIncome]=useState(prefill?.income||"");
+  const BUCKETS = [
+    {key:"fixed",label:"Fixed Costs",desc:"Same every month — non-negotiable",color:"#f87171",icon:"🔒",
+      defaults:[{name:"Housing/Rent",amount:""},{name:"Insurance",amount:""},{name:"Car Payment",amount:""}]},
+    {key:"subscription",label:"Subscriptions",desc:"Recurring but cancellable",color:"#a78bfa",icon:"🔄",
+      defaults:[{name:"Phone Bill",amount:""},{name:"Netflix",amount:""},{name:"Gym",amount:""}]},
+    {key:"estimated",label:"Estimated Costs",desc:"Variable — changes month to month",color:"#facc15",icon:"📊",
+      defaults:[{name:"Groceries",amount:""},{name:"Transportation",amount:""},{name:"Dining Out",amount:""}]},
+  ];
+
+  const initCats = () => {
+    if(prefill?.categories?.length>0){
+      return prefill.categories.map(c=>({...c,bucket:c.bucket||"estimated"}));
+    }
+    return [
+      {name:"Housing/Rent",amount:"",bucket:"fixed"},{name:"Insurance",amount:"",bucket:"fixed"},
+      {name:"Phone Bill",amount:"",bucket:"subscription"},{name:"Netflix",amount:"",bucket:"subscription"},
+      {name:"Groceries",amount:"",bucket:"estimated"},{name:"Transportation",amount:"",bucket:"estimated"},{name:"Entertainment",amount:"",bucket:"estimated"},
+    ];
+  };
+  const [cats,setCats]=useState(initCats);
+  const [newNames,setNewNames]=useState({fixed:"",subscription:"",estimated:""});
+
+  const inc=Number(income||0);
+  const totalBucket=(bucket)=>cats.filter(c=>c.bucket===bucket).reduce((s,c)=>s+Number(c.amount||0),0);
+  const totalFixed=totalBucket("fixed"),totalSub=totalBucket("subscription"),totalEst=totalBucket("estimated");
+  const total=totalFixed+totalSub+totalEst;
+  const remaining=inc-total;
+
+  const addCat=(bucket)=>{
+    const name=newNames[bucket].trim();
+    if(!name) return;
+    setCats(p=>[...p,{name,amount:"",bucket}]);
+    setNewNames(p=>({...p,[bucket]:""}));
+  };
+
+  const donutData=[
+    ...cats.filter(c=>Number(c.amount||0)>0).map((c,i)=>({name:c.name,value:Number(c.amount),bucket:c.bucket})),
+    remaining>0?{name:"Remaining",value:remaining,bucket:"remaining"}:null
+  ].filter(Boolean);
+
+  const BUCKET_COLORS={"fixed":"#f87171","subscription":"#a78bfa","estimated":"#facc15","remaining":"#1e3a5f"};
+
   return (
-    <div>
-      <Card><SecTitle>Monthly Income</SecTitle><NumInput value={income} onChange={setIncome} placeholder="5000.00"/>
-        {inc>0&&<div style={{marginTop:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:11,color:"#6b8cce"}}>Allocated</div><div style={{fontSize:13,color:total>inc?"#f87171":"#4ade80",fontWeight:"bold"}}>{fmt(total)} / {fmt(inc)}</div></div><div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}><div style={{width:Math.min(100,(total/inc)*100)+"%",height:"100%",background:total>inc?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/></div><div style={{marginTop:6,display:"flex",justifyContent:"space-between"}}><div style={{fontSize:11,color:"#6b8cce"}}>Remaining</div><div style={{fontSize:13,color:remaining>=0?"#4ade80":"#f87171",fontWeight:"bold"}}>{fmt(remaining)}</div></div></div>}
-      </Card>
-      <Card><SecTitle>Categories</SecTitle>
-        {cats.map((cat,i)=>(
-          <div key={i} style={{marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><div style={{width:9,height:9,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length],flexShrink:0}}/><input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===i?{...c,name:e.target.value}:c))} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/><button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button></div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"#6b8cce"}}>$</span><input type="number" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===i?{...c,amount:e.target.value}:c))} style={{background:"none",border:"none",outline:"none",borderBottom:"1px solid #2a4080",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:19,width:"100%",paddingBottom:4,...GS}}/>{inc>0&&Number(cat.amount)>0&&<span style={{fontSize:11,color:"#6b8cce"}}>{((Number(cat.amount)/inc)*100).toFixed(1)}%</span>}</div>
+    <div style={{paddingBottom:80}}>
+      {/* Income */}
+      <Card>
+        <SecTitle>Monthly Income</SecTitle>
+        <NumInput value={income} onChange={setIncome} placeholder="5000.00"/>
+        {inc>0&&<div style={{marginTop:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <div style={{fontSize:11,color:"#6b8cce"}}>Allocated</div>
+            <div style={{fontSize:13,color:total>inc?"#f87171":"#4ade80",fontWeight:"bold"}}>{fmt(total)} / {fmt(inc)}</div>
           </div>
-        ))}
-        <button onClick={()=>setCats(p=>[...p,{name:"New Category",amount:""}])} style={{width:"100%",background:"none",border:"1px dashed #2a4080",color:"#6b8cce",borderRadius:8,padding:"10px",cursor:"pointer",fontSize:13,...GS}}>+ Add Category</button>
+          <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
+            <div style={{width:Math.min(100,(total/inc)*100)+"%",height:"100%",background:total>inc?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+          </div>
+        </div>}
       </Card>
-      {donutData.length>0&&<Card><SecTitle>Breakdown</SecTitle>
-        <ResponsiveContainer width="100%" height={220}><PieChart><Pie data={donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value">{donutData.map((_,i)=><Cell key={i} fill={CAT_COLORS[i%CAT_COLORS.length]} stroke="none"/>)}</Pie><Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/></PieChart></ResponsiveContainer>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:4}}>{donutData.map((x,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:7,height:7,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length]}}/><span style={{fontSize:11,color:"#8fadd4"}}>{x.name}: {fmt(x.value)}</span></div>)}</div>
-      </Card>}
+
+      {/* Three buckets */}
+      {BUCKETS.map(bucket=>{
+        const bucketCats=cats.filter(c=>c.bucket===bucket.key);
+        const bucketTotal=totalBucket(bucket.key);
+        const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
+        return (
+          <Card key={bucket.key} style={{border:`1px solid ${bucket.color}33`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+                  <span style={{fontSize:16}}>{bucket.icon}</span>
+                  <div style={{fontSize:14,color:bucket.color,fontWeight:"bold",...GS}}>{bucket.label}</div>
+                </div>
+                <div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{bucket.desc}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:16,color:bucket.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>
+                {inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}
+              </div>
+            </div>
+            {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}>
+              <div style={{width:pct+"%",height:"100%",background:bucket.color,borderRadius:4,transition:"width 0.3s"}}/>
+            </div>}
+            {bucketCats.map((cat,i)=>{
+              const globalIdx=cats.indexOf(cat);
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{width:7,height:7,borderRadius:"50%",background:bucket.color,flexShrink:0}}/>
+                  <input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,name:e.target.value}:c))}
+                    style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{color:"#6b8cce",fontSize:13}}>$</span>
+                    <input type="number" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,amount:e.target.value}:c))}
+                      style={{background:"none",border:"none",outline:"none",color:bucket.color,fontSize:16,width:80,textAlign:"right",...GS}}/>
+                  </div>
+                  {inc>0&&Number(cat.amount)>0&&<span style={{fontSize:10,color:"#6b8cce",minWidth:36,textAlign:"right"}}>{((Number(cat.amount)/inc)*100).toFixed(0)}%</span>}
+                  <button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==globalIdx))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:0}}>×</button>
+                </div>
+              );
+            })}
+            <div style={{display:"flex",gap:8}}>
+              <input value={newNames[bucket.key]} onChange={e=>setNewNames(p=>({...p,[bucket.key]:e.target.value}))}
+                onKeyDown={e=>e.key==="Enter"&&addCat(bucket.key)}
+                placeholder={`Add ${bucket.label.toLowerCase()} item...`}
+                style={{background:"#0d1b3e",border:`1px dashed ${bucket.color}44`,borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:12,flex:1,outline:"none",...GS}}/>
+              <button onClick={()=>addCat(bucket.key)} style={{background:"none",border:`1px solid ${bucket.color}44`,borderRadius:8,padding:"7px 12px",color:bucket.color,cursor:"pointer",fontSize:12,...GS}}>+ Add</button>
+            </div>
+          </Card>
+        );
+      })}
+
+      {/* Donut chart */}
+      {donutData.length>0&&(
+        <Card>
+          <SecTitle>Spending Breakdown</SecTitle>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" strokeWidth={0}>
+                {donutData.map((d,i)=><Cell key={i} fill={BUCKET_COLORS[d.bucket]||CAT_COLORS[i%CAT_COLORS.length]}/>)}
+              </Pie>
+              <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginTop:4,justifyContent:"center"}}>
+            {[{label:"Fixed",color:"#f87171",val:totalFixed},{label:"Subscriptions",color:"#a78bfa",val:totalSub},{label:"Estimated",color:"#facc15",val:totalEst}].map(x=>(
+              <div key={x.label} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,background:x.color}}/><span style={{fontSize:11,color:"#8fadd4"}}>{x.label}: {fmt(x.val)}</span></div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Sticky totals bar */}
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#0d1b3e,#111827)",borderTop:"1px solid #1e3a5f",padding:"10px 16px",zIndex:200}}>
+        <div style={{maxWidth:520,margin:"0 auto"}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,alignItems:"center"}}>
+            {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subs 🔄",val:totalSub,color:"#a78bfa"},{label:"Variable 📊",val:totalEst,color:"#facc15"},{label:remaining>=0?"Left Over":"Over Budget",val:Math.abs(remaining),color:remaining>=0?"#4ade80":"#f87171"}].map(x=>(
+              <div key={x.label} style={{textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:2,...GS}}>{x.label}</div>
+                <div style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmtShort(x.val)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function StandaloneNetWorth() {
-  const [assets,setAssets]=useState([{name:"Chequing",amount:""},{name:"TFSA",amount:""},{name:"RRSP",amount:""},{name:"Home Equity",amount:""}]);
-  const [liabs,setLiabs]=useState([{name:"Credit Card",amount:""},{name:"Mortgage",amount:""}]);
+function StandaloneNetWorth({prefill=null}) {
+  const buildAssets = () => {
+    if(!prefill) return [{name:"Chequing",amount:""},{name:"TFSA",amount:""},{name:"RRSP",amount:""},{name:"Home Equity",amount:""}];
+    const items=[];
+    (prefill.bankAccounts||[]).forEach(a=>items.push({name:a.name,amount:a.amount||""}));
+    const sumGroup=arr=>(arr||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+    const inv=prefill.investments;
+    if(inv){["tfsa","fhsa","rrsp","alternatives","nonReg"].forEach(k=>{const v=sumGroup(inv[k]);if(v>0)items.push({name:k.toUpperCase().replace("NONREG","Non-Reg"),amount:String(v)});});} 
+    (prefill.savingsAccounts||[]).forEach(a=>{if(Number(a.saved||0)>0)items.push({name:a.name,amount:a.saved});});
+    if(Number(prefill.lifeInsurance||0)>0)items.push({name:"Life Insurance CSV",amount:prefill.lifeInsurance});
+    const eq=Number(prefill.mortgage?.value||0)-Number(prefill.mortgage?.balance||0);
+    if(eq>0)items.push({name:"Home Equity",amount:String(Math.round(eq))});
+    return items.length>0?items:[{name:"Chequing",amount:""},{name:"TFSA",amount:""},{name:"RRSP",amount:""},{name:"Home Equity",amount:""}];
+  };
+  const buildLiabs = () => {
+    if(!prefill) return [{name:"Credit Card",amount:""},{name:"Mortgage",amount:""}];
+    const items=[];
+    (prefill.creditCards||[]).forEach(c=>{if(Number(c.totalBalance||0)>0)items.push({name:c.name,amount:c.totalBalance});});
+    (prefill.locs||[]).forEach(l=>{if(Number(l.balance||0)>0)items.push({name:l.name||"Line of Credit",amount:l.balance});});
+    if(Number(prefill.mortgage?.balance||0)>0)items.push({name:"Mortgage",amount:prefill.mortgage.balance});
+    (prefill.otherDebts||[]).forEach(d=>{if(Number(d.balance||0)>0)items.push({name:d.name||d.type,amount:d.balance});});
+    return items.length>0?items:[{name:"Credit Card",amount:""},{name:"Mortgage",amount:""}];
+  };
+  const [assets,setAssets]=useState(buildAssets);
+  const [liabs,setLiabs]=useState(buildLiabs);
   const tA=assets.reduce((s,x)=>s+Number(x.amount||0),0),tL=liabs.reduce((s,x)=>s+Number(x.amount||0),0),nw=tA-tL;
   return (
     <div>
@@ -2943,8 +3534,14 @@ function StandaloneNetWorth() {
   );
 }
 
-function SavingsGoalCalc() {
-  const [goals,setGoals]=useState([{name:"",target:"",saved:"",date:""}]);
+function SavingsGoalCalc({prefill=null}) {
+  const initGoals = () => {
+    if(prefill?.savingsAccounts?.length>0){
+      return prefill.savingsAccounts.map(a=>({name:a.name,target:a.goal||"",saved:a.saved||"",date:""}));
+    }
+    return [{name:"",target:"",saved:"",date:""}];
+  };
+  const [goals,setGoals]=useState(initGoals);
   return (
     <div>
       <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.8,marginBottom:16}}>Enter your goal, how much you've saved, and your deadline — we'll calculate the monthly amount you need to save.</div>
