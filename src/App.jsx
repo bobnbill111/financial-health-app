@@ -77,7 +77,7 @@ const EMPTY = {
   mortgage:{balance:"",value:"",rate:"",monthlyPayment:"",amortYears:""},
   otherDebts:[],
   lifeInsurance:"",
-  budget:{income:"",categories:[
+  budget:{income:"",investmentMonthly:"",categories:[
     {name:"Investments",amount:"",bucket:"fixed"},{name:"Housing",amount:"",bucket:"fixed"},{name:"Food",amount:"",bucket:"estimated"},
     {name:"Transportation",amount:"",bucket:"estimated"},{name:"Recurring",amount:"",bucket:"subscription"},{name:"Insurance",amount:"",bucket:"fixed"},
     {name:"Entertainment",amount:"",bucket:"estimated"},{name:"Wellness",amount:"",bucket:"estimated"},
@@ -155,11 +155,12 @@ function calcScore(d, totalInv) {
   const monthlyExp = d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const surplus = monthlyIncome - monthlyExp;
 
-  // Investment rate — sum ALL investment categories
-  const invMonthly = d.budget.categories
-    .filter(c=>["investments","invest","rrsp","tfsa","fhsa","saving","savings"].some(k=>c.name.toLowerCase().includes(k)))
-    .reduce((s,c)=>s+Number(c.amount||0),0);
-  const invRate = annualIncome>0?(invMonthly*12/annualIncome)*100:0;
+  // Investment rate — use dedicated field first, fallback to keyword search
+  const invMonthly = Number(d.budget.investmentMonthly||0) ||
+    d.budget.categories
+      .filter(c=>["investments","invest","rrsp","tfsa","fhsa","saving","savings"].some(k=>c.name.toLowerCase().includes(k)))
+      .reduce((s,c)=>s+Number(c.amount||0),0);
+  const invRate = monthlyIncome>0?(invMonthly/monthlyIncome)*100:0;
 
   const band = age<30?"20s":age<40?"30s":age<50?"40s":age<60?"50s":"60s";
   const bm = {
@@ -1185,10 +1186,9 @@ function ScoreGuidance({score,data,totalInv}) {
 }
 
 // ─── INVESTMENT INPUT (BUDGET STEP) ──────────────────────────────────────────
-function ApptInvestmentInput({income,totalAlloc,categories,onSetInvestment}) {
+function ApptInvestmentInput({income,totalAlloc,currentValue,onSetInvestment}) {
   const surplus=income-totalAlloc;
-  const invCat=categories.find(c=>c.name.toLowerCase().includes("invest")||c.name.toLowerCase().includes("tfsa")||c.name.toLowerCase().includes("rrsp"));
-  const currentInvAmt=Number(invCat?.amount||0);
+  const currentInvAmt=Number(currentValue||0);
   const invRate=income>0?(currentInvAmt/income)*100:0;
   const r=0.07/12;
   const fv=(n)=>currentInvAmt>0?currentInvAmt*((Math.pow(1+r,n*12)-1)/r):0;
@@ -1213,7 +1213,7 @@ function ApptInvestmentInput({income,totalAlloc,categories,onSetInvestment}) {
         <Label>Monthly investment amount</Label>
         <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
           <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
-          <input type="number" value={currentInvAmt||""} onChange={e=>onSetInvestment(e.target.value)}
+          <input type="number" value={currentValue} onChange={e=>onSetInvestment(e.target.value)}
             placeholder="e.g. 500"
             style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:22,width:"100%",...GS}}/>
           <span style={{color:"#6b8cce",fontSize:12}}>/mo</span>
@@ -1617,17 +1617,8 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
               income={income}
               totalAlloc={totalAlloc}
               categories={d.budget.categories}
-              onSetInvestment={v=>{
-                // Find existing investment category or update first matching one
-                const cats=d.budget.categories;
-                const idx=cats.findIndex(c=>c.name.toLowerCase().includes("invest")||c.name.toLowerCase().includes("tfsa")||c.name.toLowerCase().includes("rrsp"));
-                if(idx>=0){
-                  setBudgetCat(idx,"amount")(v);
-                } else {
-                  // Add a new Investments category
-                  setD(p=>({...p,budget:{...p.budget,categories:[...p.budget.categories,{name:"Investments",amount:v,bucket:"fixed"}]}}));
-                }
-              }}
+              currentValue={d.budget.investmentMonthly||""}
+              onSetInvestment={v=>setD(p=>({...p,budget:{...p.budget,investmentMonthly:v}}))}
             />}
 
             <NextBtn onClick={()=>setStep("Score")}>Calculate My Score →</NextBtn>
