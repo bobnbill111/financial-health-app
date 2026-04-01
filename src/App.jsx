@@ -1184,46 +1184,65 @@ function ScoreGuidance({score,data,totalInv}) {
   );
 }
 
-// ─── INVESTMENT SLIDER (BUDGET STEP) ─────────────────────────────────────────
-function ApptInvestmentSlider({income,totalAlloc}) {
-  const surplus=Math.max(0,income-totalAlloc);
-  const [pct,setPct]=useState(10);
-  const monthly=Math.round(surplus*(pct/100));
+// ─── INVESTMENT INPUT (BUDGET STEP) ──────────────────────────────────────────
+function ApptInvestmentInput({income,totalAlloc,categories,onSetInvestment}) {
+  const surplus=income-totalAlloc;
+  const invCat=categories.find(c=>c.name.toLowerCase().includes("invest")||c.name.toLowerCase().includes("tfsa")||c.name.toLowerCase().includes("rrsp"));
+  const currentInvAmt=Number(invCat?.amount||0);
+  const invRate=income>0?(currentInvAmt/income)*100:0;
   const r=0.07/12;
-  const fv=(n)=>monthly>0?monthly*((Math.pow(1+r,n*12)-1)/r):0;
-  if(surplus<=0) return null;
+  const fv=(n)=>currentInvAmt>0?currentInvAmt*((Math.pow(1+r,n*12)-1)/r):0;
+
   return (
     <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
         <span style={{fontSize:18}}>📈</span>
         <div>
-          <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>Investment Opportunity</div>
-          <div style={{fontSize:11,color:"#6b8cce"}}>You have {fmt(surplus)}/mo left over — what if you invested some of it?</div>
-        </div>
-      </div>
-      <div style={{marginBottom:12}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-          <div style={{fontSize:12,color:"#8fadd4"}}>Invest <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{pct}%</span> of surplus</div>
-          <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</div>
-        </div>
-        <input type="range" min={5} max={100} step={5} value={pct} onChange={e=>setPct(Number(e.target.value))}
-          style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#2a4080",marginTop:2}}>
-          <span>5%</span><span>50%</span><span>100%</span>
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        {[{y:10,label:"10 yrs"},{y:20,label:"20 yrs"},{y:30,label:"30 yrs"}].map(x=>(
-          <div key={x.y} style={{background:"#0d1b3e",borderRadius:10,padding:"10px",textAlign:"center"}}>
-            <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{x.label}</div>
-            <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(fv(x.y))}</div>
-            <div style={{fontSize:9,color:"#2a4080",marginTop:2}}>at 7%/yr</div>
+          <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>Monthly Investment Amount</div>
+          <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>
+            {surplus>=0?`${fmt(surplus)}/mo remaining after expenses`:`${fmt(Math.abs(surplus))}/mo over budget`}
           </div>
-        ))}
+        </div>
       </div>
-      <div style={{marginTop:10,fontSize:11,color:"#6b8cce",lineHeight:1.6,textAlign:"center"}}>
-        Investing more also improves your Financial Health Score ↑
+
+      <div style={{fontSize:12,color:"#8fadd4",marginBottom:10,lineHeight:1.6}}>
+        Enter how much you invest each month (TFSA, RRSP, savings, etc.). This directly affects your Investment Rate score.
       </div>
+
+      <div style={{marginBottom:12}}>
+        <Label>Monthly investment amount</Label>
+        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
+          <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+          <input type="number" value={currentInvAmt||""} onChange={e=>onSetInvestment(e.target.value)}
+            placeholder="e.g. 500"
+            style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:22,width:"100%",...GS}}/>
+          <span style={{color:"#6b8cce",fontSize:12}}>/mo</span>
+        </div>
+        {income>0&&currentInvAmt>0&&(
+          <div style={{marginTop:8,display:"flex",justifyContent:"space-between",fontSize:12}}>
+            <span style={{color:"#6b8cce"}}>Investment rate:</span>
+            <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{invRate.toFixed(1)}% of income</span>
+          </div>
+        )}
+      </div>
+
+      {currentInvAmt>0&&(
+        <div>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>PROJECTED WEALTH AT 7%/YR</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {[10,20,30].map(y=>(
+              <div key={y} style={{background:"#0d1b3e",borderRadius:10,padding:"10px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{y} YRS</div>
+                <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(fv(y))}</div>
+                <div style={{fontSize:9,color:"#2a4080",marginTop:2}}>at 7%/yr</div>
+              </div>
+            ))}
+          </div>
+          <div style={{marginTop:10,fontSize:11,color:"#6b8cce",textAlign:"center",lineHeight:1.6}}>
+            This amount counts toward your Investment Rate score ✓
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -1593,8 +1612,23 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
               );
             })}
 
-            {/* Investment slider */}
-            {income>0&&<ApptInvestmentSlider income={income} totalAlloc={totalAlloc}/>}
+            {/* Investment input */}
+            {income>0&&<ApptInvestmentInput
+              income={income}
+              totalAlloc={totalAlloc}
+              categories={d.budget.categories}
+              onSetInvestment={v=>{
+                // Find existing investment category or update first matching one
+                const cats=d.budget.categories;
+                const idx=cats.findIndex(c=>c.name.toLowerCase().includes("invest")||c.name.toLowerCase().includes("tfsa")||c.name.toLowerCase().includes("rrsp"));
+                if(idx>=0){
+                  setBudgetCat(idx,"amount")(v);
+                } else {
+                  // Add a new Investments category
+                  setD(p=>({...p,budget:{...p.budget,categories:[...p.budget.categories,{name:"Investments",amount:v,bucket:"fixed"}]}}));
+                }
+              }}
+            />}
 
             <NextBtn onClick={()=>setStep("Score")}>Calculate My Score →</NextBtn>
           </div>
