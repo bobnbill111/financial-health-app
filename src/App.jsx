@@ -971,98 +971,96 @@ function PostScoreTools({data,onCheckup,saveScore,score}) {
 function PostScoreInvestmentSlider({income,surplus,currentInvRate,invMonthly,band}) {
   const inc=Number(income||0);
   const currentInv=Number(invMonthly||0);
-  // Slider goes from 0 to income (can't invest more than you earn)
-  const maxSlider=Math.max(inc, currentInv+Math.max(surplus||0,500));
-  const [sliderAmt,setSliderAmt]=useState(currentInv); // starts at what they already invest
+  const [extraAmt,setExtraAmt]=useState("");
   const r=0.07/12, years=[10,20,30];
   const fv=(mo,yrs)=>mo>0?Math.round(mo*((Math.pow(1+r,yrs*12)-1)/r)):0;
 
-  // Investment rate = slider amount / monthly income
-  const newRate=inc>0?(sliderAmt/inc)*100:0;
+  const totalInvested=currentInv+Number(extraAmt||0);
+  const newRate=inc>0?(totalInvested/inc)*100:0;
   const oldRate=inc>0?(currentInv/inc)*100:Number(currentInvRate||0);
   const targets={"20s":10,"30s":15,"40s":18,"50s":20,"60s":20};
   const target=targets[band]||15;
   const newScore=Math.min(30,Math.round((newRate/target)*30));
   const oldScore=Math.min(30,Math.round((oldRate/target)*30));
   const scoreDiff=newScore-oldScore;
-  const amtDiff=sliderAmt-currentInv;
+  const hasExtra=Number(extraAmt||0)>0;
 
   return (
     <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
         <span style={{fontSize:18}}>📈</span>
-        <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>Investment Rate Simulator</div>
+        <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>What If I Invested More?</div>
       </div>
       <div style={{fontSize:12,color:"#6b8cce",marginBottom:16,lineHeight:1.6}}>
-        Drag to set your monthly investment amount and see how it affects your score and long-term wealth. Rate = amount ÷ income.
+        Enter how much of your remaining budget you'd like to invest each month and see the impact on your score and wealth.
       </div>
 
-      {/* Current vs slider summary */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center",marginBottom:16}}>
+      {/* Current snapshot */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
         <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
           <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>CURRENTLY INVESTING</div>
           <div style={{fontSize:20,color:"#facc15",fontWeight:"bold",...GS}}>{fmt(currentInv)}/mo</div>
           <div style={{fontSize:11,color:"#facc15",marginTop:2}}>{oldRate.toFixed(1)}% of income</div>
           <div style={{fontSize:10,color:"#6b8cce",marginTop:1}}>{oldScore}/30 pts</div>
         </div>
-        <div style={{fontSize:20,color:"#4ade80",textAlign:"center"}}>→</div>
-        <div style={{background:"#0d2a1a",border:"1px solid #4ade8033",borderRadius:10,padding:"12px",textAlign:"center"}}>
-          <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>SIMULATING</div>
-          <div style={{fontSize:20,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(sliderAmt)}/mo</div>
-          <div style={{fontSize:11,color:"#4ade80",marginTop:2}}>{newRate.toFixed(1)}% of income</div>
-          <div style={{fontSize:10,color:scoreDiff>0?"#4ade80":"#6b8cce",marginTop:1}}>{newScore}/30 pts {scoreDiff>0?`(+${scoreDiff})`:""}</div>
+        <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>BUDGET REMAINING</div>
+          <div style={{fontSize:20,color:surplus>=0?"#4ade80":"#f87171",fontWeight:"bold",...GS}}>{fmt(Math.abs(surplus||0))}/mo</div>
+          <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>{surplus>=0?"available to invest":"over budget"}</div>
         </div>
       </div>
 
-      {/* Slider */}
+      {/* Input */}
       <div style={{marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-          <div style={{fontSize:11,color:"#8fadd4"}}>Monthly investment amount</div>
-          <div style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(sliderAmt)}/mo</div>
-        </div>
-        <input type="range" min={0} max={Math.round(maxSlider)} step={25} value={sliderAmt}
-          onChange={e=>setSliderAmt(Number(e.target.value))}
-          style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-          <span style={{fontSize:10,color:"#2a4080"}}>$0</span>
-          <span style={{fontSize:10,color:surplus>=0?"#4ade80":"#f87171",...GS}}>
-            {surplus>=0?`${fmt(surplus)} available surplus`:`${fmt(Math.abs(surplus||0))} deficit`}
-          </span>
-          <span style={{fontSize:10,color:"#2a4080"}}>{fmt(maxSlider)}</span>
+        <Label>How much more would you invest per month?</Label>
+        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
+          <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+          <input type="number" value={extraAmt} onChange={e=>setExtraAmt(e.target.value)}
+            placeholder="e.g. 200"
+            style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:20,width:"100%",...GS}}/>
+          <span style={{color:"#6b8cce",fontSize:13}}>/mo</span>
         </div>
       </div>
 
-      {/* Score impact callout */}
-      {scoreDiff>0&&(
-        <div style={{background:"#0d2a1a",border:"1px solid #4ade8044",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"center"}}>
-          <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>
-            🎯 +{scoreDiff} points to your Financial Health Score
+      {/* Results — only show when amount entered */}
+      {hasExtra&&(
+        <div>
+          {/* New rate */}
+          <div style={{background:"#0d2a1a",border:"1px solid #4ade8044",borderRadius:10,padding:"14px",marginBottom:12}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center",marginBottom:scoreDiff!==0?10:0}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>CURRENT RATE</div>
+                <div style={{fontSize:22,color:"#facc15",fontWeight:"bold",...GS}}>{oldRate.toFixed(1)}%</div>
+                <div style={{fontSize:10,color:"#6b8cce"}}>{oldScore}/30 pts</div>
+              </div>
+              <div style={{fontSize:20,color:"#4ade80",textAlign:"center"}}>→</div>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>NEW RATE</div>
+                <div style={{fontSize:22,color:"#4ade80",fontWeight:"bold",...GS}}>{newRate.toFixed(1)}%</div>
+                <div style={{fontSize:10,color:"#4ade80"}}>{newScore}/30 pts {scoreDiff>0?`(+${scoreDiff})`:""}</div>
+              </div>
+            </div>
+            {scoreDiff>0&&(
+              <div style={{textAlign:"center",fontSize:13,color:"#4ade80",fontWeight:"bold",borderTop:"1px solid #1e3a5f",paddingTop:10,...GS}}>
+                🎯 This adds +{scoreDiff} points to your Financial Health Score
+                {newRate>=target&&<div style={{fontSize:11,marginTop:4}}>✅ You'd hit the {band} target of {target}%</div>}
+              </div>
+            )}
           </div>
-          {amtDiff>0&&<div style={{fontSize:11,color:"#6b8cce",marginTop:4}}>
-            That's just {fmt(amtDiff)}/mo more than you invest now
-          </div>}
-          {newRate>=target&&<div style={{fontSize:11,color:"#4ade80",marginTop:4}}>
-            ✅ You'd hit the {band} investment target of {target}%
-          </div>}
-        </div>
-      )}
-      {scoreDiff<0&&(
-        <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"center",fontSize:12,color:"#f87171"}}>
-          ⚠️ Reducing investments below your current amount would lower your score by {Math.abs(scoreDiff)} points
-        </div>
-      )}
 
-      {/* Wealth projection */}
-      <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>PROJECTED WEALTH AT 7%/YR</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        {years.map(y=>(
-          <div key={y} style={{background:"#0d1b3e",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>{y} yrs</div>
-            <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(fv(sliderAmt,y))}</div>
-            {amtDiff>0&&<div style={{fontSize:9,color:"#22d3ee",marginTop:2}}>+{fmtShort(fv(amtDiff,y))} extra</div>}
+          {/* Wealth projections */}
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>PROJECTED WEALTH AT 7%/YR</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            {years.map(y=>(
+              <div key={y} style={{background:"#0d1b3e",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>{y} yrs</div>
+                <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(fv(totalInvested,y))}</div>
+                <div style={{fontSize:9,color:"#22d3ee",marginTop:2}}>+{fmtShort(fv(Number(extraAmt),y))} extra</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </Card>
   );
 }
