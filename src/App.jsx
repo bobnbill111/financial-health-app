@@ -1478,44 +1478,55 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
         )}
       </Card>
 
-      {/* Pension & Employer Match */}
+      {/* Pension — separate card */}
       {freq&&(
         <Card>
-          <SecTitle>Pension & Employer Match</SecTitle>
-          {beginner&&<div style={{fontSize:12,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>These count toward your investment rate. Enter per-paycheque amounts.</div>}
-          <div style={{marginBottom:12}}>
-            <Label>Pension Contribution /paycheque (your share)</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={inc.pensionContribution||""} onChange={e=>setInc("pensionContribution")(e.target.value)}
-                placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:16,width:"100%",...GS}}/>
-            </div>
+          <SecTitle>Pension Contribution</SecTitle>
+          {beginner&&<div style={{fontSize:12,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>Enter your pension contribution per paycheque (your share only). This counts toward your investment rate.</div>}
+          <Label>Your pension contribution /paycheque</Label>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #a78bfa66",borderRadius:10,padding:"12px 14px"}}>
+            <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+            <input type="number" value={inc.pensionContribution||""} onChange={e=>setInc("pensionContribution")(e.target.value)}
+              placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:20,width:"100%",...GS}}/>
+            <span style={{color:"#6b8cce",fontSize:12}}>/paycheque</span>
           </div>
-          <Label>Employer Match</Label>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+          {pension>0&&(
+            <div style={{marginTop:8,display:"flex",justifyContent:"space-between",fontSize:12}}>
+              <span style={{color:"#6b8cce"}}>Monthly equivalent</span>
+              <span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(Math.round(pension*(periods/12)))}/mo</span>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Employer Match — separate card */}
+      {freq&&(
+        <Card>
+          <SecTitle>Employer Match</SecTitle>
+          {beginner&&<div style={{fontSize:12,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>If your employer matches your contributions, enter your contribution amount and the match percentage. Leave blank if you don't have an employer match.</div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:empEE>0?12:0}}>
             <div>
-              <div style={{fontSize:10,color:"#6b8cce",marginBottom:6}}>YOUR CONTRIBUTION /PAYCHEQUE</div>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <Label>Your contribution /paycheque</Label>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #facc1566",borderRadius:8,padding:"10px 12px"}}>
                 <span style={{color:"#6b8cce",marginRight:4}}>$</span>
                 <input type="number" value={inc.employerMatchEmployee||""} onChange={e=>setInc("employerMatchEmployee")(e.target.value)}
                   placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:16,width:"100%",...GS}}/>
               </div>
             </div>
             <div>
-              <div style={{fontSize:10,color:"#6b8cce",marginBottom:6}}>EMPLOYER MATCHES</div>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <Label>Employer matches</Label>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:8,padding:"10px 12px"}}>
                 <input type="number" value={inc.employerMatchPct||""} onChange={e=>setInc("employerMatchPct")(e.target.value)}
-                  placeholder="50" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:16,width:"100%",...GS}}/>
+                  placeholder="50" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:16,width:"100%",...GS}}/>
                 <span style={{color:"#6b8cce",fontSize:12}}>%</span>
               </div>
             </div>
           </div>
-          {(pension>0||empEE>0)&&(
+          {(empEE>0||empER>0)&&(
             <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px"}}>
-              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>MONTHLY INVESTMENT FROM WORK</div>
+              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>MONTHLY BREAKDOWN</div>
               {[
-                {l:"Pension (your share)",v:Math.round(pension*(periods/12)),c:"#a78bfa"},
-                {l:`Your match contribution`,v:Math.round(empEE*(periods/12)),c:"#facc15"},
+                {l:"Your contribution",v:Math.round(empEE*(periods/12)),c:"#facc15"},
                 ...(empER>0?[{l:`Employer match (${empPct}%)`,v:Math.round(empER*(periods/12)),c:"#4ade80"}]:[]),
               ].filter(x=>x.v>0).map((x,i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
@@ -1523,12 +1534,26 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
                   <span style={{fontSize:13,color:x.c,fontWeight:"bold",...GS}}>{fmt(x.v)}/mo</span>
                 </div>
               ))}
-              <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>Total invested from work</span>
-                <span style={{fontSize:15,color,fontWeight:"bold",...GS}}>{fmt(invMonthly)}/mo</span>
+              <div style={{borderTop:"1px solid #1e3a5f",marginTop:6,paddingTop:6,display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,color:"#e8e4d9"}}>Combined /mo</span>
+                <span style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(Math.round((empEE+empER)*(periods/12)))}/mo</span>
               </div>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Total work investment summary */}
+      {freq&&(pension>0||empEE>0)&&(
+        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:11,color:"#6b8cce",marginBottom:4}}>TOTAL INVESTED FROM WORK /MO</div>
+              <div style={{fontSize:22,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(invMonthly)}/mo</div>
+              <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>Pension + your match + employer match</div>
+            </div>
+            <div style={{fontSize:32}}>📈</div>
+          </div>
         </Card>
       )}
     </div>
