@@ -151,21 +151,43 @@ function calcScore(d, totalInv) {
   const totalDebt = totalCC+totalLocBal+totalOD;
   const efund = (d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const annualIncome = Number(d.budget.income||0)*12;
-  const invRate = annualIncome>0?(Number(d.budget.categories.find(c=>c.name==="Investments")?.amount||0)*12/annualIncome)*100:0;
-  const band = age<30?"20s":age<40?"30s":age<50?"40s":age<60?"50s":"60s";
-  const bm = {"20s":{invTarget:10,efundMonths:3,debtRatio:0.3,invAmount:10000},"30s":{invTarget:15,efundMonths:4,debtRatio:0.25,invAmount:60000},"40s":{invTarget:18,efundMonths:5,debtRatio:0.2,invAmount:150000},"50s":{invTarget:20,efundMonths:6,debtRatio:0.15,invAmount:300000},"60s":{invTarget:20,efundMonths:6,debtRatio:0.1,invAmount:500000}}[band];
+  const monthlyIncome = Number(d.budget.income||0);
   const monthlyExp = d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+  const surplus = monthlyIncome - monthlyExp;
+
+  // Investment rate — sum ALL investment categories
+  const invMonthly = d.budget.categories
+    .filter(c=>["investments","invest","rrsp","tfsa","fhsa","saving","savings"].some(k=>c.name.toLowerCase().includes(k)))
+    .reduce((s,c)=>s+Number(c.amount||0),0);
+  const invRate = annualIncome>0?(invMonthly*12/annualIncome)*100:0;
+
+  const band = age<30?"20s":age<40?"30s":age<50?"40s":age<60?"50s":"60s";
+  const bm = {
+    "20s":{invTarget:10,efundMonths:3,debtRatio:0.3,invAmount:10000},
+    "30s":{invTarget:15,efundMonths:4,debtRatio:0.25,invAmount:60000},
+    "40s":{invTarget:18,efundMonths:5,debtRatio:0.2,invAmount:150000},
+    "50s":{invTarget:20,efundMonths:6,debtRatio:0.15,invAmount:300000},
+    "60s":{invTarget:20,efundMonths:6,debtRatio:0.1,invAmount:500000}
+  }[band];
+
+  // Investment rate score — full 30 pts, rewarding generously above target too
+  const invRateScore = Math.min(30, Math.round((invRate/bm.invTarget)*30));
+
+  // Budget balance — only penalises deficits, neutral for surplus
+  // 0 pts for deficit, 10 pts for balanced or surplus
+  const budgetScore = surplus>=0 ? 10 : Math.max(0, Math.round(10 + (surplus/monthlyIncome)*20));
+
   const scores = [
-    {label:"Investment Rate",score:Math.min(25,Math.round((invRate/bm.invTarget)*25)),max:25,desc:`${invRate.toFixed(1)}% invested (target: ${bm.invTarget}%)`},
+    {label:"Investment Rate",score:invRateScore,max:30,desc:`${invRate.toFixed(1)}% of income invested (target: ${bm.invTarget}%+)`},
     {label:"Portfolio Size",score:Math.min(25,Math.round((totalInv/bm.invAmount)*25)),max:25,desc:`${fmtShort(totalInv)} saved (benchmark: ${fmtShort(bm.invAmount)})`},
     {label:"Emergency Fund",score:Math.min(20,Math.round(((monthlyExp>0?efund/monthlyExp:0)/bm.efundMonths)*20)),max:20,desc:`${monthlyExp>0?(efund/monthlyExp).toFixed(1):0} months (target: ${bm.efundMonths})`},
-    {label:"Debt Management",score:Math.max(0,Math.round(annualIncome>0?20-Math.max(0,(totalDebt/annualIncome-bm.debtRatio)*100):0)),max:20,desc:`Non-mortgage debt ${annualIncome>0?(totalDebt/annualIncome*100).toFixed(0):0}% of income (target <${bm.debtRatio*100}%)`},
-    {label:"Monthly Surplus",score:Math.min(10,Math.round(Number(d.budget.income||0)>0?Math.max(0,((Number(d.budget.income||0)-monthlyExp)/Number(d.budget.income||1))*100):0)),max:10,desc:Number(d.budget.income||0)-monthlyExp>0?`${fmt(Number(d.budget.income||0)-monthlyExp)}/mo surplus`:"Budget is over"},
+    {label:"Debt Management",score:Math.max(0,Math.round(annualIncome>0?15-Math.max(0,(totalDebt/annualIncome-bm.debtRatio)*100):0)),max:15,desc:`Non-mortgage debt ${annualIncome>0?(totalDebt/annualIncome*100).toFixed(0):0}% of income (target <${bm.debtRatio*100}%)`},
+    {label:"Budget Balance",score:budgetScore,max:10,desc:surplus>=0?`${fmt(surplus)}/mo surplus — on track`:`${fmt(Math.abs(surplus))}/mo deficit — spending exceeds income`},
   ];
   const total = scores.reduce((s,x)=>s+x.score,0);
   const grade = total>=85?"A+":total>=75?"A":total>=65?"B+":total>=55?"B":total>=45?"C+":total>=35?"C":"D";
   const gradeColor = total>=75?"#4ade80":total>=55?"#facc15":total>=35?"#fb923c":"#f87171";
-  return {total,grade,gradeColor,scores,band};
+  return {total,grade,gradeColor,scores,band,surplus,invRate,invMonthly,monthlyIncome};
 }
 
 // ─── THEMES ───────────────────────────────────────────────────────────────────
@@ -819,6 +841,82 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
   );
 }
 
+// ─── POST-SCORE INVESTMENT SLIDER ─────────────────────────────────────────────
+function PostScoreInvestmentSlider({income,surplus,currentInvRate,invMonthly}) {
+  const [extra,setExtra]=useState(0);
+  const maxExtra=Math.max(0,surplus-invMonthly);
+  const totalInvMonthly=invMonthly+extra;
+  const newInvRate=income>0?(totalInvMonthly/income)*100:0;
+  const r=0.07/12;
+  const fv=(mo,n)=>mo>0?mo*((Math.pow(1+r,n*12)-1)/r):0;
+  const extraFv10=fv(extra,10);
+  const extraFv25=fv(extra,25);
+
+  if(maxExtra<=0) return null;
+
+  return (
+    <Card style={{background:"linear-gradient(135deg,#0d1a2a,#0d1b3e)",border:"1px solid #4ade8066"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <span style={{fontSize:20}}>📈</span>
+        <div style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>What If You Invested More?</div>
+      </div>
+      <div style={{fontSize:12,color:"#6b8cce",marginBottom:16,lineHeight:1.6}}>
+        You have {fmt(maxExtra)}/mo of surplus not yet invested. Drag the slider to see the impact on your wealth and score.
+      </div>
+
+      {/* Slider */}
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:12,color:"#8fadd4"}}>Extra invested per month</div>
+          <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>+{fmt(extra)}/mo</div>
+        </div>
+        <input type="range" min={0} max={maxExtra} step={Math.max(10,Math.round(maxExtra/20))} value={extra}
+          onChange={e=>setExtra(Number(e.target.value))}
+          style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#2a4080",marginTop:2}}>
+          <span>$0</span><span>{fmt(maxExtra/2)}</span><span>{fmt(maxExtra)}</span>
+        </div>
+      </div>
+
+      {/* Investment rate before/after */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+          <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>CURRENT RATE</div>
+          <div style={{fontSize:20,color:"#facc15",fontWeight:"bold",...GS}}>{currentInvRate.toFixed(1)}%</div>
+          <div style={{fontSize:10,color:"#6b8cce",marginTop:2}}>{fmt(invMonthly)}/mo</div>
+        </div>
+        <div style={{background:"#0d2a1a",borderRadius:10,padding:"12px",textAlign:"center",border:"1px solid #4ade8033"}}>
+          <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>NEW RATE</div>
+          <div style={{fontSize:20,color:"#4ade80",fontWeight:"bold",...GS}}>{newInvRate.toFixed(1)}%</div>
+          <div style={{fontSize:10,color:"#6b8cce",marginTop:2}}>{fmt(totalInvMonthly)}/mo</div>
+        </div>
+      </div>
+
+      {/* Wealth projections */}
+      {extra>0&&(
+        <div>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>EXTRA WEALTH FROM INVESTING MORE</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>IN 10 YEARS</div>
+              <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(extraFv10)}</div>
+              <div style={{fontSize:9,color:"#2a4080",marginTop:2}}>at 7%/yr</div>
+            </div>
+            <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>IN 25 YEARS</div>
+              <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(extraFv25)}</div>
+              <div style={{fontSize:9,color:"#2a4080",marginTop:2}}>at 7%/yr</div>
+            </div>
+          </div>
+          <div style={{background:"#0d1b3e",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#8fadd4",lineHeight:1.7,textAlign:"center"}}>
+            ✅ Investing {fmt(extra)}/mo more would raise your Investment Rate score and improve your overall grade.
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── FINANCIAL PRESCRIPTION ───────────────────────────────────────────────────
 function FinancialPrescription({score,data,totalInv}) {
   const income=Number(data.budget.income||0);
@@ -1057,6 +1155,50 @@ function ScoreGuidance({score,data,totalInv}) {
           })}
         </div>
       )}
+    </Card>
+  );
+}
+
+// ─── INVESTMENT SLIDER (BUDGET STEP) ─────────────────────────────────────────
+function ApptInvestmentSlider({income,totalAlloc}) {
+  const surplus=Math.max(0,income-totalAlloc);
+  const [pct,setPct]=useState(10);
+  const monthly=Math.round(surplus*(pct/100));
+  const r=0.07/12;
+  const fv=(n)=>monthly>0?monthly*((Math.pow(1+r,n*12)-1)/r):0;
+  if(surplus<=0) return null;
+  return (
+    <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <span style={{fontSize:18}}>📈</span>
+        <div>
+          <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>Investment Opportunity</div>
+          <div style={{fontSize:11,color:"#6b8cce"}}>You have {fmt(surplus)}/mo left over — what if you invested some of it?</div>
+        </div>
+      </div>
+      <div style={{marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:12,color:"#8fadd4"}}>Invest <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{pct}%</span> of surplus</div>
+          <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</div>
+        </div>
+        <input type="range" min={5} max={100} step={5} value={pct} onChange={e=>setPct(Number(e.target.value))}
+          style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#2a4080",marginTop:2}}>
+          <span>5%</span><span>50%</span><span>100%</span>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {[{y:10,label:"10 yrs"},{y:20,label:"20 yrs"},{y:30,label:"30 yrs"}].map(x=>(
+          <div key={x.y} style={{background:"#0d1b3e",borderRadius:10,padding:"10px",textAlign:"center"}}>
+            <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{x.label}</div>
+            <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(fv(x.y))}</div>
+            <div style={{fontSize:9,color:"#2a4080",marginTop:2}}>at 7%/yr</div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:10,fontSize:11,color:"#6b8cce",lineHeight:1.6,textAlign:"center"}}>
+        Investing more also improves your Financial Health Score ↑
+      </div>
     </Card>
   );
 }
@@ -1369,19 +1511,66 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
         {step==="Budget"&&(
           <div>
             <Card>
-              <SecTitle>Monthly Income</SecTitle><NumInput value={d.budget.income} onChange={setBudgetIncome} placeholder="8000.00"/>
-              {income>0&&<div style={{marginTop:10}}><div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:11,color:"#6b8cce"}}>Allocated</div><div style={{fontSize:13,color:totalAlloc>income?"#f87171":"#4ade80",fontWeight:"bold"}}>{fmt(totalAlloc)} / {fmt(income)}</div></div><div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}><div style={{width:Math.min(100,(totalAlloc/income)*100)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6,transition:"width 0.3s"}}/></div></div>}
-            </Card>
-            <Card>
-              <SecTitle>Budget Categories</SecTitle>
-              {d.budget.categories.map((cat,i)=>(
-                <div key={i} style={{marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><div style={{width:9,height:9,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length],flexShrink:0}}/><input value={cat.name} onChange={e=>setBudgetCat(i,"name")(e.target.value)} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/><button onClick={()=>setD(p=>({...p,budget:{...p.budget,categories:p.budget.categories.filter((_,idx)=>idx!==i)}}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button></div>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"#6b8cce"}}>$</span><input type="number" value={cat.amount} onChange={e=>setBudgetCat(i,"amount")(e.target.value)} style={{background:"none",border:"none",outline:"none",borderBottom:"1px solid #2a4080",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:19,width:"100%",paddingBottom:4,...GS}}/>{income>0&&Number(cat.amount)>0&&<span style={{fontSize:11,color:"#6b8cce"}}>{((Number(cat.amount)/income)*100).toFixed(1)}%</span>}</div>
+              <SecTitle>Monthly Income</SecTitle>
+              <NumInput value={d.budget.income} onChange={setBudgetIncome} placeholder="8000.00"/>
+              {income>0&&<div style={{marginTop:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <div style={{fontSize:11,color:"#6b8cce"}}>Allocated</div>
+                  <div style={{fontSize:13,color:totalAlloc>income?"#f87171":"#4ade80",fontWeight:"bold"}}>{fmt(totalAlloc)} / {fmt(income)}</div>
                 </div>
-              ))}
-              <button onClick={()=>setD(p=>({...p,budget:{...p.budget,categories:[...p.budget.categories,{name:"New Category",amount:""}]}}))} style={{width:"100%",background:"none",border:"1px dashed #2a4080",color:"#6b8cce",borderRadius:8,padding:"10px",cursor:"pointer",fontSize:13,...GS}}>+ Add Category</button>
+                <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
+                  <div style={{width:Math.min(100,(totalAlloc/income)*100)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6,transition:"width 0.3s"}}/>
+                </div>
+              </div>}
             </Card>
+
+            {/* 3-bucket categories */}
+            {[
+              {key:"fixed",label:"Fixed Costs",desc:"Same every month",icon:"🔒",color:"#f87171"},
+              {key:"subscription",label:"Subscriptions",desc:"Recurring but cancellable",icon:"🔄",color:"#a78bfa"},
+              {key:"estimated",label:"Estimated Costs",desc:"Variable month to month",icon:"📊",color:"#facc15"},
+            ].map(bucket=>{
+              const bucketCats=d.budget.categories.filter(c=>(c.bucket||"estimated")===bucket.key);
+              const bucketTotal=bucketCats.reduce((s,c)=>s+Number(c.amount||0),0);
+              return (
+                <Card key={bucket.key} style={{border:`1px solid ${bucket.color}33`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:16}}>{bucket.icon}</span>
+                      <div>
+                        <div style={{fontSize:13,color:bucket.color,fontWeight:"bold",...GS}}>{bucket.label}</div>
+                        <div style={{fontSize:10,color:"#6b8cce"}}>{bucket.desc}</div>
+                      </div>
+                    </div>
+                    <div style={{fontSize:15,color:bucket.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>
+                  </div>
+                  {bucketCats.map((cat,i)=>{
+                    const globalIdx=d.budget.categories.indexOf(cat);
+                    return (
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,background:"#0d1b3e",borderRadius:8,padding:"9px 10px"}}>
+                        <div style={{width:7,height:7,borderRadius:"50%",background:bucket.color,flexShrink:0}}/>
+                        <input value={cat.name} onChange={e=>setBudgetCat(globalIdx,"name")(e.target.value)}
+                          style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
+                        <span style={{color:"#6b8cce",fontSize:12}}>$</span>
+                        <input type="number" value={cat.amount} onChange={e=>setBudgetCat(globalIdx,"amount")(e.target.value)}
+                          style={{background:"none",border:"none",outline:"none",color:bucket.color,fontSize:15,width:80,textAlign:"right",...GS}}/>
+                        {income>0&&Number(cat.amount)>0&&<span style={{fontSize:9,color:"#6b8cce",minWidth:30,textAlign:"right"}}>{((Number(cat.amount)/income)*100).toFixed(0)}%</span>}
+                        <button onClick={()=>setD(p=>({...p,budget:{...p.budget,categories:p.budget.categories.filter((_,idx)=>idx!==globalIdx)}}))}
+                          style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:15,padding:0}}>×</button>
+                      </div>
+                    );
+                  })}
+                  <button onClick={()=>setD(p=>({...p,budget:{...p.budget,categories:[...p.budget.categories,{name:"",amount:"",bucket:bucket.key}]}}))}
+                    style={{width:"100%",background:"none",border:`1px dashed ${bucket.color}44`,borderRadius:8,padding:"7px",color:bucket.color,cursor:"pointer",fontSize:12,...GS}}>
+                    + Add {bucket.label} item
+                  </button>
+                </Card>
+              );
+            })}
+
+            {/* Investment slider */}
+            {income>0&&<ApptInvestmentSlider income={income} totalAlloc={totalAlloc}/>}
+
             <NextBtn onClick={()=>setStep("Score")}>Calculate My Score →</NextBtn>
           </div>
         )}
@@ -1406,6 +1595,9 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
                 ))}
               </Card>
 
+              {/* Post-score investment slider */}
+              {score.surplus>0&&score.monthlyIncome>0&&<PostScoreInvestmentSlider income={score.monthlyIncome} surplus={score.surplus} currentInvRate={score.invRate} invMonthly={score.invMonthly}/>}
+
               {/* Financial Prescription */}
               <FinancialPrescription score={score} data={d} totalInv={totalInv}/>
 
@@ -1420,6 +1612,11 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
 
               {/* Post-score personalized tools */}
               <PostScoreTools data={d} onCheckup={onCheckup} saveScore={saveScore} score={score}/>
+
+              {/* Post-score investment slider */}
+              {score.surplus>0&&score.monthlyIncome>0&&(
+                <PostScoreInvestmentSlider income={score.monthlyIncome} surplus={score.surplus} invRate={score.invRate} invTarget={score.invTarget}/>
+              )}
             </div>
           ):(
             <div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:40,marginBottom:16}}>⚠️</div><p style={{color:"#8fadd4"}}>Please enter your age in the Start section to generate a score.</p><NextBtn onClick={()=>setStep("Start")}>Go to Start</NextBtn></div>
@@ -2285,10 +2482,8 @@ const TOOLS_LIST = [
   {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80",beginnerLabel:"How do I budget my money?",beginnerSub:"Enter what you earn and we'll show you where it goes"},
   {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee",beginnerLabel:"Analyze my spending",beginnerSub:"Upload your bank statement and see where your money went"},
   {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Canadian housing market comparison — is buying worth it?",color:"#a78bfa",beginnerLabel:"Should I rent or buy a home?",beginnerSub:"We'll compare the real costs of renting vs buying in Canada"},
-  {id:"news",label:"Financial News",icon:"📰",sub:"Live Canadian financial news — rates, markets & economy",color:"#fb923c",beginnerLabel:"What's happening in Canadian finance?",beginnerSub:"Today's top stories on money, rates and the economy"},
   {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa",beginnerLabel:"What is my net worth?",beginnerSub:"Add up what you own and subtract what you owe"},
   {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15",beginnerLabel:"How much do I need to save?",beginnerSub:"Enter your goal and deadline — we'll tell you how much per month"},
-  {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa",beginnerLabel:"What happens if I invest more?",beginnerSub:"Try out financial decisions before you make them"},
   {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Calculate payments and interest on any loan",color:"#fb923c",beginnerLabel:"How much will a loan cost me?",beginnerSub:"See your monthly payment and total interest on any loan"},
   {id:"cashflow",label:"Cash Flow Calendar",icon:"📅",sub:"Map your income and bills through the month",color:"#22d3ee",beginnerLabel:"Map my bills through the month",beginnerSub:"See when money comes in and goes out each month"},
   {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Avalanche vs snowball — find your best payoff path",color:"#f87171",beginnerLabel:"How do I pay off my debt fastest?",beginnerSub:"Find the fastest and cheapest way to become debt-free"},
@@ -2298,10 +2493,8 @@ function IndividualTools({onHome,data,beginner}) {
   const [tool,setTool]=useState(null);
   if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget}/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
-  if(tool==="news") return <ToolWrapper title="Financial News" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-news"><FinancialNews/></ToolWrapper>;
   if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data} beginner={beginner}/></ToolWrapper>;
   if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data} beginner={beginner}/></ToolWrapper>;
-  if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
   if(tool==="loc") return <ToolWrapper title={beginner?"How Much Will a Loan Cost?":"Loan Simulator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate="" beginner={beginner}/></ToolWrapper>;
   if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
   if(tool==="debtopt") return <ToolWrapper title={beginner?"How Do I Pay Off Debt?":"Debt Optimizer"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
