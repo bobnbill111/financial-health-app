@@ -489,9 +489,6 @@ export default function App() {
 
   if(!user&&!isGuest) return <AuthScreen onAuth={handleAuth} onGuest={()=>setIsGuest(true)}/>;
 
-  // New user — show onboarding welcome screen
-  if(isNewUser&&!isGuest) return <OnboardingScreen displayName={displayName} userEmail={user?.email||""} onStart={()=>{setIsNewUser(false);setPage("home");}} onSkip={()=>setIsNewUser(false)}/>;
-
   const signOutBtn=(
     <div style={{position:"fixed",bottom:20,right:16,zIndex:500}}>
       {saving&&<div style={{fontSize:10,color:"#6b8cce",textAlign:"center",marginBottom:4,letterSpacing:1}}>saving...</div>}
