@@ -1041,6 +1041,87 @@ function PostScoreTools({data,onCheckup,saveScore,score}) {
   );
 }
 
+// ─── POST-SCORE INVESTMENT SLIDER ─────────────────────────────────────────────
+function PostScoreInvestmentSlider({income,surplus,currentInvRate,invMonthly,band}) {
+  const maxSlider=Math.max(Math.round((surplus||0)*1.5),500);
+  const [extraInv,setExtraInv]=useState(Math.min(Math.round((surplus||0)*0.5),500));
+  const r=0.07/12,years=[10,20,30];
+  const fv=(mo,yrs)=>mo>0?Math.round(mo*((Math.pow(1+r,yrs*12)-1)/r)):0;
+  const totalMonthly=(invMonthly||0)+extraInv;
+  const newRate=income>0?(totalMonthly/income)*100:0;
+  const targets={"20s":10,"30s":15,"40s":18,"50s":20,"60s":20};
+  const target=targets[band]||15;
+  const newScore=Math.min(30,Math.round((newRate/target)*30));
+  const oldScore=Math.min(30,Math.round(((currentInvRate||0)/target)*30));
+
+  return (
+    <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+        <span style={{fontSize:18}}>📈</span>
+        <div style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>What If I Invested More?</div>
+      </div>
+      <div style={{fontSize:12,color:"#6b8cce",marginBottom:16,lineHeight:1.6}}>
+        Drag the slider to see how investing more of your surplus each month affects your score and long-term wealth.
+      </div>
+
+      {/* Slider */}
+      <div style={{marginBottom:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:12,color:"#e8e4d9"}}>Extra invested per month</div>
+          <div style={{fontSize:16,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(extraInv)}/mo</div>
+        </div>
+        <input type="range" min={0} max={maxSlider} step={25} value={extraInv}
+          onChange={e=>setExtraInv(Number(e.target.value))}
+          style={{width:"100%",accentColor:"#4ade80",cursor:"pointer"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <span style={{fontSize:10,color:"#2a4080"}}>$0</span>
+          <span style={{fontSize:10,color:"#2a4080"}}>{fmt(maxSlider)}</span>
+        </div>
+      </div>
+
+      {/* Investment rate impact */}
+      <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:12}}>
+        <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>INVESTMENT RATE IMPACT</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center",marginBottom:8}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>Current</div>
+            <div style={{fontSize:20,color:"#facc15",fontWeight:"bold",...GS}}>{(currentInvRate||0).toFixed(1)}%</div>
+            <div style={{fontSize:10,color:"#6b8cce"}}>{oldScore}/30 pts</div>
+          </div>
+          <div style={{fontSize:18,color:"#4ade80"}}>→</div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>With extra</div>
+            <div style={{fontSize:20,color:"#4ade80",fontWeight:"bold",...GS}}>{newRate.toFixed(1)}%</div>
+            <div style={{fontSize:10,color:"#4ade80"}}>{newScore}/30 pts {newScore>oldScore&&`(+${newScore-oldScore})`}</div>
+          </div>
+        </div>
+        {newScore>oldScore&&(
+          <div style={{fontSize:11,color:"#4ade80",textAlign:"center",marginTop:4}}>
+            🎯 This would add <strong>+{newScore-oldScore} points</strong> to your Financial Health Score
+          </div>
+        )}
+        {newRate>=target&&(
+          <div style={{fontSize:11,color:"#4ade80",textAlign:"center",marginTop:6,background:"#0d2a1a",borderRadius:8,padding:"6px"}}>
+            ✅ You'd hit the {band} investment target of {target}%
+          </div>
+        )}
+      </div>
+
+      {/* Wealth projection */}
+      <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>WEALTH AT 7% ANNUAL RETURN</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+        {years.map(y=>(
+          <div key={y} style={{background:"#0d1b3e",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>{y} years</div>
+            <div style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(fv(totalMonthly,y))}</div>
+            {extraInv>0&&<div style={{fontSize:9,color:"#22d3ee",marginTop:2}}>+{fmtShort(fv(extraInv,y))} extra</div>}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 // ─── SCORE GUIDANCE ───────────────────────────────────────────────────────────
 function ScoreGuidance({score,data,totalInv}) {
   const isStruggling = score.total < 55; // below B
@@ -1595,14 +1676,14 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
                 ))}
               </Card>
 
-              {/* Post-score investment slider */}
-              {score.surplus>0&&score.monthlyIncome>0&&<PostScoreInvestmentSlider income={score.monthlyIncome} surplus={score.surplus} currentInvRate={score.invRate} invMonthly={score.invMonthly}/>}
-
               {/* Financial Prescription */}
               <FinancialPrescription score={score} data={d} totalInv={totalInv}/>
 
               {/* Score guidance */}
               <ScoreGuidance score={score} data={d} totalInv={totalInv}/>
+
+              {/* Investment slider */}
+              {score.monthlyIncome>0&&<PostScoreInvestmentSlider income={score.monthlyIncome} surplus={score.surplus} currentInvRate={score.invRate} invMonthly={score.invMonthly} band={score.band}/>}
 
               <PDFBtn title={`Financial Score - ${d.clientName||"Report"}`} contentId="score-content"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -1612,11 +1693,6 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
 
               {/* Post-score personalized tools */}
               <PostScoreTools data={d} onCheckup={onCheckup} saveScore={saveScore} score={score}/>
-
-              {/* Post-score investment slider */}
-              {score.surplus>0&&score.monthlyIncome>0&&(
-                <PostScoreInvestmentSlider income={score.monthlyIncome} surplus={score.surplus} invRate={score.invRate} invTarget={score.invTarget}/>
-              )}
             </div>
           ):(
             <div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:40,marginBottom:16}}>⚠️</div><p style={{color:"#8fadd4"}}>Please enter your age in the Start section to generate a score.</p><NextBtn onClick={()=>setStep("Start")}>Go to Start</NextBtn></div>
