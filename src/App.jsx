@@ -60,6 +60,26 @@ const today = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.
 // ─── DEFAULT STATE ─────────────────────────────────────────────────────────────
 const EMPTY = {
   clientName:"", isJoint:null, age1:"", age2:"", person1Name:"", person2Name:"",
+  income:{
+    currentRole:"", grossSalary:"", hourlyRate:"", netPaycheque:"",
+    payFrequency:"",
+    avgMonthly:"",
+    pensionContribution:"",
+    employerMatchEmployee:"",
+    employerMatchPct:"",
+    monthlyIncome:"",
+    grossMonthly:"",
+  },
+  income2:{
+    currentRole:"", grossSalary:"", hourlyRate:"", netPaycheque:"",
+    payFrequency:"",
+    avgMonthly:"",
+    pensionContribution:"",
+    employerMatchEmployee:"",
+    employerMatchPct:"",
+    monthlyIncome:"",
+    grossMonthly:"",
+  },
   bankAccounts:[{name:"Chequing",amount:""}],
   investments:{
     tfsa:[{name:"Financial Planner",amount:""},{name:"Private Wealth",amount:""},{name:"Self Directed",amount:""}],
@@ -105,8 +125,8 @@ const PctInput = ({value,onChange,placeholder="0.00"}) => (
     <span style={{color:"#6b8cce"}}>%</span>
   </div>
 );
-const NextBtn = ({onClick,children,style={}}) => (
-  <button onClick={onClick} style={{width:"100%",background:"linear-gradient(135deg,#1a4080,#0d2a5e)",border:"1px solid #2a4080",borderRadius:10,color:"#4ade80",padding:"14px",fontSize:14,cursor:"pointer",letterSpacing:1,marginBottom:14,...GS,...style}}>{children}</button>
+const NextBtn = ({onClick,children,style={},disabled=false}) => (
+  <button onClick={disabled?undefined:onClick} disabled={disabled} style={{width:"100%",background:disabled?"#1a1a2e":"linear-gradient(135deg,#1a4080,#0d2a5e)",border:`1px solid ${disabled?"#2a2a4a":"#2a4080"}`,borderRadius:10,color:disabled?"#4a5a6a":"#4ade80",padding:"14px",fontSize:14,cursor:disabled?"not-allowed":"pointer",letterSpacing:1,marginBottom:14,opacity:disabled?0.6:1,...GS,...style}}>{children}</button>
 );
 const NavBar = ({title,subtitle,onHome,right}) => (
   <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 0",position:"sticky",top:0,zIndex:100}}>
@@ -150,36 +170,49 @@ function calcScore(d, totalInv) {
   const totalLocBal = (d.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
   const totalDebt = totalCC+totalLocBal+totalOD;
   const efund = (d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
-  const annualIncome = Number(d.budget.income||0)*12;
   const monthlyIncome = Number(d.budget.income||0);
+  const annualIncome = monthlyIncome*12;
   const monthlyExp = d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const surplus = monthlyIncome - monthlyExp;
 
-  // Investment rate — use dedicated field first, fallback to keyword search
-  const invMonthly = Number(d.budget.investmentMonthly||0) ||
-    d.budget.categories
-      .filter(c=>["investments","invest","rrsp","tfsa","fhsa","saving","savings"].some(k=>c.name.toLowerCase().includes(k)))
-      .reduce((s,c)=>s+Number(c.amount||0),0);
-  const invRate = monthlyIncome>0?(invMonthly/monthlyIncome)*100:0;
+  // Gross monthly for 25% target
+  const inc=d.income||{};
+  const grossMonthly=Number(inc.grossSalary||0)>0
+    ? Number(inc.grossSalary)/12
+    : Number(inc.hourlyRate||0)>0
+      ? Number(inc.hourlyRate)*2080/12
+      : monthlyIncome; // fallback to net if no gross entered
+
+  // Investment rate — dedicated field + pension + employer match
+  const periods={"monthly":12,"biweekly":26,"semimonthly":24,"weekly":52,"commission":12}[inc.payFrequency||"monthly"]||12;
+  const pension=Number(inc.pensionContribution||0);
+  const empEE=Number(inc.employerMatchEmployee||0);
+  const empER=empEE*(Number(inc.employerMatchPct||0)/100);
+  const workInvMonthly=(pension+empEE+empER)*(periods/12);
+  const manualInvMonthly=Number(d.budget.investmentMonthly||0);
+  // Use whichever is higher — the manual input or the work contributions
+  const invMonthly=Math.max(manualInvMonthly,workInvMonthly) +
+    (manualInvMonthly>0&&workInvMonthly>0?Math.min(manualInvMonthly,workInvMonthly):0);
+  // Actually: add them together if both filled
+  const totalInvMonthly = manualInvMonthly + workInvMonthly;
+  // Investment rate vs GROSS income, target 25%
+  const invRate = grossMonthly>0?(totalInvMonthly/grossMonthly)*100:0;
+  const invTarget = 25; // 25% of gross is the universal target
 
   const band = age<30?"20s":age<40?"30s":age<50?"40s":age<60?"50s":"60s";
   const bm = {
-    "20s":{invTarget:10,efundMonths:3,debtRatio:0.3,invAmount:10000},
-    "30s":{invTarget:15,efundMonths:4,debtRatio:0.25,invAmount:60000},
-    "40s":{invTarget:18,efundMonths:5,debtRatio:0.2,invAmount:150000},
-    "50s":{invTarget:20,efundMonths:6,debtRatio:0.15,invAmount:300000},
-    "60s":{invTarget:20,efundMonths:6,debtRatio:0.1,invAmount:500000}
+    "20s":{efundMonths:3,debtRatio:0.3,invAmount:10000},
+    "30s":{efundMonths:4,debtRatio:0.25,invAmount:60000},
+    "40s":{efundMonths:5,debtRatio:0.2,invAmount:150000},
+    "50s":{efundMonths:6,debtRatio:0.15,invAmount:300000},
+    "60s":{efundMonths:6,debtRatio:0.1,invAmount:500000}
   }[band];
 
-  // Investment rate score — full 30 pts, rewarding generously above target too
-  const invRateScore = Math.min(30, Math.round((invRate/bm.invTarget)*30));
-
-  // Budget balance — only penalises deficits, neutral for surplus
-  // 0 pts for deficit, 10 pts for balanced or surplus
+  const invRateScore = Math.min(30, Math.round((invRate/invTarget)*30));
   const budgetScore = surplus>=0 ? 10 : Math.max(0, Math.round(10 + (surplus/monthlyIncome)*20));
 
   const scores = [
-    {label:"Investment Rate",score:invRateScore,max:30,desc:`${invRate.toFixed(1)}% of income invested (target: ${bm.invTarget}%+)`},
+    {label:"Investment Rate",score:invRateScore,max:30,desc:`${invRate.toFixed(1)}% of gross income invested (target: 25%)`},
     {label:"Portfolio Size",score:Math.min(25,Math.round((totalInv/bm.invAmount)*25)),max:25,desc:`${fmtShort(totalInv)} saved (benchmark: ${fmtShort(bm.invAmount)})`},
     {label:"Emergency Fund",score:Math.min(20,Math.round(((monthlyExp>0?efund/monthlyExp:0)/bm.efundMonths)*20)),max:20,desc:`${monthlyExp>0?(efund/monthlyExp).toFixed(1):0} months (target: ${bm.efundMonths})`},
     {label:"Debt Management",score:Math.max(0,Math.round(annualIncome>0?15-Math.max(0,(totalDebt/annualIncome-bm.debtRatio)*100):0)),max:15,desc:`Non-mortgage debt ${annualIncome>0?(totalDebt/annualIncome*100).toFixed(0):0}% of income (target <${bm.debtRatio*100}%)`},
@@ -188,7 +221,7 @@ function calcScore(d, totalInv) {
   const total = scores.reduce((s,x)=>s+x.score,0);
   const grade = total>=85?"A+":total>=75?"A":total>=65?"B+":total>=55?"B":total>=45?"C+":total>=35?"C":"D";
   const gradeColor = total>=75?"#4ade80":total>=55?"#facc15":total>=35?"#fb923c":"#f87171";
-  return {total,grade,gradeColor,scores,band,surplus,invRate,invMonthly,monthlyIncome};
+  return {total,grade,gradeColor,scores,band,surplus,invRate,invMonthly:totalInvMonthly,monthlyIncome,grossMonthly};
 }
 
 // ─── THEMES ───────────────────────────────────────────────────────────────────
@@ -850,8 +883,9 @@ function FinancialPrescription({score,data,totalInv}) {
   const totalAlloc=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const surplus=income-totalAlloc;
   const totalCC=data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
-  const invCat=data.budget.categories.find(c=>c.name==="Investments");
-  const invAmt=Number(invCat?.amount||0);
+  const invAmt=score.invMonthly||0;
+  const grossMonthly=score.grossMonthly||income;
+  const invRate=score.invRate||0;
   const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp=totalAlloc;
   const efundMonths=monthlyExp>0?(efund/monthlyExp):0;
@@ -859,11 +893,11 @@ function FinancialPrescription({score,data,totalInv}) {
   // Generate 3 hyper-specific prescriptions based on their actual numbers
   const rxItems=[];
 
-  // Investment rate Rx
-  if(income>0&&invAmt/income<0.10){
-    const target=Math.round(income*0.10);
+  // Investment rate Rx — use gross income and 25% target
+  if(grossMonthly>0&&invRate<25){
+    const target=Math.round(grossMonthly*0.25);
     const gap=target-invAmt;
-    rxItems.push({icon:"💊",color:"#4ade80",title:"Boost your investment rate",action:`Transfer ${fmt(gap)}/mo more into your TFSA — bringing you from ${((invAmt/income)*100).toFixed(1)}% to 10% of your income invested. Set this up as an automatic transfer on payday so it never gets spent.`});
+    rxItems.push({icon:"💊",color:"#4ade80",title:"Boost your investment rate",action:`You're currently investing ${invRate.toFixed(1)}% of your gross income. The goal is 25% (${fmt(target)}/mo). You need ${fmt(Math.max(0,gap))} more per month — through TFSA contributions, pension, or employer match. Set up an automatic transfer on payday so it never gets spent.`});
   }
 
   // Emergency fund Rx
@@ -1247,12 +1281,268 @@ function ApptInvestmentInput({income,totalAlloc,currentValue,onSetInvestment}) {
   );
 }
 
-// ─── APPOINTMENT ──────────────────────────────────────────────────────────────
-const APPT_STEPS=["Start","Accounts","Investments","Savings","Mortgage","Debt","Credit Cards","Line of Credit","Budget","Score"];
+// ─── INCOME STEP ──────────────────────────────────────────────────────────────
+function IncomeStep({d,setD,setIncome,setIncome2,beginner,onNext}) {
+  const isJoint=d.isJoint;
+  const name1=d.person1Name||d.clientName||"Person 1";
+  const name2=d.person2Name||"Person 2";
 
-function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) {
+  // Helper to calculate monthly from an income object
+  const calcMonthly=(inc)=>{
+    const freq=inc.payFrequency||"", net=Number(inc.netPaycheque||0);
+    if(freq==="monthly") return net;
+    if(freq==="biweekly") return net*26/12;
+    if(freq==="semimonthly") return net*2;
+    if(freq==="weekly") return net*52/12;
+    if(freq==="commission") return Number(inc.avgMonthly||0);
+    return 0;
+  };
+  const calcInvMonthly=(inc)=>{
+    const freq=inc.payFrequency||"monthly";
+    const periods={"monthly":12,"biweekly":26,"semimonthly":24,"weekly":52,"commission":12}[freq]||12;
+    const pension=Number(inc.pensionContribution||0);
+    const empEE=Number(inc.employerMatchEmployee||0);
+    const empER=empEE*(Number(inc.employerMatchPct||0)/100);
+    return Math.round((pension+empEE+empER)*(periods/12));
+  };
+
+  const inc1=d.income||{}, inc2=d.income2||{};
+  const monthly1=Math.round(calcMonthly(inc1));
+  const monthly2=Math.round(calcMonthly(inc2));
+  const totalMonthly=monthly1+(isJoint?monthly2:0);
+
+  const canProceed1=inc1.payFrequency&&(inc1.payFrequency==="commission"?Number(inc1.avgMonthly||0)>0:Number(inc1.netPaycheque||0)>0);
+  const canProceed2=!isJoint||(inc2.payFrequency&&(inc2.payFrequency==="commission"?Number(inc2.avgMonthly||0)>0:Number(inc2.netPaycheque||0)>0));
+  const canProceed=canProceed1&&canProceed2;
+
+  return (
+    <div>
+      {isJoint&&(
+        <div style={{textAlign:"center",background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px",marginBottom:14,fontSize:13,color:"#8fadd4"}}>
+          Filling out income for both people — combined monthly income will be used for your budget and score.
+        </div>
+      )}
+
+      {/* Person 1 */}
+      <IncomePanel
+        label={isJoint?name1:null}
+        color="#4ade80"
+        inc={inc1}
+        setInc={setIncome}
+        beginner={beginner}
+        monthlyNet={monthly1}
+        invMonthly={calcInvMonthly(inc1)}
+      />
+
+      {/* Person 2 — only if joint */}
+      {isJoint&&(
+        <IncomePanel
+          label={name2}
+          color="#60a5fa"
+          inc={inc2}
+          setInc={setIncome2}
+          beginner={beginner}
+          monthlyNet={monthly2}
+          invMonthly={calcInvMonthly(inc2)}
+        />
+      )}
+
+      {/* Combined summary for joint */}
+      {isJoint&&monthly1>0&&monthly2>0&&(
+        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"16px"}}>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>COMBINED MONTHLY TAKE-HOME</div>
+          <div style={{fontSize:28,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalMonthly)}/mo</div>
+          <div style={{fontSize:11,color:"#6b8cce",marginTop:4}}>{fmt(monthly1)} + {fmt(monthly2)}</div>
+        </Card>
+      )}
+
+      <NextBtn onClick={onNext} disabled={!canProceed}>
+        {canProceed?"Next: Bank Accounts →":"Enter pay details to continue"}
+      </NextBtn>
+    </div>
+  );
+}
+
+
+// ─── INCOME PANEL (reusable per-person income block) ─────────────────────────
+function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
+  const freq=inc.payFrequency||"";
+  const pension=Number(inc.pensionContribution||0);
+  const empEE=Number(inc.employerMatchEmployee||0);
+  const empPct=Number(inc.employerMatchPct||0);
+  const empER=empEE*(empPct/100);
+  const periods={"monthly":12,"biweekly":26,"semimonthly":24,"weekly":52,"commission":12}[freq]||12;
+
+  const FREQS=[
+    {val:"monthly",label:"Monthly",sub:"Paid once a month"},
+    {val:"semimonthly",label:"Semi-Monthly",sub:"Twice a month (24×/yr)"},
+    {val:"biweekly",label:"Bi-Weekly",sub:"Every 2 weeks (26×/yr)"},
+    {val:"weekly",label:"Weekly",sub:"Every week (52×/yr)"},
+    {val:"commission",label:"Commission",sub:"Variable — enter monthly average"},
+  ];
+
+  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+
+  return (
+    <div style={{marginBottom:14}}>
+      {label&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <div style={{width:10,height:10,borderRadius:"50%",background:color}}/>
+        <div style={{fontSize:15,color,fontWeight:"bold",...GS}}>{label}</div>
+      </div>}
+
+      {/* Role & Pay */}
+      <Card>
+        <SecTitle>{label?"Role & Income":"Your Role & Income"}</SecTitle>
+        <div style={{marginBottom:12}}>
+          <Label>Current Role / Job Title</Label>
+          <input value={inc.currentRole||""} onChange={e=>setInc("currentRole")(e.target.value)}
+            placeholder="e.g. Financial Advisor, Nurse, Software Developer" style={inp}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <Label>Gross Annual Salary</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={inc.grossSalary||""} onChange={e=>setInc("grossSalary")(e.target.value)} placeholder="75,000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+            </div>
+            {beginner&&<div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Total pay before taxes</div>}
+          </div>
+          <div>
+            <Label>Hourly Rate (if applicable)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={inc.hourlyRate||""} onChange={e=>setInc("hourlyRate")(e.target.value)} placeholder="35.00" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:11}}>/hr</span>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Pay frequency */}
+      <Card>
+        <SecTitle>Pay Frequency</SecTitle>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {FREQS.map(f=>(
+            <button key={f.val} onClick={()=>setInc("payFrequency")(f.val)}
+              style={{background:freq===f.val?"#1a4080":"#0d1b3e",border:`1px solid ${freq===f.val?color:"#2a4080"}`,borderRadius:10,padding:"10px 14px",cursor:"pointer",textAlign:"left",color:"#e8e4d9",...GS,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:"bold",color:freq===f.val?color:"#e8e4d9"}}>{f.label}</div>
+                <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>{f.sub}</div>
+              </div>
+              {freq===f.val&&<span style={{color,fontSize:16}}>✓</span>}
+            </button>
+          ))}
+        </div>
+
+        {freq&&freq!=="commission"&&(
+          <div>
+            <Label>Net Pay Per Paycheque (after all deductions)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:`1px solid ${color}66`,borderRadius:10,padding:"12px 14px"}}>
+              <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+              <input type="number" value={inc.netPaycheque||""} onChange={e=>setInc("netPaycheque")(e.target.value)}
+                placeholder="2,400.00" style={{background:"none",border:"none",outline:"none",color,fontSize:22,width:"100%",...GS}}/>
+            </div>
+            {beginner&&<div style={{fontSize:11,color:"#6b8cce",marginTop:6,lineHeight:1.6}}>The amount that hits your bank account each pay — after income tax, CPP, EI and other deductions.</div>}
+          </div>
+        )}
+        {freq==="commission"&&(
+          <div>
+            <Label>Average Monthly Take-Home (after tax)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:`1px solid ${color}66`,borderRadius:10,padding:"12px 14px"}}>
+              <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+              <input type="number" value={inc.avgMonthly||""} onChange={e=>setInc("avgMonthly")(e.target.value)}
+                placeholder="5,000.00" style={{background:"none",border:"none",outline:"none",color,fontSize:22,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>/mo</span>
+            </div>
+          </div>
+        )}
+
+        {/* Monthly summary */}
+        {monthlyNet>0&&beginner&&(
+          <div style={{marginTop:14,background:"#0d2a1a",border:`1px solid ${color}44`,borderRadius:10,padding:"12px 14px"}}>
+            <div style={{fontSize:11,color:"#6b8cce",marginBottom:4}}>MONTHLY TAKE-HOME</div>
+            <div style={{fontSize:24,color,fontWeight:"bold",...GS}}>{fmt(monthlyNet)}/mo</div>
+            <div style={{fontSize:11,color:"#6b8cce",marginTop:4}}>
+              {freq==="biweekly"?`${fmt(Number(inc.netPaycheque||0))} × 26 ÷ 12`:
+               freq==="semimonthly"?`${fmt(Number(inc.netPaycheque||0))} × 2`:
+               freq==="weekly"?`${fmt(Number(inc.netPaycheque||0))} × 52 ÷ 12`:
+               freq==="monthly"?`Monthly pay`:`Commission average`}
+            </div>
+          </div>
+        )}
+        {monthlyNet>0&&!beginner&&(
+          <div style={{marginTop:10,display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:"1px solid #1e3a5f"}}>
+            <span style={{fontSize:13,color:"#8fadd4"}}>Monthly take-home</span>
+            <span style={{fontSize:16,color,fontWeight:"bold",...GS}}>{fmt(monthlyNet)}/mo</span>
+          </div>
+        )}
+      </Card>
+
+      {/* Pension & Employer Match */}
+      {freq&&(
+        <Card>
+          <SecTitle>Pension & Employer Match</SecTitle>
+          {beginner&&<div style={{fontSize:12,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>These count toward your investment rate. Enter per-paycheque amounts.</div>}
+          <div style={{marginBottom:12}}>
+            <Label>Pension Contribution /paycheque (your share)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={inc.pensionContribution||""} onChange={e=>setInc("pensionContribution")(e.target.value)}
+                placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:16,width:"100%",...GS}}/>
+            </div>
+          </div>
+          <Label>Employer Match</Label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div>
+              <div style={{fontSize:10,color:"#6b8cce",marginBottom:6}}>YOUR CONTRIBUTION /PAYCHEQUE</div>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+                <input type="number" value={inc.employerMatchEmployee||""} onChange={e=>setInc("employerMatchEmployee")(e.target.value)}
+                  placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:16,width:"100%",...GS}}/>
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"#6b8cce",marginBottom:6}}>EMPLOYER MATCHES</div>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                <input type="number" value={inc.employerMatchPct||""} onChange={e=>setInc("employerMatchPct")(e.target.value)}
+                  placeholder="50" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:16,width:"100%",...GS}}/>
+                <span style={{color:"#6b8cce",fontSize:12}}>%</span>
+              </div>
+            </div>
+          </div>
+          {(pension>0||empEE>0)&&(
+            <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px"}}>
+              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>MONTHLY INVESTMENT FROM WORK</div>
+              {[
+                {l:"Pension (your share)",v:Math.round(pension*(periods/12)),c:"#a78bfa"},
+                {l:`Your match contribution`,v:Math.round(empEE*(periods/12)),c:"#facc15"},
+                ...(empER>0?[{l:`Employer match (${empPct}%)`,v:Math.round(empER*(periods/12)),c:"#4ade80"}]:[]),
+              ].filter(x=>x.v>0).map((x,i)=>(
+                <div key={i} style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:12,color:"#8fadd4"}}>{x.l}</span>
+                  <span style={{fontSize:13,color:x.c,fontWeight:"bold",...GS}}>{fmt(x.v)}/mo</span>
+                </div>
+              ))}
+              <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>Total invested from work</span>
+                <span style={{fontSize:15,color,fontWeight:"bold",...GS}}>{fmt(invMonthly)}/mo</span>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── APPOINTMENT ──────────────────────────────────────────────────────────────
+const APPT_STEPS=["Start","Income","Accounts","Investments","Savings","Mortgage","Debt","Credit Cards","Line of Credit","Budget","Score"];
+
+function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,beginner,theme}) {
   const [step,setStep]=useState("Start");
   const set=(g,f)=>v=>setD(p=>({...p,[g]:{...p[g],[f]:v}}));
+  const setIncome=f=>v=>setD(p=>({...p,income:{...p.income,[f]:v}}));
+  const setIncome2=f=>v=>setD(p=>({...p,income2:{...p.income2,[f]:v}}));
   const setCC=(i,f)=>v=>setD(p=>({...p,creditCards:p.creditCards.map((c,idx)=>idx===i?{...c,[f]:v}:c)}));
   const setOD=(i,f)=>v=>setD(p=>({...p,otherDebts:p.otherDebts.map((x,idx)=>idx===i?{...x,[f]:v}:x)}));
   const setBudgetIncome=v=>setD(p=>({...p,budget:{...p.budget,income:v}}));
@@ -1281,7 +1571,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
       <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80"}}>{pct}%</div>}/>
       <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",transition:"width 0.4s"}}/></div>
       <div style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
-        {APPT_STEPS.filter(s=>s!=="Start"&&s!=="Score").map(s=>(
+        {APPT_STEPS.filter(s=>s!=="Start"&&s!=="Income"&&s!=="Score").map(s=>(
           <button key={s} onClick={()=>setStep(s)} style={{background:"none",border:"none",borderBottom:step===s?"2px solid #4ade80":"2px solid transparent",color:step===s?"#4ade80":"#8fadd4",padding:"8px 11px",fontSize:10,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap",...GS}}>{s}</button>
         ))}
       </div>
@@ -1320,8 +1610,41 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv}) 
                 </>}
               </Card>
             )}
-            {d.isJoint!==null&&<NextBtn onClick={()=>setStep("Accounts")}>Let's Begin →</NextBtn>}
+            {d.isJoint!==null&&<NextBtn onClick={()=>setStep("Income")}>Let's Begin →</NextBtn>}
           </div>
+        )}
+
+        {step==="Income"&&(
+          <IncomeStep d={d} setD={setD} setIncome={setIncome} setIncome2={setIncome2} beginner={beginner} onNext={()=>{
+            const calcMonthly=(inc)=>{
+              const freq=inc.payFrequency, net=Number(inc.netPaycheque||0);
+              if(freq==="monthly") return net;
+              if(freq==="biweekly") return net*26/12;
+              if(freq==="semimonthly") return net*2;
+              if(freq==="weekly") return net*52/12;
+              if(freq==="commission") return Number(inc.avgMonthly||0);
+              return 0;
+            };
+            const calcInv=(inc)=>{
+              const freq=inc.payFrequency||"monthly";
+              const periods={"monthly":12,"biweekly":26,"semimonthly":24,"weekly":52,"commission":12}[freq]||12;
+              const pension=Number(inc.pensionContribution||0);
+              const empEE=Number(inc.employerMatchEmployee||0);
+              const empER=empEE*(Number(inc.employerMatchPct||0)/100);
+              return Math.round((pension+empEE+empER)*(periods/12));
+            };
+            const inc=d.income||{}, inc2=d.income2||{};
+            const monthly1=Math.round(calcMonthly(inc));
+            const monthly2=d.isJoint?Math.round(calcMonthly(inc2)):0;
+            const totalMonthly=monthly1+monthly2;
+            const totalInvMo=calcInv(inc)+(d.isJoint?calcInv(inc2):0);
+            setD(p=>({...p,
+              income:{...p.income,monthlyIncome:String(monthly1)},
+              income2:{...p.income2,monthlyIncome:String(monthly2)},
+              budget:{...p.budget,income:String(totalMonthly),investmentMonthly:String(totalInvMo||p.budget.investmentMonthly)}
+            }));
+            setStep("Accounts");
+          }}/>
         )}
 
         {step==="Accounts"&&(
