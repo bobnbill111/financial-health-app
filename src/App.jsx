@@ -47,7 +47,44 @@ const supa = {
       body: JSON.stringify({user_id:userId, data:JSON.stringify(data), scores:JSON.stringify(scores)})
     });
     return r;
-  }
+  },
+  // Tool snapshots
+  async loadSnapshots(userId, token, tool) {
+    const filter=tool?`&tool=eq.${encodeURIComponent(tool)}`:"";
+    const r=await fetch(`${SUPA_URL}/rest/v1/tool_snapshots?user_id=eq.${userId}${filter}&order=created_at.desc&select=*`,{
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
+    });
+    return r.json();
+  },
+  async saveSnapshot(userId, token, tool, name, inputs) {
+    const r=await fetch(`${SUPA_URL}/rest/v1/tool_snapshots`,{
+      method:"POST",
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+      body:JSON.stringify({user_id:userId,tool,name,inputs})
+    });
+    return r.json();
+  },
+  async deleteSnapshot(id, token) {
+    await fetch(`${SUPA_URL}/rest/v1/tool_snapshots?id=eq.${id}`,{
+      method:"DELETE",
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
+    });
+  },
+  // Milestones
+  async loadMilestones(userId, token) {
+    const r=await fetch(`${SUPA_URL}/rest/v1/user_milestones?user_id=eq.${userId}&select=*`,{
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
+    });
+    const rows=await r.json();
+    return rows[0]?.milestones||[];
+  },
+  async saveMilestones(userId, token, milestones) {
+    await fetch(`${SUPA_URL}/rest/v1/user_milestones`,{
+      method:"POST",
+      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},
+      body:JSON.stringify({user_id:userId,milestones:JSON.stringify(milestones)})
+    });
+  },
 };
 
 
@@ -93,7 +130,7 @@ const EMPTY = {
     {name:"Sinking Fund",saved:"",goal:"12075",color:"#60a5fa"},
   ],
   locs:[{name:"BMO Line of Credit",balance:"",limit:"",rate:""}],
-  creditCards:[{name:"Visa",totalBalance:"",due:"",pending:""},{name:"Mastercard",totalBalance:"",due:"",pending:""}],
+  creditCards:[{name:"Visa",totalBalance:"",due:"",pending:"",payInFull:true},{name:"Mastercard",totalBalance:"",due:"",pending:"",payInFull:true}],
   mortgage:{balance:"",value:"",rate:"",monthlyPayment:"",amortYears:""},
   otherDebts:[],
   lifeInsurance:"",
@@ -108,7 +145,7 @@ const EMPTY = {
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
 const Card = ({children,style={}}) => <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14,...style}}>{children}</div>;
 const Label = ({children}) => <div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",marginBottom:6,...GS}}>{children}</div>;
-const SecTitle = ({children}) => <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",marginBottom:14,...GS}}>{children}</div>;
+const SecTitle = ({children,style={}}) => <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",marginBottom:14,...GS,...style}}>{children}</div>;
 const NumInput = ({value,onChange,placeholder="0.00"}) => (
   <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
     <span style={{color:"#6b8cce",marginRight:6,fontSize:14}}>$</span>
@@ -165,7 +202,7 @@ function PDFBtn({title,contentId}) {
 function calcScore(d, totalInv) {
   const age = Number(d.age1||0);
   if (!age) return null;
-  const totalCC = d.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalCC = d.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
   const totalOD = (d.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
   const totalLocBal = (d.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
   const totalDebt = totalCC+totalLocBal+totalOD;
@@ -444,6 +481,10 @@ export default function App() {
   const [beginner,setBeginner]=useState(false);
   const [saving,setSaving]=useState(false);
   const [isNewUser,setIsNewUser]=useState(false);
+  const [milestones,setMilestones]=useState([]);
+  const [milestone,setMilestone]=useState(null);
+  const milestonesRef=useRef([]);
+  useEffect(()=>{milestonesRef.current=milestones;},[milestones]);
 
   const [data,setData]=useState(EMPTY);
   const [scoreHistory,setScoreHistory]=useState([]);
@@ -476,7 +517,10 @@ export default function App() {
     if(!user||!token) return;
     const t=setTimeout(()=>{
       setSaving(true);
+      const sg=arr=>(arr||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+      const inv=sg(data.investments.tfsa)+sg(data.investments.fhsa)+sg(data.investments.rrsp)+sg(data.investments.alternatives)+sg(data.investments.nonReg);
       supa.saveData(user.id,token,data,scoreHistory).finally(()=>setSaving(false));
+      checkMilestones(data,inv);
     },1500);
     return ()=>clearTimeout(t);
   },[data,scoreHistory]);
@@ -493,11 +537,11 @@ export default function App() {
         try{if(row.scores)setScoreHistory(JSON.parse(row.scores));}catch(e){}
         setIsNewUser(false);
       } else {
-        // No data row = new user
         setIsNewUser(true);
       }
+      // Load milestones
+      try{const ms=await supa.loadMilestones(authUser.id,authToken);setMilestones(ms||[]);}catch(e){}
     } catch(e) {
-      // If anything fails, still let them in
       setIsNewUser(newUser);
     }
   };
@@ -508,8 +552,49 @@ export default function App() {
     localStorage.removeItem("fh_uid");
     localStorage.removeItem("fh_email");
     setUser(null);setToken(null);
-    setData(EMPTY);setScoreHistory([]);
+    setData(EMPTY);setScoreHistory([]);setMilestones([]);
     setPage("home");setIsNewUser(false);setIsGuest(false);
+  };
+
+  // Check milestones whenever data changes
+  const checkMilestones=async(newData,newTotalInv)=>{
+    if(!user||!token||isGuest) return;
+    const efund=(newData.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+    const monthlyExp=newData.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+    const efundTarget=monthlyExp*3;
+    const nw=newTotalInv+efund+(newData.bankAccounts||[]).reduce((s,a)=>s+Number(a.amount||0),0)
+      +Number(newData.mortgage?.value||0)-Number(newData.mortgage?.balance||0)
+      -newData.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0)
+      -(newData.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+      -(newData.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
+
+    const MILESTONE_DEFS=[
+      {id:"nw_10k",label:"$10K Net Worth",icon:"💰",desc:"Your net worth crossed $10,000!",check:()=>nw>=10000},
+      {id:"nw_25k",label:"$25K Net Worth",icon:"🌟",desc:"Your net worth crossed $25,000!",check:()=>nw>=25000},
+      {id:"nw_50k",label:"$50K Net Worth",icon:"🚀",desc:"Your net worth crossed $50,000!",check:()=>nw>=50000},
+      {id:"nw_100k",label:"$100K Net Worth",icon:"💎",desc:"Your net worth crossed $100,000!",check:()=>nw>=100000},
+      {id:"nw_250k",label:"$250K Net Worth",icon:"👑",desc:"Your net worth crossed $250,000!",check:()=>nw>=250000},
+      {id:"nw_500k",label:"$500K Net Worth",icon:"🏆",desc:"Your net worth crossed $500,000!",check:()=>nw>=500000},
+      {id:"nw_1m",label:"$1M Net Worth",icon:"🎯",desc:"You're a millionaire!",check:()=>nw>=1000000},
+      {id:"nw_positive",label:"Positive Net Worth",icon:"📈",desc:"Your net worth is now positive!",check:()=>nw>0},
+      {id:"first_inv",label:"First Investment",icon:"📊",desc:"You made your first investment!",check:()=>newTotalInv>0},
+      {id:"efund_full",label:"Emergency Fund Funded",icon:"🛡️",desc:`You've fully funded your ${(efundTarget/monthlyExp).toFixed(0)}-month emergency fund!`,check:()=>efund>=efundTarget&&efundTarget>0},
+    ];
+
+    let newMilestones=[...milestonesRef.current];
+    let triggered=null;
+    for(const m of MILESTONE_DEFS){
+      if(!newMilestones.includes(m.id)&&m.check()){
+        newMilestones=[...newMilestones,m.id];
+        triggered=m;
+        break; // show one at a time
+      }
+    }
+    if(triggered){
+      setMilestones(newMilestones);
+      setMilestone(triggered);
+      try{await supa.saveMilestones(user.id,token,newMilestones);}catch(e){}
+    }
   };
 
   const saveScore=(score)=>{
@@ -525,10 +610,7 @@ export default function App() {
   const sumGroup=arr=>arr.reduce((s,x)=>s+Number(x.amount||0),0);
   const totalInv=sumGroup(data.investments.tfsa)+sumGroup(data.investments.fhsa)+sumGroup(data.investments.rrsp)+sumGroup(data.investments.alternatives)+sumGroup(data.investments.nonReg);
   const theme=dark?DARK_THEME:LIGHT_THEME;
-
-  // Derive display name — appointment name first, fallback to email
   const displayName=data.clientName||user?.email?.split("@")[0]||"";
-  // Latest score
   const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
 
   if(!authChecked) return (
@@ -553,13 +635,67 @@ export default function App() {
 
   return (
     <>
-      {signOutBtn}
+      {/* Milestone celebration overlay */}
+      {milestone&&<MilestoneCelebration milestone={milestone} onClose={()=>setMilestone(null)}/>}
       {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
       {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>}
-      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner}/>}
-      {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner}/>}
+      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner} user={user} token={token} milestones={milestones}/>}
+      {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner} user={user} token={token}/>}
       {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>setPage("home")} onSignOut={handleSignOut} data={data}/>}
     </>
+  );
+}
+
+// ─── MILESTONE CELEBRATION ────────────────────────────────────────────────────
+function MilestoneCelebration({milestone,onClose}) {
+  const [vis,setVis]=useState(false);
+  useEffect(()=>{
+    setTimeout(()=>setVis(true),50);
+    // Inject confetti keyframes
+    const id="confetti-style";
+    if(!document.getElementById(id)){
+      const s=document.createElement("style");
+      s.id=id;
+      s.textContent=`
+        @keyframes confettiFall {
+          0%{transform:translateY(-20px) rotate(0deg);opacity:1;}
+          100%{transform:translateY(100vh) rotate(720deg);opacity:0;}
+        }
+        @keyframes milestoneIn {
+          0%{transform:scale(0.5) translateY(40px);opacity:0;}
+          100%{transform:scale(1) translateY(0);opacity:1;}
+        }
+      `;
+      document.head.appendChild(s);
+    }
+  },[]);
+
+  const confettiColors=["#cc0000","#4ade80","#facc15","#60a5fa","#a78bfa","#fb923c"];
+  const confetti=Array.from({length:20},(_,i)=>({
+    left:`${Math.random()*100}%`,
+    delay:`${Math.random()*1}s`,
+    duration:`${2+Math.random()*2}s`,
+    color:confettiColors[i%confettiColors.length],
+    size:`${6+Math.random()*8}px`,
+  }));
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",...GS}} onClick={onClose}>
+      {/* Confetti */}
+      {confetti.map((c,i)=>(
+        <div key={i} style={{position:"fixed",top:"-20px",left:c.left,width:c.size,height:c.size,background:c.color,borderRadius:"2px",animation:`confettiFall ${c.duration} ${c.delay} ease-in forwards`,pointerEvents:"none"}}/>
+      ))}
+      {/* Card */}
+      <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"2px solid #4ade80",borderRadius:24,padding:"40px 32px",textAlign:"center",maxWidth:340,width:"90%",animation:"milestoneIn 0.5s ease-out forwards",position:"relative"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontSize:72,marginBottom:16}}>{milestone.icon}</div>
+        <div style={{fontSize:11,color:"#4ade80",letterSpacing:3,marginBottom:8}}>MILESTONE UNLOCKED</div>
+        <div style={{fontSize:24,color:"#e8e4d9",fontWeight:"bold",marginBottom:12,...GS}}>{milestone.label}</div>
+        <div style={{fontSize:14,color:"#8fadd4",lineHeight:1.7,marginBottom:24}}>{milestone.desc}</div>
+        <button onClick={onClose} style={{background:"linear-gradient(135deg,#4ade80,#22d3ee)",border:"none",borderRadius:12,padding:"14px 32px",color:"#0a0f1e",fontSize:15,fontWeight:"bold",cursor:"pointer",...GS}}>
+          🎉 Awesome!
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -855,8 +991,8 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
 
         <div style={{...fade(0.3),width:"100%",display:"flex",flexDirection:"column",gap:12}}>
           {[
-            {label:beginner?"See My Financial Picture":"Financial Check-up",sub:beginner?"See everything about your money in one place — net worth, savings, debts and more":"View your dashboard — net worth, investments & goals",badge:"RETURNING",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
-            {label:beginner?"Set Up My Profile":"Initial Appointment",sub:beginner?"Answer some simple questions about your money — takes about 10 minutes":"Enter your financial info — takes about 10 minutes",badge:beginner?"START HERE":"NEW",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
+            {label:beginner?"See My Financial Picture":"Financial Health Dashboard",sub:beginner?"See everything about your money in one place — net worth, savings, debts and more":"View your dashboard — net worth, investments & goals",badge:"DASHBOARD",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
+            {label:beginner?"Set Up My Profile":"Check-Up Appointment",sub:beginner?"Answer some simple questions about your money — takes about 10 minutes":"Enter or edit your financial information",badge:"EDIT INFO",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
             {label:beginner?"Financial Calculators":"Individual Tools",sub:beginner?"Simple calculators for budgeting, saving goals, loans and more":"Budget, net worth, savings goals, simulators & more",badge:"TOOLS",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
           ].map(btn=>(
             <button key={btn.label} onClick={btn.fn}
@@ -1833,15 +1969,34 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,be
         {step==="Credit Cards"&&(
           <div>
             {d.creditCards.map((cc,i)=>{
+              const payInFull=cc.payInFull!==false; // default true
               const bill=Number(cc.totalBalance||0)+Number(cc.pending||0)-Number(cc.due||0);
               return (
-                <Card key={i}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>{cc.name||`Card ${i+1}`}</div><button onClick={()=>setD(p=>({...p,creditCards:p.creditCards.filter((_,idx)=>idx!==i)}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button></div>
+                <Card key={i} style={{border:`1px solid ${payInFull?"#4ade8033":"#f8717133"}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>{cc.name||`Card ${i+1}`}</div>
+                    <button onClick={()=>setD(p=>({...p,creditCards:p.creditCards.filter((_,idx)=>idx!==i)}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>
+                  </div>
                   <Label>Card Name</Label><TxtInput value={cc.name} onChange={v=>setCC(i,"name")(v)} placeholder="Visa, Mastercard..."/>
                   <div style={{height:10}}/><Label>Total Balance</Label><NumInput value={cc.totalBalance} onChange={setCC(i,"totalBalance")}/>
                   <div style={{height:10}}/><Label>Due (Statement Balance)</Label><NumInput value={cc.due} onChange={setCC(i,"due")}/>
                   <div style={{height:10}}/><Label>Pending (Not Yet on Statement)</Label><NumInput value={cc.pending} onChange={setCC(i,"pending")}/>
-                  {(Number(cc.totalBalance)||Number(cc.due)||Number(cc.pending))?<div style={{marginTop:12,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
+
+                  {/* Pay in full toggle */}
+                  <div style={{marginTop:14,background:"#0d1b3e",borderRadius:10,padding:"12px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>Paying in full each month?</div>
+                        <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>{payInFull?"✅ Not counted as debt":"⚠️ Counted as debt in your score"}</div>
+                      </div>
+                      <button onClick={()=>setCC(i,"payInFull")(!payInFull)}
+                        style={{width:56,height:28,borderRadius:14,background:payInFull?"#0d2a1a":"#1a0505",border:`2px solid ${payInFull?"#4ade80":"#f87171"}`,position:"relative",cursor:"pointer",transition:"all 0.2s",flexShrink:0}}>
+                        <div style={{width:20,height:20,borderRadius:"50%",background:payInFull?"#4ade80":"#f87171",position:"absolute",top:2,left:payInFull?32:2,transition:"left 0.2s"}}/>
+                      </button>
+                    </div>
+                  </div>
+
+                  {(Number(cc.totalBalance)||Number(cc.due)||Number(cc.pending))?<div style={{marginTop:10,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div style={{fontSize:10,color:"#6b8cce"}}>CURRENT BILL</div><div style={{fontSize:10,color:"#6b8cce"}}>Total + Pending − Due</div></div>
                     <div style={{fontSize:22,color:bill>0?"#f87171":"#4ade80",fontWeight:"bold"}}>{fmt(bill)}</div>
                     <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
@@ -1853,7 +2008,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,be
                 </Card>
               );
             })}
-            <button onClick={()=>setD(p=>({...p,creditCards:[...p.creditCards,{name:"",totalBalance:"",due:"",pending:""}]}))} style={{width:"100%",background:"transparent",border:"1px solid #2a4080",borderRadius:10,color:"#8fadd4",padding:"12px",fontSize:13,cursor:"pointer",marginBottom:12,...GS}}>+ Add Card</button>
+            <button onClick={()=>setD(p=>({...p,creditCards:[...p.creditCards,{name:"",totalBalance:"",due:"",pending:"",payInFull:true}]}))} style={{width:"100%",background:"transparent",border:"1px solid #2a4080",borderRadius:10,color:"#8fadd4",padding:"12px",fontSize:13,cursor:"pointer",marginBottom:12,...GS}}>+ Add Card</button>
             <NextBtn onClick={()=>setStep("Line of Credit")}>Next: Line of Credit →</NextBtn>
           </div>
         )}
@@ -2235,9 +2390,9 @@ function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, inco
   );
 }
 
-const DASH_TABS=["Overview","Investments","Budget","Savings","Debt","Mortgage","Cash Flow","Score History"];
+const DASH_TABS=["Overview","Goals","Investments","Budget","Savings","Debt","Mortgage","Cash Flow","Score History"];
 
-function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore}) {
+function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,beginner,user,token,milestones}) {
   const [tab,setTab]=useState("Overview");
   const cash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
@@ -2303,7 +2458,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore}) 
           </Card>}
           <Card>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <SecTitle style={{marginBottom:0}}>Financial Order of Operations</SecTitle>
+              <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",...GS}}>FINANCIAL ORDER OF OPERATIONS</div>
               <div style={{fontSize:11,color:"#6b8cce"}}>{fooComplete}/{FOO_LABELS.length}</div>
             </div>
             {/* Progress bar */}
@@ -2359,6 +2514,8 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore}) 
           </Card>
           <PDFBtn title={`Financial Overview - ${d.clientName||"Report"}`} contentId="overview-content"/>
         </div>}
+
+        {tab==="Goals"&&<GoalsTab data={d} totalInv={totalInv} scoreHistory={scoreHistory}/>}
 
         {tab==="Investments"&&<div id="inv-content">
           <Card style={{textAlign:"center",padding:"18px 16px"}}><div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:4}}>TOTAL PORTFOLIO</div><div style={{fontSize:36,color:"#4ade80",fontWeight:"bold"}}>{fmt(totalInv)}</div></Card>
@@ -2874,20 +3031,27 @@ function ScoreHistory({history,currentScore,onSave}) {
 const TOOLS_LIST = [
   {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80",beginnerLabel:"How do I budget my money?",beginnerSub:"Enter what you earn and we'll show you where it goes"},
   {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee",beginnerLabel:"Analyze my spending",beginnerSub:"Upload your bank statement and see where your money went"},
+  {id:"retirement",label:"Retirement Planner",icon:"🏖️",sub:"Project your net worth with life events and retirement date",color:"#4ade80",beginnerLabel:"When can I retire?",beginnerSub:"See your net worth grow over time and plan your retirement"},
   {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Canadian housing market comparison — is buying worth it?",color:"#a78bfa",beginnerLabel:"Should I rent or buy a home?",beginnerSub:"We'll compare the real costs of renting vs buying in Canada"},
+  {id:"news",label:"Financial News",icon:"📰",sub:"Live Canadian financial news — rates, markets & economy",color:"#fb923c",beginnerLabel:"What's happening in Canadian finance?",beginnerSub:"Today's top stories on money, rates and the economy"},
   {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa",beginnerLabel:"What is my net worth?",beginnerSub:"Add up what you own and subtract what you owe"},
   {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15",beginnerLabel:"How much do I need to save?",beginnerSub:"Enter your goal and deadline — we'll tell you how much per month"},
+  {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa",beginnerLabel:"What happens if I invest more?",beginnerSub:"Try out financial decisions before you make them"},
   {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Calculate payments and interest on any loan",color:"#fb923c",beginnerLabel:"How much will a loan cost me?",beginnerSub:"See your monthly payment and total interest on any loan"},
   {id:"cashflow",label:"Cash Flow Calendar",icon:"📅",sub:"Map your income and bills through the month",color:"#22d3ee",beginnerLabel:"Map my bills through the month",beginnerSub:"See when money comes in and goes out each month"},
   {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Avalanche vs snowball — find your best payoff path",color:"#f87171",beginnerLabel:"How do I pay off my debt fastest?",beginnerSub:"Find the fastest and cheapest way to become debt-free"},
 ];
 
-function IndividualTools({onHome,data,beginner}) {
+function IndividualTools({onHome,data,beginner,user,token}) {
   const [tool,setTool]=useState(null);
-  if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget}/></ToolWrapper>;
+  if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
+  if(tool==="rentvsbuy") return <ToolWrapper title={beginner?"Should I Rent or Buy?":"Rent vs. Buy"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy beginner={beginner} user={user} token={token} toolId="rentvsbuy"/></ToolWrapper>;
+  if(tool==="news") return <ToolWrapper title="Financial News" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-news"><FinancialNews/></ToolWrapper>;
+  if(tool==="retirement") return <ToolWrapper title="Retirement Planner" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-retirement"><RetirementPlanner data={data} user={user} token={token} toolId="retirement"/></ToolWrapper>;
   if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data} beginner={beginner}/></ToolWrapper>;
   if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data} beginner={beginner}/></ToolWrapper>;
+  if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
   if(tool==="loc") return <ToolWrapper title={beginner?"How Much Will a Loan Cost?":"Loan Simulator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate="" beginner={beginner}/></ToolWrapper>;
   if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
   if(tool==="debtopt") return <ToolWrapper title={beginner?"How Do I Pay Off Debt?":"Debt Optimizer"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
@@ -2918,6 +3082,68 @@ function IndividualTools({onHome,data,beginner}) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── SNAPSHOT BAR ─────────────────────────────────────────────────────────────
+function SnapshotBar({user,token,toolId,getInputs}) {
+  const [name,setName]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [msg,setMsg]=useState("");
+  const [snaps,setSnaps]=useState([]);
+  const [open,setOpen]=useState(false);
+
+  useEffect(()=>{
+    if(!user||!token||!open) return;
+    supa.loadSnapshots(user.id,token,toolId).then(s=>setSnaps(Array.isArray(s)?s:[])).catch(()=>{});
+  },[open,user,token]);
+
+  const save=async()=>{
+    if(!user||!token||!name.trim()) return;
+    setSaving(true);
+    await supa.saveSnapshot(user.id,token,toolId,name.trim(),getInputs());
+    const s=await supa.loadSnapshots(user.id,token,toolId);
+    setSnaps(Array.isArray(s)?s:[]);
+    setName("");setMsg("Saved ✓");setTimeout(()=>setMsg(""),2000);
+    setSaving(false);
+  };
+
+  const del=async(id)=>{
+    await supa.deleteSnapshot(id,token);
+    setSnaps(p=>p.filter(s=>s.id!==id));
+  };
+
+  if(!user) return null;
+  return (
+    <Card style={{marginBottom:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{fontSize:12,color:"#8fadd4",fontWeight:"bold",...GS}}>💾 Saved Scenarios</div>
+        <button onClick={()=>setOpen(p=>!p)} style={{background:"none",border:"1px solid #2a4080",borderRadius:6,padding:"4px 10px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{open?"Hide":"Show"}</button>
+      </div>
+      {open&&(
+        <div style={{marginTop:12}}>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Name this scenario..."
+              style={{flex:1,background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:12,outline:"none",...GS}}/>
+            <button onClick={save} disabled={saving||!name.trim()} style={{background:"#0d2a1a",border:"1px solid #4ade80",borderRadius:8,padding:"8px 12px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
+              {saving?"...":"Save"}
+            </button>
+          </div>
+          {msg&&<div style={{fontSize:11,color:"#4ade80",marginBottom:8}}>{msg}</div>}
+          {snaps.length===0?<div style={{fontSize:12,color:"#6b8cce"}}>No saved scenarios yet.</div>:
+            snaps.map(s=>(
+              <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 10px",marginBottom:6}}>
+                <div>
+                  <div style={{fontSize:12,color:"#e8e4d9",...GS}}>{s.name}</div>
+                  <div style={{fontSize:10,color:"#6b8cce"}}>{new Date(s.created_at).toLocaleDateString("en-CA")}</div>
+                </div>
+                <button onClick={()=>del(s.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14}}>×</button>
+              </div>
+            ))
+          }
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -3116,7 +3342,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
   );
 }
 
-function RentVsBuy({beginner}) {
+function RentVsBuy({beginner,user,token,toolId}) {
   const [homePrice,setHomePrice]=useState("600000");
   const [downMode,setDownMode]=useState("pct"); // "pct" or "dollar"
   const [downPct,setDownPct]=useState("10");
@@ -3229,6 +3455,9 @@ function RentVsBuy({beginner}) {
     <div style={{position:"relative",minHeight:"100%"}}>
       {/* Lightning flashes for super mode */}
       {superMode&&<SuperModeLightning/>}
+
+      {/* Snapshot Bar */}
+      <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({homePrice,downPct,downDollar,downMode,rate,amort,propTax,maintenance,homeIns,appreciation,rent,rentIncrease,tenantIns,utilities,investReturn,years,toronto,firstTime,superMode,condoFee,closingCosts,movingCosts,renobudget,propTaxGrowth,rentalIncome,mortgagePenalty})}/>
 
       {beginner&&<div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 Fill in your numbers below and we'll tell you whether renting or buying makes more financial sense for your situation.</div>}
 
@@ -3659,6 +3888,397 @@ function FinancialNews() {
       <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#2a4080"}}>
         Live feeds from CBC, Globe & Mail, Financial Post, Bank of Canada
       </div>
+    </div>
+  );
+}
+
+// ─── GOALS TAB ────────────────────────────────────────────────────────────────
+function GoalsTab({data,totalInv,scoreHistory}) {
+  const income=Number(data.budget.income||0);
+  const grossMonthly=Number(data.income?.grossSalary||0)>0?Number(data.income.grossSalary)/12:income;
+  const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const monthlyExp=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+  const efundTarget=monthlyExp*3;
+  const fhsa=(data.investments?.fhsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalDebt=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+    +(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
+    +data.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const invMonthly=Number(data.budget.investmentMonthly||0);
+  const invRate=grossMonthly>0?(invMonthly/grossMonthly)*100:0;
+  const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
+  const prevScore=scoreHistory.length>1?scoreHistory[scoreHistory.length-2]:null;
+
+  const GOALS=[
+    {
+      id:"home",icon:"🏠",label:"Buy a Home",
+      desc:"Build your FHSA and emergency fund while keeping debt low",
+      items:[
+        {label:"FHSA Balance",val:fhsa,target:40000,fmt:v=>fmtShort(v)},
+        {label:"Emergency Fund (3 months)",val:Math.min(efund,efundTarget),target:efundTarget,fmt:v=>fmtShort(v)},
+        {label:"Debt-free (non-mortgage)",val:Math.max(0,totalDebt===0?1:0),target:1,fmt:()=>totalDebt===0?"✅ Debt free":"Paying down debt"},
+      ],
+      done:fhsa>=40000&&efund>=efundTarget&&totalDebt===0,
+    },
+    {
+      id:"efund",icon:"🛡️",label:"Fully Fund Emergency Fund",
+      desc:`Save ${monthlyExp>0?`${(efundTarget/monthlyExp).toFixed(0)} months`:"3 months"} of expenses (${fmtShort(efundTarget)})`,
+      items:[{label:"Emergency Fund",val:efund,target:Math.max(efundTarget,1),fmt:v=>fmtShort(v)}],
+      done:efund>=efundTarget&&efundTarget>0,
+    },
+    {
+      id:"debt",icon:"💳",label:"Pay Off All Non-Mortgage Debt",
+      desc:"Eliminate credit cards, lines of credit, and personal loans",
+      items:[{label:"Remaining Debt",val:Math.max(0,totalDebt===0?1:0),target:1,fmt:()=>totalDebt===0?"✅ Debt free":fmtShort(totalDebt)+" remaining"}],
+      done:totalDebt===0,
+    },
+    {
+      id:"invest",icon:"📈",label:"Hit 25% Investment Rate",
+      desc:"Invest 25% of your gross income every month",
+      items:[{label:"Investment Rate",val:Math.min(invRate,25),target:25,fmt:v=>v.toFixed(1)+"%"}],
+      done:invRate>=25,
+    },
+    {
+      id:"fi",icon:"🏆",label:"Reach Financial Independence",
+      desc:"Portfolio reaches 25× your annual expenses (4% rule)",
+      items:[{label:"Portfolio vs FI Target",val:totalInv,target:Math.max(monthlyExp*12*25,1),fmt:v=>fmtShort(v)}],
+      done:monthlyExp>0&&totalInv>=monthlyExp*12*25,
+    },
+    {
+      id:"score",icon:"⭐",label:"Improve My Financial Health Score",
+      desc:"Reach an A+ (85+) Financial Health Score",
+      items:[{label:"Current Score",val:latestScore?.score||0,target:85,fmt:v=>v+"/100"}],
+      done:(latestScore?.score||0)>=85,
+    },
+  ];
+
+  const active=GOALS.filter(g=>!g.done);
+  const completed=GOALS.filter(g=>g.done);
+
+  const GoalCard=({goal})=>(
+    <Card style={{marginBottom:12,opacity:goal.done?0.85:1}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <span style={{fontSize:28}}>{goal.icon}</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",...GS}}>{goal.label}</div>
+          <div style={{fontSize:11,color:"#6b8cce",marginTop:2,lineHeight:1.5}}>{goal.desc}</div>
+        </div>
+        {goal.done&&<span style={{fontSize:22}}>✅</span>}
+      </div>
+      {goal.items.map((item,i)=>{
+        const pct=Math.min(100,item.target>0?(item.val/item.target)*100:0);
+        return (
+          <div key={i} style={{marginBottom:i<goal.items.length-1?12:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:12,color:"#8fadd4"}}>{item.label}</span>
+              <span style={{fontSize:12,color:pct>=100?"#4ade80":"#facc15",fontWeight:"bold",...GS}}>{item.fmt(item.val)}</span>
+            </div>
+            <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",background:pct>=100?"#4ade80":pct>=60?"#facc15":"#fb923c",borderRadius:4,transition:"width 0.5s"}}/>
+            </div>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:3}}>
+              {pct>=100?"Complete!":Math.round(pct)+"% there · target: "+item.fmt(item.target)}
+            </div>
+          </div>
+        );
+      })}
+    </Card>
+  );
+
+  return (
+    <div>
+      {active.length===0&&completed.length>0&&(
+        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"24px"}}>
+          <div style={{fontSize:40,marginBottom:8}}>🎉</div>
+          <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>All goals complete!</div>
+          <div style={{fontSize:13,color:"#6b8cce",marginTop:6}}>You're in exceptional financial health.</div>
+        </Card>
+      )}
+      {active.length>0&&(
+        <div>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:12}}>IN PROGRESS</div>
+          {active.map(g=><GoalCard key={g.id} goal={g}/>)}
+        </div>
+      )}
+      {completed.length>0&&(
+        <div style={{marginTop:active.length>0?20:0}}>
+          <div style={{fontSize:10,color:"#4ade80",letterSpacing:3,marginBottom:12}}>COMPLETED ✅</div>
+          {completed.map(g=><GoalCard key={g.id} goal={g}/>)}
+        </div>
+      )}
+      {!income&&!totalInv&&(
+        <Card style={{textAlign:"center",padding:"32px 16px"}}>
+          <div style={{fontSize:36,marginBottom:12}}>📋</div>
+          <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",marginBottom:8}}>Complete your Check-Up Appointment first</div>
+          <div style={{fontSize:13,color:"#6b8cce",lineHeight:1.7}}>Your goals will auto-populate once you've entered your financial information.</div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── RETIREMENT PLANNER ───────────────────────────────────────────────────────
+function RetirementPlanner({data,user,token,toolId}) {
+  const sg=arr=>(arr||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+  const currentNetWorth=sg(data.investments.tfsa)+sg(data.investments.fhsa)+sg(data.investments.rrsp)+sg(data.investments.alternatives)+sg(data.investments.nonReg)
+    +(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0)
+    +(data.bankAccounts||[]).reduce((s,a)=>s+Number(a.amount||0),0)
+    +Number(data.mortgage?.value||0)-Number(data.mortgage?.balance||0)
+    -(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+    -(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
+
+  const [age,setAge]=useState(String(data.age1||30));
+  const [netWorth,setNetWorth]=useState(String(Math.round(Math.max(0,currentNetWorth))));
+  const [monthlySavings,setMonthlySavings]=useState(String(Number(data.budget.investmentMonthly||0)));
+  const [retireAge,setRetireAge]=useState("65");
+  const [returnRate,setReturnRate]=useState("7");
+  const [pensionPct,setPensionPct]=useState("");
+  const [events,setEvents]=useState([]);
+  const [showEventForm,setShowEventForm]=useState(false);
+  const [newEvent,setNewEvent]=useState({type:"home",year:String(new Date().getFullYear()+5),amount:"",label:""});
+  const [snapName,setSnapName]=useState("");
+  const [snapSaving,setSnapSaving]=useState(false);
+  const [snapMsg,setSnapMsg]=useState("");
+  const [savedSnaps,setSavedSnaps]=useState([]);
+  const [loadingSnaps,setLoadingSnaps]=useState(false);
+
+  const EVENT_TYPES=[
+    {val:"home",label:"🏠 Buy a Home",desc:"Depletes savings by down payment amount"},
+    {val:"retire",label:"🏖️ Retirement",desc:"Income stops, pension starts, 4% withdrawal begins"},
+    {val:"child",label:"👶 Have a Child",desc:"Adds $1,000/mo in expenses"},
+    {val:"education",label:"🎓 Education Cost",desc:"One-time lump sum expense"},
+    {val:"crash",label:"📉 Market Crash",desc:"Portfolio drops 35%"},
+    {val:"career",label:"💼 Career Change",desc:"Monthly savings change"},
+  ];
+
+  // Load saved snapshots
+  useEffect(()=>{
+    if(!user||!token) return;
+    setLoadingSnaps(true);
+    supa.loadSnapshots(user.id,token,toolId).then(snaps=>{
+      setSavedSnaps(Array.isArray(snaps)?snaps:[]);
+      setLoadingSnaps(false);
+    }).catch(()=>setLoadingSnaps(false));
+  },[user,token]);
+
+  const saveSnap=async()=>{
+    if(!user||!token||!snapName.trim()) return;
+    setSnapSaving(true);
+    await supa.saveSnapshot(user.id,token,toolId,snapName.trim(),{age,netWorth,monthlySavings,retireAge,returnRate,pensionPct,events});
+    const snaps=await supa.loadSnapshots(user.id,token,toolId);
+    setSavedSnaps(Array.isArray(snaps)?snaps:[]);
+    setSnapName("");setSnapMsg("Saved!");
+    setTimeout(()=>setSnapMsg(""),2000);
+    setSnapSaving(false);
+  };
+
+  const loadSnap=(snap)=>{
+    const i=snap.inputs||{};
+    if(i.age)setAge(i.age);
+    if(i.netWorth)setNetWorth(i.netWorth);
+    if(i.monthlySavings)setMonthlySavings(i.monthlySavings);
+    if(i.retireAge)setRetireAge(i.retireAge);
+    if(i.returnRate)setReturnRate(i.returnRate);
+    if(i.pensionPct)setPensionPct(i.pensionPct);
+    if(i.events)setEvents(i.events);
+  };
+
+  const deleteSnap=async(id)=>{
+    if(!user||!token) return;
+    await supa.deleteSnapshot(id,token);
+    setSavedSnaps(prev=>prev.filter(s=>s.id!==id));
+  };
+
+  // Build projection data year by year
+  const buildProjection=()=>{
+    const a=Number(age)||30;
+    const ra=Number(retireAge)||65;
+    const r=Number(returnRate||7)/100/12;
+    const pct=Number(pensionPct||0)/100;
+    const monthlyIncome=Number(data.budget.income||0);
+    let nw=Number(netWorth||0);
+    let mSav=Number(monthlySavings||0);
+    const pts=[];
+    let runsOutAge=null;
+
+    for(let yr=a;yr<=95;yr++){
+      // Apply life events this year
+      const yearEvents=events.filter(e=>Number(e.year)===yr);
+      for(const ev of yearEvents){
+        if(ev.type==="home") nw-=Number(ev.amount||0);
+        if(ev.type==="crash") nw*=0.65;
+        if(ev.type==="child") mSav=Math.max(0,mSav-1000);
+        if(ev.type==="education") nw-=Number(ev.amount||0);
+        if(ev.type==="career") mSav=Number(ev.amount||mSav);
+        if(ev.type==="retire"){
+          // retirement handled below
+        }
+      }
+
+      const isRetired=yr>=ra;
+      let monthlyChange;
+      if(isRetired){
+        const withdrawal=(nw*0.04)/12;
+        const pension=monthlyIncome*pct;
+        monthlyChange=pension-withdrawal; // negative if drawing down
+        // actually: nw grows at return rate minus withdrawals
+        for(let m=0;m<12;m++){
+          nw=nw*(1+r)-(withdrawal/12*12/12)+pension;
+        }
+      } else {
+        for(let m=0;m<12;m++){
+          nw=nw*(1+r)+mSav;
+        }
+      }
+
+      if(nw<0&&runsOutAge===null) runsOutAge=yr;
+      pts.push({age:yr,netWorth:Math.max(0,Math.round(nw)),isRetired,hasEvent:yearEvents.length>0,eventLabel:yearEvents.map(e=>e.label||e.type).join(", ")});
+    }
+    return {pts,runsOutAge};
+  };
+
+  const {pts,runsOutAge}=buildProjection();
+  const retirePt=pts.find(p=>p.age===Number(retireAge));
+  const endPt=pts[pts.length-1];
+
+  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+
+  return (
+    <div>
+      {/* Saved scenarios */}
+      {user&&(
+        <Card>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>SAVED SCENARIOS</div>
+          {loadingSnaps?<div style={{fontSize:12,color:"#6b8cce"}}>Loading...</div>:savedSnaps.length===0?
+            <div style={{fontSize:12,color:"#6b8cce"}}>No saved scenarios yet.</div>:
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {savedSnaps.map(s=>(
+                <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 12px"}}>
+                  <div>
+                    <div style={{fontSize:13,color:"#e8e4d9",...GS}}>{s.name}</div>
+                    <div style={{fontSize:10,color:"#6b8cce"}}>{new Date(s.created_at).toLocaleDateString("en-CA")}</div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>loadSnap(s)} style={{background:"#1a4080",border:"none",borderRadius:6,padding:"5px 10px",color:"#4ade80",cursor:"pointer",fontSize:11,...GS}}>Load</button>
+                    <button onClick={()=>deleteSnap(s.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14}}>×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+          <div style={{display:"flex",gap:8,marginTop:12}}>
+            <input value={snapName} onChange={e=>setSnapName(e.target.value)} placeholder="Scenario name..." style={{...inp,flex:1,fontSize:13,padding:"8px 12px"}}/>
+            <button onClick={saveSnap} disabled={snapSaving||!snapName.trim()} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:8,padding:"8px 14px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
+              {snapSaving?"Saving...":"Save"}
+            </button>
+          </div>
+          {snapMsg&&<div style={{fontSize:11,color:"#4ade80",marginTop:6}}>{snapMsg}</div>}
+        </Card>
+      )}
+
+      {/* Inputs */}
+      <Card>
+        <SecTitle>Your Details</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          {[
+            {label:"Current Age",val:age,set:setAge,suffix:"yrs"},
+            {label:"Retire At",val:retireAge,set:setRetireAge,suffix:"yrs"},
+            {label:"Current Net Worth",val:netWorth,set:setNetWorth,prefix:"$"},
+            {label:"Monthly Savings",val:monthlySavings,set:setMonthlySavings,prefix:"$"},
+            {label:"Annual Return",val:returnRate,set:setReturnRate,suffix:"%"},
+            {label:"Pension % of Income",val:pensionPct,set:setPensionPct,suffix:"%",placeholder:"0"},
+          ].map(f=>(
+            <div key={f.label}>
+              <Label>{f.label}</Label>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+                {f.prefix&&<span style={{color:"#6b8cce",marginRight:4}}>{f.prefix}</span>}
+                <input type="number" value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder||"0"}
+                  style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
+                {f.suffix&&<span style={{color:"#6b8cce",fontSize:11}}>{f.suffix}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Life Events */}
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",...GS}}>LIFE EVENTS</div>
+          <button onClick={()=>setShowEventForm(p=>!p)} style={{background:"#0d2a1a",border:"1px solid #4ade8044",borderRadius:8,padding:"5px 12px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
+            {showEventForm?"Cancel":"+ Add Event"}
+          </button>
+        </div>
+        {showEventForm&&(
+          <div style={{background:"#0d1b3e",borderRadius:10,padding:"14px",marginBottom:12}}>
+            <div style={{marginBottom:10}}>
+              <Label>Event Type</Label>
+              <select value={newEvent.type} onChange={e=>setNewEvent(p=>({...p,type:e.target.value}))}
+                style={{...inp,fontSize:13}}>
+                {EVENT_TYPES.map(t=><option key={t.val} value={t.val}>{t.label}</option>)}
+              </select>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div>
+                <Label>Year</Label>
+                <input type="number" value={newEvent.year} onChange={e=>setNewEvent(p=>({...p,year:e.target.value}))} style={inp}/>
+              </div>
+              {["home","education","career","child"].includes(newEvent.type)&&(
+                <div>
+                  <Label>{newEvent.type==="career"?"New Monthly Savings ($)":"Amount ($)"}</Label>
+                  <input type="number" value={newEvent.amount} onChange={e=>setNewEvent(p=>({...p,amount:e.target.value}))} placeholder="0" style={inp}/>
+                </div>
+              )}
+            </div>
+            <div style={{marginBottom:10}}>
+              <Label>Label (optional)</Label>
+              <input value={newEvent.label} onChange={e=>setNewEvent(p=>({...p,label:e.target.value}))} placeholder="e.g. Buy condo in Toronto" style={inp}/>
+            </div>
+            <button onClick={()=>{setEvents(p=>[...p,{...newEvent,id:Date.now()}]);setShowEventForm(false);setNewEvent({type:"home",year:String(new Date().getFullYear()+5),amount:"",label:""});}}
+              style={{width:"100%",background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:8,padding:"10px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>
+              Add to Timeline
+            </button>
+          </div>
+        )}
+        {events.length===0?<div style={{fontSize:12,color:"#6b8cce"}}>No life events added yet. Add retirement, home purchase, or other milestones.</div>:
+          events.map((ev,i)=>(
+            <div key={ev.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+              <div>
+                <span style={{fontSize:13,color:"#e8e4d9",...GS}}>{EVENT_TYPES.find(t=>t.val===ev.type)?.label} </span>
+                <span style={{fontSize:11,color:"#6b8cce"}}>Age {Number(ev.year)-(new Date().getFullYear())+Number(age||30)} ({ev.year}){ev.label&&` · ${ev.label}`}{ev.amount?` · ${fmtShort(ev.amount)}`:""}</span>
+              </div>
+              <button onClick={()=>setEvents(p=>p.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>
+            </div>
+          ))
+        }
+      </Card>
+
+      {/* Chart */}
+      <Card>
+        <SecTitle>Net Worth Projection</SecTitle>
+        {runsOutAge&&<div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:12,color:"#f87171"}}>
+          ⚠️ At current rates your money runs out at age {runsOutAge}. Consider increasing savings or adjusting retirement plans.
+        </div>}
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={pts} margin={{top:5,right:10,left:0,bottom:5}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f44"/>
+            <XAxis dataKey="age" stroke="#6b8cce" tick={{fontSize:10}} label={{value:"Age",position:"insideBottom",offset:-2,fill:"#6b8cce",fontSize:10}}/>
+            <YAxis stroke="#6b8cce" tick={{fontSize:9}} tickFormatter={v=>fmtShort(v)} width={55}/>
+            <Tooltip formatter={(v)=>[fmtShort(v),"Net Worth"]} labelFormatter={l=>`Age ${l}`} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,fontSize:12}}/>
+            <Line type="monotone" dataKey="netWorth" stroke="#4ade80" strokeWidth={2.5} dot={false}/>
+          </LineChart>
+        </ResponsiveContainer>
+        {/* Key stats */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:14}}>
+          {retirePt&&<div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>AT RETIREMENT (AGE {retireAge})</div>
+            <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(retirePt.netWorth)}</div>
+          </div>}
+          <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>AT AGE 95</div>
+            <div style={{fontSize:18,color:runsOutAge?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>{runsOutAge?`Runs out at ${runsOutAge}`:fmtShort(endPt?.netWorth||0)}</div>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
@@ -4579,7 +5199,7 @@ function BuyHomeSim({income}) {
 }
 
 // ─── STANDALONE TOOLS ─────────────────────────────────────────────────────────
-function StandaloneBudget({prefill=null}) {
+function StandaloneBudget({prefill=null,user,token,toolId}) {
   const [income,setIncome]=useState(prefill?.income||"");
   const BUCKETS = [
     {key:"fixed",label:"Fixed Costs",desc:"Same every month — non-negotiable",color:"#f87171",icon:"🔒",
@@ -4664,6 +5284,9 @@ function StandaloneBudget({prefill=null}) {
 
   return (
     <div style={{paddingBottom:80}}>
+      {/* Snapshot bar */}
+      <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({income,cats})}/>
+
       {/* Income */}
       <Card>
         <SecTitle>Monthly Income</SecTitle>
