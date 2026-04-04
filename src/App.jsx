@@ -2884,24 +2884,26 @@ function ScoreHistory({history,currentScore,onSave}) {
 const TOOLS_LIST = [
   {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
   {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs",color:"#22d3ee"},
-  {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Is buying worth it in Canada?",color:"#a78bfa"},
+  {id:"housing",label:"Housing Analysis",icon:"🏠",sub:"Rent vs. Buy & Mortgage Qualifier",color:"#a78bfa"},
   {id:"networth",label:"Net Worth",icon:"📊",sub:"Assets minus liabilities",color:"#60a5fa"},
   {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month",color:"#facc15"},
   {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Payments and interest on any loan",color:"#fb923c"},
   {id:"cashflow",label:"Cash Flow",icon:"📅",sub:"Map income and bills monthly",color:"#22d3ee"},
   {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Fastest path to debt-free",color:"#f87171"},
+  {id:"tax",label:"Tax Estimator",icon:"🇨🇦",sub:"Estimate Canadian take-home pay",color:"#4ade80"},
 ];
 
 function IndividualTools({onHome,data,user,token}) {
   const [tool,setTool]=useState(null);
   if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
-  if(tool==="rentvsbuy") return <ToolWrapper title="Rent vs. Buy" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy user={user} token={token} toolId="rentvsbuy"/></ToolWrapper>;
+  if(tool==="housing") return <ToolWrapper title="Housing Analysis" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-housing"><HousingAnalysis data={data} user={user} token={token}/></ToolWrapper>;
   if(tool==="networth") return <ToolWrapper title="Net Worth Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data}/></ToolWrapper>;
   if(tool==="savings") return <ToolWrapper title="Savings Goal" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data}/></ToolWrapper>;
   if(tool==="loc") return <ToolWrapper title="Loan Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate=""/></ToolWrapper>;
   if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
   if(tool==="debtopt") return <ToolWrapper title="Debt Optimizer" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
+  if(tool==="tax") return <ToolWrapper title="Canadian Tax Estimator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-tax"><CanadianTaxEstimator data={data}/></ToolWrapper>;
 
   return (
     <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
@@ -3576,6 +3578,379 @@ function RentVsBuy({user,token,toolId}) {
             </Card>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HOUSING ANALYSIS (wrapper with tabs) ─────────────────────────────────────
+function HousingAnalysis({data,user,token}) {
+  const [tab,setTab]=useState("rentvsbuy");
+  const TABS=[{id:"rentvsbuy",label:"🏘️ Rent vs. Buy"},{id:"qualifier",label:"🏦 Mortgage Qualifier"}];
+  return (
+    <div>
+      {/* Tab bar */}
+      <div style={{display:"flex",background:"#0d1b3e",borderRadius:12,padding:4,marginBottom:16,gap:4}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{flex:1,background:tab===t.id?"linear-gradient(135deg,#1a2f5a,#1e3a5f)":"none",border:tab===t.id?"1px solid #2a4080":"1px solid transparent",borderRadius:10,padding:"10px 8px",cursor:"pointer",color:tab===t.id?"#e8e4d9":"#6b8cce",fontSize:13,fontWeight:tab===t.id?"bold":"normal",transition:"all 0.2s",...GS}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab==="rentvsbuy"&&<RentVsBuy user={user} token={token} toolId="rentvsbuy"/>}
+      {tab==="qualifier"&&<MortgageQualifier data={data}/>}
+    </div>
+  );
+}
+
+// ─── MORTGAGE QUALIFIER ────────────────────────────────────────────────────────
+function MortgageQualifier({data}) {
+  const prefillIncome=Number(data?.budget?.income||0)*12;
+  const prefillDebt=(data?.otherDebts||[]).reduce((s,x)=>s+Number(x.payment||0),0)
+    +(data?.locs||[]).reduce((s,l)=>s+Number(l.balance||0)*(Number(l.rate||6)/100)/12,0)
+    +data?.creditCards?.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0)*0.03,0)||0;
+
+  const [grossIncome,setGrossIncome]=useState(String(Math.round(prefillIncome))||"");
+  const [coIncome,setCoIncome]=useState("");
+  const [monthlyDebts,setMonthlyDebts]=useState(String(Math.round(prefillDebt))||"");
+  const [downPayment,setDownPayment]=useState("");
+  const [rate,setRate]=useState("5.25");
+  const [amort,setAmort]=useState("25");
+  const [propTax,setPropTax]=useState("");
+  const [condoFee,setCondoFee]=useState("0");
+  const [heatCost,setHeatCost]=useState("150");
+
+  const totalGross=(Number(grossIncome||0)+Number(coIncome||0));
+  const monthlyGross=totalGross/12;
+  const stressRate=Math.max(Number(rate||5.25)+2, 5.25);
+  const r=stressRate/100/12;
+  const n=Number(amort||25)*12;
+
+  // Max GDS = 39% of gross monthly (housing costs / gross)
+  // Max TDS = 44% of gross monthly (all debts / gross)
+  // Housing costs = mortgage P&I + property tax + heat + 50% condo fee
+  const monthlyPropTax=Number(propTax||0)/12;
+  const monthlyHeat=Number(heatCost||150);
+  const monthlyCondo=Number(condoFee||0)*0.5;
+  const otherHousing=monthlyPropTax+monthlyHeat+monthlyCondo;
+
+  // Max mortgage payment from GDS
+  const maxGDSPayment=monthlyGross*0.39-otherHousing;
+  // Max mortgage payment from TDS
+  const maxTDSPayment=monthlyGross*0.44-otherHousing-Number(monthlyDebts||0);
+  const maxPayment=Math.max(0,Math.min(maxGDSPayment,maxTDSPayment));
+
+  // Max principal from payment
+  const maxPrincipal=maxPayment>0&&r>0?maxPayment*((1-Math.pow(1+r,-n))/r):0;
+  const maxPurchase=maxPrincipal+Number(downPayment||0);
+
+  // CMHC insurance
+  const dp=Number(downPayment||0);
+  const dpPct=maxPurchase>0?(dp/maxPurchase)*100:0;
+  const cmhc=dp>0&&maxPurchase>0&&dpPct<20
+    ? maxPrincipal*(dpPct<5?0.04:dpPct<10?0.031:0.028)
+    : 0;
+
+  // Qualifying check
+  const gdsRatio=monthlyGross>0?((maxPayment+otherHousing)/monthlyGross)*100:0;
+  const tdsRatio=monthlyGross>0?((maxPayment+otherHousing+Number(monthlyDebts||0))/monthlyGross)*100:0;
+
+  const actualPayment=maxPrincipal>0&&r>0?maxPrincipal*r/(1-Math.pow(1+r,-n)):0;
+
+  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+
+  return (
+    <div>
+      <Card>
+        <SecTitle>Income</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
+          <div>
+            <Label>Gross Annual Income</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={grossIncome} onChange={e=>setGrossIncome(e.target.value)} placeholder="80,000" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
+            </div>
+          </div>
+          <div>
+            <Label>Co-Applicant Income</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={coIncome} onChange={e=>setCoIncome(e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <SecTitle>Monthly Debts & Down Payment</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <Label>Existing Monthly Debts</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={monthlyDebts} onChange={e=>setMonthlyDebts(e.target.value)} placeholder="500" style={{background:"none",border:"none",outline:"none",color:"#f87171",fontSize:15,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:11}}>/mo</span>
+            </div>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:4,lineHeight:1.5}}>Car payments, student loans, etc.</div>
+          </div>
+          <div>
+            <Label>Down Payment</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={downPayment} onChange={e=>setDownPayment(e.target.value)} placeholder="60,000" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:15,width:"100%",...GS}}/>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <SecTitle>Mortgage Details</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div>
+            <Label>Rate (%)</Label>
+            <input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="5.25" style={inp}/>
+          </div>
+          <div>
+            <Label>Amortization</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:11}}>yrs</span>
+            </div>
+          </div>
+          <div>
+            <Label>Annual Property Tax</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={propTax} onChange={e=>setPropTax(e.target.value)} placeholder="4,000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+            </div>
+          </div>
+          <div>
+            <Label>Monthly Heat Cost</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={heatCost} onChange={e=>setHeatCost(e.target.value)} placeholder="150" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+            </div>
+          </div>
+          <div>
+            <Label>Monthly Condo Fee (if any)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" value={condoFee} onChange={e=>setCondoFee(e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+            </div>
+          </div>
+        </div>
+        <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#6b8cce",lineHeight:1.6}}>
+          ⚡ Stress test rate: <span style={{color:"#facc15"}}>{stressRate.toFixed(2)}%</span> (your rate + 2%, min 5.25% per OSFI rules)
+        </div>
+      </Card>
+
+      {/* Results */}
+      {totalGross>0&&(
+        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044"}}>
+          <SecTitle>Qualification Results</SecTitle>
+          <div style={{textAlign:"center",marginBottom:16}}>
+            <div style={{fontSize:11,color:"#6b8cce",marginBottom:4,letterSpacing:2}}>MAXIMUM PURCHASE PRICE</div>
+            <div style={{fontSize:40,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(maxPurchase)}</div>
+            <div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>Based on Canadian stress test (OSFI B-20)</div>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            {[
+              {label:"Max Mortgage",val:fmtShort(maxPrincipal),color:"#4ade80"},
+              {label:"Monthly Payment",val:fmt(actualPayment)+"/mo",color:"#facc15"},
+              {label:"CMHC Insurance",val:cmhc>0?fmtShort(cmhc):"None needed",color:cmhc>0?"#f87171":"#4ade80"},
+              {label:"Down Payment",val:dp>0?fmtShort(dp)+" ("+dpPct.toFixed(1)+"%)":"Not entered",color:"#60a5fa"},
+            ].map((r,i)=>(
+              <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{r.label.toUpperCase()}</div>
+                <div style={{fontSize:14,color:r.color,fontWeight:"bold",...GS}}>{r.val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* GDS/TDS bars */}
+          <div style={{marginBottom:10}}>
+            {[
+              {label:"GDS Ratio",val:gdsRatio,max:39,desc:"Housing costs vs income (max 39%)"},
+              {label:"TDS Ratio",val:tdsRatio,max:44,desc:"All debts vs income (max 44%)"},
+            ].map((ratio,i)=>(
+              <div key={i} style={{marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:12,color:"#8fadd4"}}>{ratio.label}</span>
+                  <span style={{fontSize:12,color:ratio.val>ratio.max?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>{ratio.val.toFixed(1)}% / {ratio.max}%</span>
+                </div>
+                <div style={{background:"#0d1b3e",borderRadius:4,height:8,overflow:"hidden"}}>
+                  <div style={{width:Math.min(100,(ratio.val/ratio.max)*100)+"%",height:"100%",background:ratio.val>ratio.max?"#f87171":"#4ade80",borderRadius:4,transition:"width 0.4s"}}/>
+                </div>
+                <div style={{fontSize:10,color:"#6b8cce",marginTop:3}}>{ratio.desc}</div>
+              </div>
+            ))}
+          </div>
+
+          {dpPct>0&&dpPct<5&&(
+            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#f87171",lineHeight:1.6}}>
+              ⚠️ Minimum down payment in Canada is 5% for homes under $500K, or 5% on the first $500K + 10% on the remainder up to $1M.
+            </div>
+          )}
+          {maxPurchase<=0&&(
+            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#f87171",lineHeight:1.6}}>
+              ⚠️ Based on your debts and income, it may be difficult to qualify. Consider reducing debts or increasing your down payment.
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── CANADIAN TAX ESTIMATOR ───────────────────────────────────────────────────
+function CanadianTaxEstimator({data}) {
+  const prefillSalary=Number(data?.income?.grossSalary||0)||Number(data?.budget?.income||0)*12||0;
+  const [salary,setSalary]=useState(String(Math.round(prefillSalary))||"");
+  const [province,setProvince]=useState("ON");
+  const [rrspContrib,setRrspContrib]=useState("");
+
+  const PROVINCES=[
+    {val:"ON",label:"Ontario"},
+    {val:"BC",label:"British Columbia"},
+    {val:"AB",label:"Alberta"},
+    {val:"QC",label:"Quebec"},
+    {val:"MB",label:"Manitoba"},
+    {val:"SK",label:"Saskatchewan"},
+    {val:"NS",label:"Nova Scotia"},
+    {val:"NB",label:"New Brunswick"},
+    {val:"NL",label:"Newfoundland"},
+    {val:"PE",label:"PEI"},
+  ];
+
+  // 2024 Federal brackets
+  const fedBrackets=[
+    {max:55867,rate:0.15},{max:111733,rate:0.205},{max:154906,rate:0.26},
+    {max:220000,rate:0.29},{max:Infinity,rate:0.33},
+  ];
+
+  // Provincial brackets (simplified 2024)
+  const provBrackets={
+    ON:[{max:51446,rate:0.0505},{max:102894,rate:0.0915},{max:150000,rate:0.1116},{max:220000,rate:0.1216},{max:Infinity,rate:0.1316}],
+    BC:[{max:45654,rate:0.0506},{max:91310,rate:0.077},{max:104835,rate:0.105},{max:127299,rate:0.1229},{max:172602,rate:0.147},{max:240716,rate:0.168},{max:Infinity,rate:0.205}],
+    AB:[{max:148269,rate:0.10},{max:177922,rate:0.12},{max:237230,rate:0.13},{max:355845,rate:0.14},{max:Infinity,rate:0.15}],
+    QC:[{max:51780,rate:0.14},{max:103545,rate:0.19},{max:126000,rate:0.24},{max:Infinity,rate:0.2575}],
+    MB:[{max:36842,rate:0.108},{max:79625,rate:0.1275},{max:Infinity,rate:0.174}],
+    SK:[{max:49720,rate:0.105},{max:142058,rate:0.125},{max:Infinity,rate:0.145}],
+    NS:[{max:29590,rate:0.0879},{max:59180,rate:0.1495},{max:93000,rate:0.1667},{max:150000,rate:0.175},{max:Infinity,rate:0.21}],
+    NB:[{max:47715,rate:0.094},{max:95431,rate:0.14},{max:176756,rate:0.16},{max:Infinity,rate:0.195}],
+    NL:[{max:43198,rate:0.087},{max:86395,rate:0.145},{max:154244,rate:0.158},{max:215943,rate:0.178},{max:275870,rate:0.198},{max:Infinity,rate:0.208}],
+    PE:[{max:32656,rate:0.096},{max:64313,rate:0.1337},{max:105000,rate:0.166},{max:140000,rate:0.18},{max:Infinity,rate:0.185}],
+  };
+
+  const calcTax=(income,brackets)=>{
+    let tax=0,prev=0;
+    for(const b of brackets){
+      if(income<=0) break;
+      const taxable=Math.min(income,b.max)-prev;
+      if(taxable>0) tax+=taxable*b.rate;
+      prev=b.max;
+      if(income<=b.max) break;
+    }
+    return Math.max(0,tax);
+  };
+
+  const gross=Number(salary||0);
+  const rrsp=Math.min(Number(rrspContrib||0),gross*0.18);
+  const taxableIncome=Math.max(0,gross-rrsp);
+
+  // Federal basic personal amount 2024: $15,705
+  const fedBPA=15705;
+  const fedTax=Math.max(0,calcTax(taxableIncome,fedBrackets)-fedBPA*0.15);
+
+  // Provincial
+  const provBracketData=provBrackets[province]||provBrackets.ON;
+  const provBPA={ON:11865,BC:11981,AB:21003,QC:17183,MB:15780,SK:17661,NS:8481,NB:12458,NL:10818,PE:12000}[province]||10000;
+  const provTax=Math.max(0,calcTax(taxableIncome,provBracketData)-provBPA*(provBracketData[0].rate));
+
+  // CPP 2024: 5.95% on earnings between $3,500 and $68,500
+  const cppRate=0.0595, cppMax=68500, cppExempt=3500;
+  const cpp=gross>0?Math.min((Math.min(gross,cppMax)-cppExempt)*cppRate,3867):0;
+
+  // EI 2024: 1.66% up to $63,200 insurable earnings
+  const eiRate=0.0166, eiMax=63200;
+  const ei=Math.min(gross*eiRate,eiMax*eiRate);
+
+  const totalDeductions=fedTax+provTax+cpp+ei;
+  const netAnnual=Math.max(0,gross-totalDeductions);
+  const netMonthly=netAnnual/12;
+  const effectiveRate=gross>0?(totalDeductions/gross)*100:0;
+  const marginalFed=taxableIncome>220000?33:taxableIncome>154906?29:taxableIncome>111733?26:taxableIncome>55867?20.5:15;
+
+  return (
+    <div>
+      <Card>
+        <SecTitle>Your Income</SecTitle>
+        <div style={{marginBottom:12}}>
+          <Label>Gross Annual Salary</Label>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
+            <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+            <input type="number" value={salary} onChange={e=>setSalary(e.target.value)} placeholder="80,000"
+              style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:22,width:"100%",...GS}}/>
+          </div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <Label>Province</Label>
+          <select value={province} onChange={e=>setProvince(e.target.value)}
+            style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",...GS}}>
+            {PROVINCES.map(p=><option key={p.val} value={p.val}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <Label>RRSP Contribution (optional)</Label>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+            <input type="number" value={rrspContrib} onChange={e=>setRrspContrib(e.target.value)} placeholder="0"
+              style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:15,width:"100%",...GS}}/>
+          </div>
+          {rrsp>0&&<div style={{fontSize:10,color:"#a78bfa",marginTop:4}}>Reduces taxable income by {fmt(rrsp)}</div>}
+        </div>
+      </Card>
+
+      {gross>0&&(
+        <>
+          {/* Summary card */}
+          <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"24px 16px"}}>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:4}}>ESTIMATED TAKE-HOME PAY</div>
+            <div style={{fontSize:42,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(netMonthly)}<span style={{fontSize:16,color:"#6b8cce"}}>/mo</span></div>
+            <div style={{fontSize:14,color:"#8fadd4",marginTop:4}}>{fmt(netAnnual)} per year</div>
+            <div style={{marginTop:12,fontSize:12,color:"#6b8cce"}}>Effective tax rate: <span style={{color:"#facc15",fontWeight:"bold"}}>{effectiveRate.toFixed(1)}%</span></div>
+          </Card>
+
+          {/* Breakdown */}
+          <Card>
+            <SecTitle>Deduction Breakdown</SecTitle>
+            {[
+              {label:"Gross Income",val:gross,color:"#4ade80",bold:true},
+              {label:`Federal Income Tax (marginal: ${marginalFed}%)`,val:-fedTax,color:"#f87171"},
+              {label:`${PROVINCES.find(p=>p.val===province)?.label||province} Provincial Tax`,val:-provTax,color:"#fb923c"},
+              {label:"CPP Contributions",val:-cpp,color:"#facc15"},
+              {label:"EI Premiums",val:-ei,color:"#facc15"},
+              ...(rrsp>0?[{label:"RRSP Deduction",val:-rrsp,color:"#a78bfa"}]:[]),
+              {label:"Net Annual Income",val:netAnnual,color:"#4ade80",bold:true,border:true},
+              {label:"Net Monthly Income",val:netMonthly,color:"#4ade80",bold:true},
+            ].map((row,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderTop:row.border?"1px solid #1e3a5f":"none",marginTop:row.border?4:0}}>
+                <span style={{fontSize:12,color:"#8fadd4",flex:1}}>{row.label}</span>
+                <span style={{fontSize:13,color:row.color,fontWeight:row.bold?"bold":"normal",...GS}}>
+                  {row.val<0?"-"+fmt(Math.abs(row.val)):fmt(row.val)}
+                </span>
+              </div>
+            ))}
+          </Card>
+
+          <Card style={{background:"#0d1b3e"}}>
+            <div style={{fontSize:11,color:"#6b8cce",lineHeight:1.7}}>
+              ⚠️ These are estimates based on 2024 federal and provincial tax rates. They do not account for additional credits, deductions, or employer benefits. Consult a tax professional for precise figures.
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );
