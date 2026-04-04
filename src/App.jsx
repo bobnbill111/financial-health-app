@@ -70,21 +70,6 @@ const supa = {
       headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
     });
   },
-  // Milestones
-  async loadMilestones(userId, token) {
-    const r=await fetch(`${SUPA_URL}/rest/v1/user_milestones?user_id=eq.${userId}&select=*`,{
-      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`}
-    });
-    const rows=await r.json();
-    return rows[0]?.milestones||[];
-  },
-  async saveMilestones(userId, token, milestones) {
-    await fetch(`${SUPA_URL}/rest/v1/user_milestones`,{
-      method:"POST",
-      headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${token}`,"Content-Type":"application/json","Prefer":"resolution=merge-duplicates"},
-      body:JSON.stringify({user_id:userId,milestones:JSON.stringify(milestones)})
-    });
-  },
 };
 
 
@@ -480,9 +465,6 @@ export default function App() {
   const [dark,setDark]=useState(true);
   const [saving,setSaving]=useState(false);
   const [isNewUser,setIsNewUser]=useState(false);
-  const [milestones,setMilestones]=useState([]);
-  const milestonesRef=useRef([]);
-  useEffect(()=>{milestonesRef.current=milestones;},[milestones]);
 
   const [data,setData]=useState(EMPTY);
   const [scoreHistory,setScoreHistory]=useState([]);
@@ -515,10 +497,7 @@ export default function App() {
     if(!user||!token) return;
     const t=setTimeout(()=>{
       setSaving(true);
-      const sg=arr=>(arr||[]).reduce((s,x)=>s+Number(x.amount||0),0);
-      const inv=sg(data.investments.tfsa)+sg(data.investments.fhsa)+sg(data.investments.rrsp)+sg(data.investments.alternatives)+sg(data.investments.nonReg);
       supa.saveData(user.id,token,data,scoreHistory).finally(()=>setSaving(false));
-      checkMilestones(data,inv);
     },1500);
     return ()=>clearTimeout(t);
   },[data,scoreHistory]);
@@ -537,8 +516,6 @@ export default function App() {
       } else {
         setIsNewUser(true);
       }
-      // Load milestones
-      try{const ms=await supa.loadMilestones(authUser.id,authToken);setMilestones(ms||[]);}catch(e){}
     } catch(e) {
       setIsNewUser(newUser);
     }
@@ -550,48 +527,8 @@ export default function App() {
     localStorage.removeItem("fh_uid");
     localStorage.removeItem("fh_email");
     setUser(null);setToken(null);
-    setData(EMPTY);setScoreHistory([]);setMilestones([]);
+    setData(EMPTY);setScoreHistory([]);
     setPage("home");setIsNewUser(false);setIsGuest(false);
-  };
-
-  // Check milestones whenever data changes
-  const checkMilestones=async(newData,newTotalInv)=>{
-    if(!user||!token||isGuest) return;
-    const efund=(newData.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
-    const monthlyExp=newData.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
-    const efundTarget=monthlyExp*3;
-    const nw=newTotalInv+efund+(newData.bankAccounts||[]).reduce((s,a)=>s+Number(a.amount||0),0)
-      +Number(newData.mortgage?.value||0)-Number(newData.mortgage?.balance||0)
-      -newData.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0)
-      -(newData.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
-      -(newData.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
-
-    const MILESTONE_DEFS=[
-      {id:"nw_10k",label:"$10K Net Worth",icon:"💰",desc:"Your net worth crossed $10,000!",check:()=>nw>=10000},
-      {id:"nw_25k",label:"$25K Net Worth",icon:"🌟",desc:"Your net worth crossed $25,000!",check:()=>nw>=25000},
-      {id:"nw_50k",label:"$50K Net Worth",icon:"🚀",desc:"Your net worth crossed $50,000!",check:()=>nw>=50000},
-      {id:"nw_100k",label:"$100K Net Worth",icon:"💎",desc:"Your net worth crossed $100,000!",check:()=>nw>=100000},
-      {id:"nw_250k",label:"$250K Net Worth",icon:"👑",desc:"Your net worth crossed $250,000!",check:()=>nw>=250000},
-      {id:"nw_500k",label:"$500K Net Worth",icon:"🏆",desc:"Your net worth crossed $500,000!",check:()=>nw>=500000},
-      {id:"nw_1m",label:"$1M Net Worth",icon:"🎯",desc:"You're a millionaire!",check:()=>nw>=1000000},
-      {id:"nw_positive",label:"Positive Net Worth",icon:"📈",desc:"Your net worth is now positive!",check:()=>nw>0},
-      {id:"first_inv",label:"First Investment",icon:"📊",desc:"You made your first investment!",check:()=>newTotalInv>0},
-      {id:"efund_full",label:"Emergency Fund Funded",icon:"🛡️",desc:`You've fully funded your ${(efundTarget/monthlyExp).toFixed(0)}-month emergency fund!`,check:()=>efund>=efundTarget&&efundTarget>0},
-    ];
-
-    let newMilestones=[...milestonesRef.current];
-    let triggered=null;
-    for(const m of MILESTONE_DEFS){
-      if(!newMilestones.includes(m.id)&&m.check()){
-        newMilestones=[...newMilestones,m.id];
-        triggered=m;
-        break; // show one at a time
-      }
-    }
-    if(triggered){
-      setMilestones(newMilestones);
-      try{await supa.saveMilestones(user.id,token,newMilestones);}catch(e){}
-    }
   };
 
   const saveScore=(score)=>{
@@ -632,9 +569,7 @@ export default function App() {
 
   return (
     <>
-      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest} milestones={milestones}/>}
       {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme}/>}
-      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token} milestones={milestones}/>}
       {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} user={user} token={token}/>}
       {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>setPage("home")} onSignOut={handleSignOut} data={data}/>}
     </>
@@ -834,7 +769,7 @@ function BeginnerCard({tip,title,children}) {
 }
 
 // ─── HOMEPAGE ─────────────────────────────────────────────────────────────────
-function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDark,theme,userEmail,displayName,latestScore,isGuest,milestones=[]}) {
+function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDark,theme,userEmail,displayName,latestScore,isGuest=[]}) {
   const [vis,setVis]=useState(false);
   useEffect(()=>{setTimeout(()=>setVis(true),80);},[]);
   const fade = d=>({opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:`opacity 0.7s ease ${d}s,transform 0.7s ease ${d}s`});
@@ -889,37 +824,6 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
                 <div style={{display:"flex",alignItems:"center",gap:4,marginTop:1}}>
                   <span style={{fontSize:11,color:latestScore.gradeColor,fontWeight:"bold",...GS}}>{latestScore.grade}</span>
                   <span style={{fontSize:10,color:"#6b8cce"}}>{latestScore.score}/100</span>
-                </div>
-              )}
-              {/* Milestone badges */}
-              {milestones.length>0&&(
-                <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap",maxWidth:180}}>
-                  {milestones.map(id=>{
-                    const BADGE_MAP={
-                      nw_10k:{icon:"💰",label:"$10K Net Worth"},nw_25k:{icon:"🌟",label:"$25K Net Worth"},
-                      nw_50k:{icon:"🚀",label:"$50K Net Worth"},nw_100k:{icon:"💎",label:"$100K Net Worth"},
-                      nw_250k:{icon:"👑",label:"$250K Net Worth"},nw_500k:{icon:"🏆",label:"$500K Net Worth"},
-                      nw_1m:{icon:"🎯",label:"Millionaire"},nw_positive:{icon:"📈",label:"Positive Net Worth"},
-                      first_inv:{icon:"📊",label:"First Investment"},efund_full:{icon:"🛡️",label:"Emergency Fund Funded"},
-                    };
-                    const b=BADGE_MAP[id];
-                    if(!b) return null;
-                    return (
-                      <div key={id} title={b.label} style={{fontSize:14,cursor:"default",position:"relative"}}
-                        onMouseEnter={e=>{
-                          const tip=document.createElement("div");
-                          tip.id="ms-tip";
-                          tip.textContent=b.label;
-                          tip.style.cssText="position:fixed;background:#0d1b3e;border:1px solid #2a4080;borderRadius:6px;padding:4px 8px;fontSize:11px;color:#e8e4d9;zIndex:9999;pointerEvents:none;whiteSpace:nowrap;fontFamily:inherit";
-                          tip.style.left=(e.clientX+8)+"px";
-                          tip.style.top=(e.clientY-28)+"px";
-                          document.body.appendChild(tip);
-                        }}
-                        onMouseLeave={()=>{const t=document.getElementById("ms-tip");if(t)t.remove();}}>
-                        {b.icon}
-                      </div>
-                    );
-                  })}
                 </div>
               )}
             </div>
@@ -2339,7 +2243,7 @@ function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, inco
 
 const DASH_TABS=["Overview","Goals","Investments","Budget","Savings","Debt","Mortgage","Cash Flow","Score History"];
 
-function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token,milestones}) {
+function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token}) {
   const [tab,setTab]=useState("Overview");
   const cash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
@@ -2666,7 +2570,6 @@ function NetWorthProjection({totalInv,income,totalAlloc,netWorth}) {
         </LineChart>
       </ResponsiveContainer>
 
-      {/* Milestones */}
       {mi > 0 && (
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
           {[5,10,20].map(y=>(
