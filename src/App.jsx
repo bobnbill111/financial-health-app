@@ -478,11 +478,9 @@ export default function App() {
   const [isGuest,setIsGuest]=useState(false);
   const [page,setPage]=useState("home");
   const [dark,setDark]=useState(true);
-  const [beginner,setBeginner]=useState(false);
   const [saving,setSaving]=useState(false);
   const [isNewUser,setIsNewUser]=useState(false);
   const [milestones,setMilestones]=useState([]);
-  const [milestone,setMilestone]=useState(null);
   const milestonesRef=useRef([]);
   useEffect(()=>{milestonesRef.current=milestones;},[milestones]);
 
@@ -592,7 +590,6 @@ export default function App() {
     }
     if(triggered){
       setMilestones(newMilestones);
-      setMilestone(triggered);
       try{await supa.saveMilestones(user.id,token,newMilestones);}catch(e){}
     }
   };
@@ -635,67 +632,12 @@ export default function App() {
 
   return (
     <>
-      {/* Milestone celebration overlay */}
-      {milestone&&<MilestoneCelebration milestone={milestone} onClose={()=>setMilestone(null)}/>}
-      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} beginner={beginner} setBeginner={setBeginner} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
-      {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} beginner={beginner}/>}
-      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} beginner={beginner} user={user} token={token} milestones={milestones}/>}
-      {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} beginner={beginner} user={user} token={token}/>}
+      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest} milestones={milestones}/>}
+      {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme}/>}
+      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token} milestones={milestones}/>}
+      {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} user={user} token={token}/>}
       {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>setPage("home")} onSignOut={handleSignOut} data={data}/>}
     </>
-  );
-}
-
-// ─── MILESTONE CELEBRATION ────────────────────────────────────────────────────
-function MilestoneCelebration({milestone,onClose}) {
-  const [vis,setVis]=useState(false);
-  useEffect(()=>{
-    setTimeout(()=>setVis(true),50);
-    // Inject confetti keyframes
-    const id="confetti-style";
-    if(!document.getElementById(id)){
-      const s=document.createElement("style");
-      s.id=id;
-      s.textContent=`
-        @keyframes confettiFall {
-          0%{transform:translateY(-20px) rotate(0deg);opacity:1;}
-          100%{transform:translateY(100vh) rotate(720deg);opacity:0;}
-        }
-        @keyframes milestoneIn {
-          0%{transform:scale(0.5) translateY(40px);opacity:0;}
-          100%{transform:scale(1) translateY(0);opacity:1;}
-        }
-      `;
-      document.head.appendChild(s);
-    }
-  },[]);
-
-  const confettiColors=["#cc0000","#4ade80","#facc15","#60a5fa","#a78bfa","#fb923c"];
-  const confetti=Array.from({length:20},(_,i)=>({
-    left:`${Math.random()*100}%`,
-    delay:`${Math.random()*1}s`,
-    duration:`${2+Math.random()*2}s`,
-    color:confettiColors[i%confettiColors.length],
-    size:`${6+Math.random()*8}px`,
-  }));
-
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",...GS}} onClick={onClose}>
-      {/* Confetti */}
-      {confetti.map((c,i)=>(
-        <div key={i} style={{position:"fixed",top:"-20px",left:c.left,width:c.size,height:c.size,background:c.color,borderRadius:"2px",animation:`confettiFall ${c.duration} ${c.delay} ease-in forwards`,pointerEvents:"none"}}/>
-      ))}
-      {/* Card */}
-      <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"2px solid #4ade80",borderRadius:24,padding:"40px 32px",textAlign:"center",maxWidth:340,width:"90%",animation:"milestoneIn 0.5s ease-out forwards",position:"relative"}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontSize:72,marginBottom:16}}>{milestone.icon}</div>
-        <div style={{fontSize:11,color:"#4ade80",letterSpacing:3,marginBottom:8}}>MILESTONE UNLOCKED</div>
-        <div style={{fontSize:24,color:"#e8e4d9",fontWeight:"bold",marginBottom:12,...GS}}>{milestone.label}</div>
-        <div style={{fontSize:14,color:"#8fadd4",lineHeight:1.7,marginBottom:24}}>{milestone.desc}</div>
-        <button onClick={onClose} style={{background:"linear-gradient(135deg,#4ade80,#22d3ee)",border:"none",borderRadius:12,padding:"14px 32px",color:"#0a0f1e",fontSize:15,fontWeight:"bold",cursor:"pointer",...GS}}>
-          🎉 Awesome!
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -863,9 +805,9 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
 }
 
 // ─── BEGINNER TOOLTIP ─────────────────────────────────────────────────────────
-function Tip({text,beginner}) {
+function Tip({text}) {
   const [show,setShow]=useState(false);
-  if(!beginner) return null;
+  
   return (
     <span style={{position:"relative",display:"inline-block",marginLeft:6}}>
       <button onClick={()=>setShow(p=>!p)} style={{background:"#1e3a5f",border:"1px solid #2a4080",borderRadius:"50%",width:18,height:18,color:"#6b8cce",cursor:"pointer",fontSize:10,padding:0,lineHeight:"18px",textAlign:"center",...GS}}>?</button>
@@ -878,13 +820,13 @@ function Tip({text,beginner}) {
 }
 
 // ─── BEGINNER SECTION WRAPPER ──────────────────────────────────────────────────
-function BeginnerCard({beginner,tip,title,children}) {
-  if(!beginner) return <>{children}</>;
+function BeginnerCard({tip,title,children}) {
+  return <>{children}</>;
   return (
     <div style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:13,color:"#22d3ee",fontWeight:"bold",...GS}}>{title}</div>
-        {tip&&<Tip text={tip} beginner={beginner}/>}
+        {tip&&<Tip text={tip}/>}
       </div>
       {children}
     </div>
@@ -892,7 +834,7 @@ function BeginnerCard({beginner,tip,title,children}) {
 }
 
 // ─── HOMEPAGE ─────────────────────────────────────────────────────────────────
-function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDark,theme,beginner,setBeginner,userEmail,displayName,latestScore,isGuest}) {
+function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDark,theme,userEmail,displayName,latestScore,isGuest,milestones=[]}) {
   const [vis,setVis]=useState(false);
   useEffect(()=>{setTimeout(()=>setVis(true),80);},[]);
   const fade = d=>({opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:`opacity 0.7s ease ${d}s,transform 0.7s ease ${d}s`});
@@ -949,28 +891,50 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
                   <span style={{fontSize:10,color:"#6b8cce"}}>{latestScore.score}/100</span>
                 </div>
               )}
+              {/* Milestone badges */}
+              {milestones.length>0&&(
+                <div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap",maxWidth:180}}>
+                  {milestones.map(id=>{
+                    const BADGE_MAP={
+                      nw_10k:{icon:"💰",label:"$10K Net Worth"},nw_25k:{icon:"🌟",label:"$25K Net Worth"},
+                      nw_50k:{icon:"🚀",label:"$50K Net Worth"},nw_100k:{icon:"💎",label:"$100K Net Worth"},
+                      nw_250k:{icon:"👑",label:"$250K Net Worth"},nw_500k:{icon:"🏆",label:"$500K Net Worth"},
+                      nw_1m:{icon:"🎯",label:"Millionaire"},nw_positive:{icon:"📈",label:"Positive Net Worth"},
+                      first_inv:{icon:"📊",label:"First Investment"},efund_full:{icon:"🛡️",label:"Emergency Fund Funded"},
+                    };
+                    const b=BADGE_MAP[id];
+                    if(!b) return null;
+                    return (
+                      <div key={id} title={b.label} style={{fontSize:14,cursor:"default",position:"relative"}}
+                        onMouseEnter={e=>{
+                          const tip=document.createElement("div");
+                          tip.id="ms-tip";
+                          tip.textContent=b.label;
+                          tip.style.cssText="position:fixed;background:#0d1b3e;border:1px solid #2a4080;borderRadius:6px;padding:4px 8px;fontSize:11px;color:#e8e4d9;zIndex:9999;pointerEvents:none;whiteSpace:nowrap;fontFamily:inherit";
+                          tip.style.left=(e.clientX+8)+"px";
+                          tip.style.top=(e.clientY-28)+"px";
+                          document.body.appendChild(tip);
+                        }}
+                        onMouseLeave={()=>{const t=document.getElementById("ms-tip");if(t)t.remove();}}>
+                        {b.icon}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </button>
         )}
       </div>
 
-      {/* Toggles — top right */}
+      {/* Dark/Light toggle — top right */}
       <div style={{position:"absolute",top:24,right:24,zIndex:10,display:"flex",flexDirection:"column",gap:10,alignItems:"flex-end"}}>
-        {/* Dark/Light */}
         <button onClick={()=>setDark(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
           <div style={{width:64,height:32,borderRadius:16,background:dark?"#1e3a5f":"#e2e8f0",border:`2px solid ${dark?"#2a4080":"#cbd5e1"}`,position:"relative",transition:"background 0.3s,border 0.3s",display:"flex",alignItems:"center",padding:"0 4px"}}>
             <div style={{width:22,height:22,borderRadius:"50%",background:dark?"#4ade80":"#facc15",position:"absolute",left:dark?4:36,transition:"left 0.3s,background 0.3s",boxShadow:`0 2px 8px ${dark?"#4ade8066":"#facc1566"}`}}/>
             <span style={{position:"absolute",left:dark?32:6,fontSize:13,transition:"left 0.3s"}}>{dark?"☀️":"🌙"}</span>
           </div>
           <div style={{fontSize:9,color:theme.textDim,letterSpacing:2,textTransform:"uppercase",...GS}}>{dark?"Light":"Dark"}</div>
-        </button>
-        {/* Beginner mode */}
-        <button onClick={()=>setBeginner(p=>!p)} style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-          <div style={{width:64,height:32,borderRadius:16,background:beginner?"#1a2a0a":"#1e1e2e",border:`2px solid ${beginner?"#84cc16":"#2a4080"}`,position:"relative",transition:"background 0.3s,border 0.3s",display:"flex",alignItems:"center",padding:"0 4px"}}>
-            <div style={{width:22,height:22,borderRadius:"50%",background:beginner?"#84cc16":"#475569",position:"absolute",left:beginner?36:4,transition:"left 0.3s,background 0.3s",boxShadow:`0 2px 8px ${beginner?"#84cc1666":"#00000033"}`}}/>
-            <span style={{position:"absolute",left:beginner?6:30,fontSize:13,transition:"left 0.3s"}}>{beginner?"🌱":"🎓"}</span>
-          </div>
-          <div style={{fontSize:9,color:beginner?"#84cc16":theme.textDim,letterSpacing:2,textTransform:"uppercase",...GS}}>Beginner</div>
         </button>
       </div>
 
@@ -986,14 +950,13 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
         <div style={{...fade(0.15),textAlign:"center",marginBottom:32}}>
           <h1 style={{fontSize:36,margin:"0 0 8px",color:theme.text,fontWeight:"normal",letterSpacing:1}}>Financial <span style={{color:theme.titleAccent}}>Health</span></h1>
           <div style={{fontSize:12,color:theme.textDim,letterSpacing:2,textTransform:"uppercase"}}>Your complete financial picture</div>
-          {beginner&&<div style={{marginTop:10,background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:10,padding:"8px 16px",fontSize:12,color:"#84cc16",...GS}}>🌱 Beginner Mode is ON — we'll guide you every step</div>}
         </div>
 
         <div style={{...fade(0.3),width:"100%",display:"flex",flexDirection:"column",gap:12}}>
           {[
-            {label:beginner?"See My Financial Picture":"Financial Health Dashboard",sub:beginner?"See everything about your money in one place — net worth, savings, debts and more":"View your dashboard — net worth, investments & goals",badge:"DASHBOARD",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
-            {label:beginner?"Set Up My Profile":"Check-Up Appointment",sub:beginner?"Answer some simple questions about your money — takes about 10 minutes":"Enter or edit your financial information",badge:"EDIT INFO",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
-            {label:beginner?"Financial Calculators":"Individual Tools",sub:beginner?"Simple calculators for budgeting, saving goals, loans and more":"Budget, net worth, savings goals, simulators & more",badge:"TOOLS",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
+            {label:"Financial Health Dashboard",sub:"View your dashboard — net worth, investments & goals",badge:"DASHBOARD",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
+            {label:"Check-Up Appointment",sub:"Enter or edit your financial information",badge:"EDIT INFO",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
+            {label:"Individual Tools",sub:"Budget, net worth, savings goals, simulators & more",badge:"TOOLS",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
           ].map(btn=>(
             <button key={btn.label} onClick={btn.fn}
               style={{background:btn.bg,border:`1px solid ${btn.border}`,borderRadius:14,padding:"20px 24px",cursor:"pointer",textAlign:"center",color:btn.textColor,width:"100%",transition:"transform 0.2s,box-shadow 0.2s",...GS}}
@@ -1418,7 +1381,7 @@ function ApptInvestmentInput({income,totalAlloc,currentValue,onSetInvestment}) {
 }
 
 // ─── INCOME STEP ──────────────────────────────────────────────────────────────
-function IncomeStep({d,setD,setIncome,setIncome2,beginner,onNext}) {
+function IncomeStep({d,setD,setIncome,setIncome2,onNext}) {
   const isJoint=d.isJoint;
   const name1=d.person1Name||d.clientName||"Person 1";
   const name2=d.person2Name||"Person 2";
@@ -1465,7 +1428,7 @@ function IncomeStep({d,setD,setIncome,setIncome2,beginner,onNext}) {
         color="#4ade80"
         inc={inc1}
         setInc={setIncome}
-        beginner={beginner}
+       
         monthlyNet={monthly1}
         invMonthly={calcInvMonthly(inc1)}
       />
@@ -1477,7 +1440,7 @@ function IncomeStep({d,setD,setIncome,setIncome2,beginner,onNext}) {
           color="#60a5fa"
           inc={inc2}
           setInc={setIncome2}
-          beginner={beginner}
+         
           monthlyNet={monthly2}
           invMonthly={calcInvMonthly(inc2)}
         />
@@ -1501,7 +1464,7 @@ function IncomeStep({d,setD,setIncome,setIncome2,beginner,onNext}) {
 
 
 // ─── INCOME PANEL (reusable per-person income block) ─────────────────────────
-function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
+function IncomePanel({label,color,inc,setInc,monthlyNet,invMonthly}) {
   const freq=inc.payFrequency||"";
   const pension=Number(inc.pensionContribution||0);
   const empEE=Number(inc.employerMatchEmployee||0);
@@ -1541,7 +1504,6 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
               <span style={{color:"#6b8cce",marginRight:4}}>$</span>
               <input type="number" value={inc.grossSalary||""} onChange={e=>setInc("grossSalary")(e.target.value)} placeholder="75,000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
             </div>
-            {beginner&&<div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Total pay before taxes</div>}
           </div>
           <div>
             <Label>Hourly Rate (if applicable)</Label>
@@ -1578,7 +1540,6 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
               <input type="number" value={inc.netPaycheque||""} onChange={e=>setInc("netPaycheque")(e.target.value)}
                 placeholder="2,400.00" style={{background:"none",border:"none",outline:"none",color,fontSize:22,width:"100%",...GS}}/>
             </div>
-            {beginner&&<div style={{fontSize:11,color:"#6b8cce",marginTop:6,lineHeight:1.6}}>The amount that hits your bank account each pay — after income tax, CPP, EI and other deductions.</div>}
           </div>
         )}
         {freq==="commission"&&(
@@ -1594,19 +1555,7 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
         )}
 
         {/* Monthly summary */}
-        {monthlyNet>0&&beginner&&(
-          <div style={{marginTop:14,background:"#0d2a1a",border:`1px solid ${color}44`,borderRadius:10,padding:"12px 14px"}}>
-            <div style={{fontSize:11,color:"#6b8cce",marginBottom:4}}>MONTHLY TAKE-HOME</div>
-            <div style={{fontSize:24,color,fontWeight:"bold",...GS}}>{fmt(monthlyNet)}/mo</div>
-            <div style={{fontSize:11,color:"#6b8cce",marginTop:4}}>
-              {freq==="biweekly"?`${fmt(Number(inc.netPaycheque||0))} × 26 ÷ 12`:
-               freq==="semimonthly"?`${fmt(Number(inc.netPaycheque||0))} × 2`:
-               freq==="weekly"?`${fmt(Number(inc.netPaycheque||0))} × 52 ÷ 12`:
-               freq==="monthly"?`Monthly pay`:`Commission average`}
-            </div>
-          </div>
-        )}
-        {monthlyNet>0&&!beginner&&(
+        {monthlyNet>0&&(
           <div style={{marginTop:10,display:"flex",justifyContent:"space-between",padding:"10px 0",borderTop:"1px solid #1e3a5f"}}>
             <span style={{fontSize:13,color:"#8fadd4"}}>Monthly take-home</span>
             <span style={{fontSize:16,color,fontWeight:"bold",...GS}}>{fmt(monthlyNet)}/mo</span>
@@ -1618,7 +1567,6 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
       {freq&&(
         <Card>
           <SecTitle>Pension Contribution</SecTitle>
-          {beginner&&<div style={{fontSize:12,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>Enter your pension contribution per paycheque (your share only). This counts toward your investment rate.</div>}
           <Label>Your pension contribution /paycheque</Label>
           <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #a78bfa66",borderRadius:10,padding:"12px 14px"}}>
             <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
@@ -1639,7 +1587,6 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
       {freq&&(
         <Card>
           <SecTitle>Employer Match</SecTitle>
-          {beginner&&<div style={{fontSize:12,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>If your employer matches your contributions, enter your contribution amount and the match percentage. Leave blank if you don't have an employer match.</div>}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:empEE>0?12:0}}>
             <div>
               <Label>Your contribution /paycheque</Label>
@@ -1699,7 +1646,7 @@ function IncomePanel({label,color,inc,setInc,beginner,monthlyNet,invMonthly}) {
 // ─── APPOINTMENT ──────────────────────────────────────────────────────────────
 const APPT_STEPS=["Start","Income","Accounts","Investments","Savings","Mortgage","Debt","Credit Cards","Line of Credit","Budget","Score"];
 
-function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,beginner,theme}) {
+function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,theme}) {
   const [step,setStep]=useState("Start");
   const set=(g,f)=>v=>setD(p=>({...p,[g]:{...p[g],[f]:v}}));
   const setIncome=f=>v=>setD(p=>({...p,income:{...p.income,[f]:v}}));
@@ -1776,7 +1723,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,be
         )}
 
         {step==="Income"&&(
-          <IncomeStep d={d} setD={setD} setIncome={setIncome} setIncome2={setIncome2} beginner={beginner} onNext={()=>{
+          <IncomeStep d={d} setD={setD} setIncome={setIncome} setIncome2={setIncome2} onNext={()=>{
             const calcMonthly=(inc)=>{
               const freq=inc.payFrequency, net=Number(inc.netPaycheque||0);
               if(freq==="monthly") return net;
@@ -2392,7 +2339,7 @@ function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, inco
 
 const DASH_TABS=["Overview","Goals","Investments","Budget","Savings","Debt","Mortgage","Cash Flow","Score History"];
 
-function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,beginner,user,token,milestones}) {
+function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token,milestones}) {
   const [tab,setTab]=useState("Overview");
   const cash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
@@ -3029,54 +2976,41 @@ function ScoreHistory({history,currentScore,onSave}) {
 
 // ─── INDIVIDUAL TOOLS HUB ─────────────────────────────────────────────────────
 const TOOLS_LIST = [
-  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80",beginnerLabel:"How do I budget my money?",beginnerSub:"Enter what you earn and we'll show you where it goes"},
-  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs and classify spending",color:"#22d3ee",beginnerLabel:"Analyze my spending",beginnerSub:"Upload your bank statement and see where your money went"},
-  {id:"retirement",label:"Retirement Planner",icon:"🏖️",sub:"Project your net worth with life events and retirement date",color:"#4ade80",beginnerLabel:"When can I retire?",beginnerSub:"See your net worth grow over time and plan your retirement"},
-  {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Canadian housing market comparison — is buying worth it?",color:"#a78bfa",beginnerLabel:"Should I rent or buy a home?",beginnerSub:"We'll compare the real costs of renting vs buying in Canada"},
-  {id:"news",label:"Financial News",icon:"📰",sub:"Live Canadian financial news — rates, markets & economy",color:"#fb923c",beginnerLabel:"What's happening in Canadian finance?",beginnerSub:"Today's top stories on money, rates and the economy"},
-  {id:"networth",label:"Net Worth Calculator",icon:"📊",sub:"Calculate your assets minus liabilities",color:"#60a5fa",beginnerLabel:"What is my net worth?",beginnerSub:"Add up what you own and subtract what you owe"},
-  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month for any goal",color:"#facc15",beginnerLabel:"How much do I need to save?",beginnerSub:"Enter your goal and deadline — we'll tell you how much per month"},
-  {id:"whatif",label:"What-If Simulator",icon:"🔮",sub:"Simulate financial decisions before making them",color:"#a78bfa",beginnerLabel:"What happens if I invest more?",beginnerSub:"Try out financial decisions before you make them"},
-  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Calculate payments and interest on any loan",color:"#fb923c",beginnerLabel:"How much will a loan cost me?",beginnerSub:"See your monthly payment and total interest on any loan"},
-  {id:"cashflow",label:"Cash Flow Calendar",icon:"📅",sub:"Map your income and bills through the month",color:"#22d3ee",beginnerLabel:"Map my bills through the month",beginnerSub:"See when money comes in and goes out each month"},
-  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Avalanche vs snowball — find your best payoff path",color:"#f87171",beginnerLabel:"How do I pay off my debt fastest?",beginnerSub:"Find the fastest and cheapest way to become debt-free"},
+  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
+  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs",color:"#22d3ee"},
+  {id:"rentvsbuy",label:"Rent vs. Buy",icon:"🏠",sub:"Is buying worth it in Canada?",color:"#a78bfa"},
+  {id:"networth",label:"Net Worth",icon:"📊",sub:"Assets minus liabilities",color:"#60a5fa"},
+  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month",color:"#facc15"},
+  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Payments and interest on any loan",color:"#fb923c"},
+  {id:"cashflow",label:"Cash Flow",icon:"📅",sub:"Map income and bills monthly",color:"#22d3ee"},
+  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Fastest path to debt-free",color:"#f87171"},
 ];
 
-function IndividualTools({onHome,data,beginner,user,token}) {
+function IndividualTools({onHome,data,user,token}) {
   const [tool,setTool]=useState(null);
-  if(tool==="budget") return <ToolWrapper title={beginner?"How Do I Budget?":"Budget Builder"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
+  if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
-  if(tool==="rentvsbuy") return <ToolWrapper title={beginner?"Should I Rent or Buy?":"Rent vs. Buy"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy beginner={beginner} user={user} token={token} toolId="rentvsbuy"/></ToolWrapper>;
-  if(tool==="news") return <ToolWrapper title="Financial News" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-news"><FinancialNews/></ToolWrapper>;
-  if(tool==="retirement") return <ToolWrapper title="Retirement Planner" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-retirement"><RetirementPlanner data={data} user={user} token={token} toolId="retirement"/></ToolWrapper>;
-  if(tool==="networth") return <ToolWrapper title={beginner?"What Is My Net Worth?":"Net Worth Calculator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data} beginner={beginner}/></ToolWrapper>;
-  if(tool==="savings") return <ToolWrapper title={beginner?"How Much Do I Need to Save?":"Savings Goal"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data} beginner={beginner}/></ToolWrapper>;
-  if(tool==="whatif") return <ToolWrapper title="What-If Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-whatif"><WhatIfSimulator data={data}/></ToolWrapper>;
-  if(tool==="loc") return <ToolWrapper title={beginner?"How Much Will a Loan Cost?":"Loan Simulator"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate="" beginner={beginner}/></ToolWrapper>;
+  if(tool==="rentvsbuy") return <ToolWrapper title="Rent vs. Buy" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-rvb"><RentVsBuy user={user} token={token} toolId="rentvsbuy"/></ToolWrapper>;
+  if(tool==="networth") return <ToolWrapper title="Net Worth Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data}/></ToolWrapper>;
+  if(tool==="savings") return <ToolWrapper title="Savings Goal" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data}/></ToolWrapper>;
+  if(tool==="loc") return <ToolWrapper title="Loan Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate=""/></ToolWrapper>;
   if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
-  if(tool==="debtopt") return <ToolWrapper title={beginner?"How Do I Pay Off Debt?":"Debt Optimizer"} onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
+  if(tool==="debtopt") return <ToolWrapper title="Debt Optimizer" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
 
   return (
     <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
-      <NavBar title={beginner?"Financial Calculators":"Individual Tools"} subtitle="FinHealth" onHome={onHome}/>
+      <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
-        {beginner
-          ? <div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:20,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 <b>Beginner Mode</b> — tap any tool below. Each one walks you through with plain English explanations.</div>
-          : <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Standalone financial tools — no appointment needed.</div>
-        }
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Tap a tool to get started.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
           {TOOLS_LIST.map(t=>(
-            <button key={t.id} onClick={()=>setTool(t.id)} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:14,padding:"18px 20px",cursor:"pointer",textAlign:"left",color:"#e8e4d9",width:"100%",transition:"transform 0.2s,box-shadow 0.2s,border-color 0.2s",...GS}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 32px ${t.color}22`;e.currentTarget.style.borderColor=t.color+"44";}}
+            <button key={t.id} onClick={()=>setTool(t.id)}
+              style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:16,padding:"20px 8px 16px",cursor:"pointer",textAlign:"center",color:"#e8e4d9",width:"100%",transition:"transform 0.2s,box-shadow 0.2s,border-color 0.2s",display:"flex",flexDirection:"column",alignItems:"center",gap:8,...GS}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 24px ${t.color}33`;e.currentTarget.style.borderColor=t.color+"66";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#1e3a5f";}}>
-              <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <div style={{fontSize:28,flexShrink:0,width:40,textAlign:"center"}}>{t.icon}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:16,fontWeight:"bold",color:t.color,marginBottom:3}}>{beginner&&t.beginnerLabel?t.beginnerLabel:t.label}</div>
-                  <div style={{fontSize:12,color:"#8fadd4",lineHeight:1.5}}>{beginner&&t.beginnerSub?t.beginnerSub:t.sub}</div>
-                </div>
-                <div style={{fontSize:18,color:"#2a4080"}}>›</div>
-              </div>
+              <div style={{fontSize:32,marginBottom:2}}>{t.icon}</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS}}>{t.label}</div>
+              <div style={{fontSize:10,color:"#6b8cce",lineHeight:1.4,marginTop:2}}>{t.sub}</div>
             </button>
           ))}
         </div>
@@ -3084,6 +3018,7 @@ function IndividualTools({onHome,data,beginner,user,token}) {
     </div>
   );
 }
+
 
 // ─── SNAPSHOT BAR ─────────────────────────────────────────────────────────────
 function SnapshotBar({user,token,toolId,getInputs}) {
@@ -3342,7 +3277,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
   );
 }
 
-function RentVsBuy({beginner,user,token,toolId}) {
+function RentVsBuy({user,token,toolId}) {
   const [homePrice,setHomePrice]=useState("600000");
   const [downMode,setDownMode]=useState("pct"); // "pct" or "dollar"
   const [downPct,setDownPct]=useState("10");
@@ -3459,7 +3394,6 @@ function RentVsBuy({beginner,user,token,toolId}) {
       {/* Snapshot Bar */}
       <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({homePrice,downPct,downDollar,downMode,rate,amort,propTax,maintenance,homeIns,appreciation,rent,rentIncrease,tenantIns,utilities,investReturn,years,toronto,firstTime,superMode,condoFee,closingCosts,movingCosts,renobudget,propTaxGrowth,rentalIncome,mortgagePenalty})}/>
 
-      {beginner&&<div style={{background:"#1a2a0a",border:"1px solid #84cc1644",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#84cc16",lineHeight:1.7,...GS}}>🌱 Fill in your numbers below and we'll tell you whether renting or buying makes more financial sense for your situation.</div>}
 
       {/* Super In-Depth Toggle */}
       <button onClick={()=>toggleSuper(!superMode)} style={{width:"100%",background:superMode?"linear-gradient(135deg,#1a0505,#0d1b3e)":"#0d1b3e",border:`2px solid ${superMode?"#cc0000":"#2a4080"}`,borderRadius:14,padding:"14px 18px",cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",...GS,transition:"all 0.3s"}}>
@@ -3477,7 +3411,7 @@ function RentVsBuy({beginner,user,token,toolId}) {
 
       {/* Location */}
       <Card>
-        <SecTitle>{beginner?"Where Are You Located?":"Location"}</SecTitle>
+        <SecTitle>{"Location"}</SecTitle>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           {[{val:false,label:"Outside Toronto",sub:"Ontario LTT only"},{val:true,label:"Toronto",sub:"Ontario + Toronto LTT"}].map(o=>(
             <button key={String(o.val)} onClick={()=>setToronto(o.val)} style={{background:toronto===o.val?"#1a2a3e":"#0d1b3e",border:`1px solid ${toronto===o.val?"#60a5fa":"#2a4080"}`,borderRadius:10,padding:"12px",cursor:"pointer",color:toronto===o.val?"#60a5fa":"#8fadd4",textAlign:"center",...GS}}>
@@ -3488,13 +3422,12 @@ function RentVsBuy({beginner,user,token,toolId}) {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <button onClick={()=>setFirstTime(p=>!p)} style={{width:22,height:22,borderRadius:6,background:firstTime?"#4ade80":"#0d1b3e",border:`2px solid ${firstTime?"#4ade80":"#2a4080"}`,cursor:"pointer",flexShrink:0,color:firstTime?"#0a0f1e":"transparent",fontSize:13,padding:0}}>✓</button>
-          <span style={{fontSize:13,color:"#e8e4d9"}}>First-time home buyer{beginner&&<Tip text="First-time buyers in Ontario get a rebate of up to $4,000 on Land Transfer Tax. In Toronto, an additional rebate of up to $4,475 applies." beginner={true}/>}</span>
         </div>
       </Card>
 
       {/* Buying inputs */}
       <Card>
-        <SecTitle>{beginner?"The Home You Want to Buy":"Buying — Home Details"}</SecTitle>
+        <SecTitle>{"Buying — Home Details"}</SecTitle>
         <div style={{marginBottom:12}}>
           <Label>Home Price</Label>
           <NumInput value={homePrice} onChange={v=>{setHomePrice(v);if(downMode==="dollar"&&downDollar)setDownPct(Number(v)>0?String(((Number(downDollar)/Number(v))*100).toFixed(2)):"");else setDownDollar(String(Math.round(Number(v)*(Number(downPct||0)/100))));}} placeholder="600000"/>
@@ -3502,7 +3435,6 @@ function RentVsBuy({beginner,user,token,toolId}) {
         {/* Down payment — toggle $ or % */}
         <div style={{marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <Label style={{marginBottom:0}}>Down Payment{beginner&&<Tip text="The down payment is the upfront cash you pay toward the home. In Canada you need at least 5% for homes under $500K." beginner={true}/>}</Label>
             <div style={{display:"flex",background:"#0d1b3e",borderRadius:8,overflow:"hidden",border:"1px solid #2a4080"}}>
               {[{val:"pct",label:"%"},{val:"dollar",label:"$"}].map(m=>(
                 <button key={m.val} onClick={()=>setDownMode(m.val)} style={{background:downMode===m.val?"#1a4080":"transparent",border:"none",color:downMode===m.val?"#4ade80":"#6b8cce",padding:"4px 12px",cursor:"pointer",fontSize:12,...GS}}>{m.label}</button>
@@ -3522,29 +3454,23 @@ function RentVsBuy({beginner,user,token,toolId}) {
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div><Label>Mortgage Rate %</Label><PctInput value={rate} onChange={setRate} placeholder="5.25"/></div>
-          <div><Label>Amortization{beginner&&<Tip text="How many years to pay off the mortgage. Max 25 yrs if under 20% down, 30 yrs if 20%+." beginner={true}/>}</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>yrs</span></div></div>
-          <div><Label>Property Tax /mo{beginner&&<Tip text="~1% of home value per year. Leave blank to auto-estimate." beginner={true}/>}</Label><NumInput value={propTax} onChange={setPropTax} placeholder={`~${fmt(autoPropTax)}/mo`}/></div>
-          <div><Label>Maintenance /mo{beginner&&<Tip text="Budget ~1% of home value per year for repairs. Leave blank to auto-estimate." beginner={true}/>}</Label><NumInput value={maintenance} onChange={setMaintenance} placeholder={`~${fmt(autoMaintenance)}/mo`}/></div>
         </div>
         <Label>Home Insurance /mo</Label><NumInput value={homeIns} onChange={setHomeIns} placeholder="150"/>
         <div style={{height:10}}/>
-        <Label>Annual Home Appreciation %{beginner&&<Tip text="How much the home grows in value each year. The long-term Canadian average is about 4–6%, but in recent years it has varied widely. We default to 2% (conservative)." beginner={true}/>}</Label>
         <PctInput value={appreciation} onChange={setAppreciation} placeholder="2"/>
       </Card>
 
       {/* Renting inputs */}
       <Card>
-        <SecTitle>{beginner?"What You'd Pay to Rent Instead":"Renting — Monthly Costs"}</SecTitle>
+        <SecTitle>{"Renting — Monthly Costs"}</SecTitle>
         <Label>Monthly Rent</Label><NumInput value={rent} onChange={setRent} placeholder="2200"/>
         <div style={{height:10}}/>
-        <Label>Annual Rent Increase %{beginner&&<Tip text="Ontario rent control caps increases at 2.5%/yr for most units. Newer buildings (built after 2018) may have no cap." beginner={true}/>}</Label>
         <PctInput value={rentIncrease} onChange={setRentIncrease} placeholder="2.5"/>
         <div style={{height:10}}/>
         <Label>Tenant Insurance /mo</Label><NumInput value={tenantIns} onChange={setTenantIns} placeholder="30"/>
         <div style={{height:10}}/>
         <Label>Utilities /mo (if not included)</Label><NumInput value={utilities} onChange={setUtilities} placeholder="0"/>
         <div style={{height:10}}/>
-        <Label>Investment Return % (if you invest down payment instead){beginner&&<Tip text="If you rent, you can invest your down payment. A diversified Canadian portfolio has historically returned about 7%/yr." beginner={true}/>}</Label>
         <PctInput value={investReturn} onChange={setInvestReturn} placeholder="7"/>
       </Card>
 
@@ -3745,540 +3671,6 @@ function RentVsBuy({beginner,user,token,toolId}) {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-// ─── FINANCIAL NEWS ───────────────────────────────────────────────────────────
-const NEWS_FEEDS = [
-  {label:"CBC Business",url:"https://www.cbc.ca/cmlink/rss-business",color:"#f87171"},
-  {label:"Globe & Mail",url:"https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/business/",color:"#4ade80"},
-  {label:"Financial Post",url:"https://financialpost.com/feed",color:"#facc15"},
-  {label:"Bank of Canada",url:"https://www.bankofcanada.ca/feed/",color:"#60a5fa"},
-];
-
-async function fetchFeed(feedUrl) {
-  const proxies = [
-    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}&count=8`,
-    `https://feedproxy.google.com/~r/${encodeURIComponent(feedUrl)}`,
-  ];
-  // Try rss2json first
-  try {
-    const r = await fetch(proxies[0]);
-    const json = await r.json();
-    if(json.items && json.items.length > 0) return json.items;
-  } catch(e) {}
-  return [];
-}
-
-function FinancialNews() {
-  const [articles,setArticles]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [error,setError]=useState(null);
-  const [activeSource,setActiveSource]=useState("all");
-  const [sourceName,setSourceName]=useState({});
-
-  useEffect(()=>{
-    const fetchAll=async()=>{
-      setLoading(true);setError(null);
-      const results=[];
-      await Promise.all(NEWS_FEEDS.map(async feed=>{
-        try{
-          const items = await fetchFeed(feed.url);
-          items.forEach(item=>{
-            results.push({
-              title:(item.title||"").replace(/&amp;/g,"&").replace(/&#039;/g,"'").replace(/&quot;/g,'"').replace(/<[^>]+>/g,"").trim(),
-              link:item.link||item.url||"#",
-              date:item.pubDate?new Date(item.pubDate):new Date(),
-              source:feed.label,
-              color:feed.color,
-              desc:(item.description||item.content||"").replace(/<[^>]+>/g,"").slice(0,120).trim()+"...",
-            });
-          });
-        }catch(e){}
-      }));
-
-      if(results.length===0){
-        // Fallback — static recent Canadian finance links
-        const fallback=[
-          {title:"Bank of Canada holds interest rate — what it means for your mortgage",link:"https://www.cbc.ca/news/business",date:new Date(),source:"CBC Business",color:"#f87171",desc:"The Bank of Canada held its policy rate steady as inflation remains near target. Analysts expect cuts later this year."},
-          {title:"Canadian housing market showing signs of spring recovery",link:"https://financialpost.com",date:new Date(),source:"Financial Post",color:"#facc15",desc:"Home sales picked up in major markets as buyers returned ahead of anticipated rate cuts from the Bank of Canada."},
-          {title:"TFSA contribution limit for 2025 — what you need to know",link:"https://www.theglobeandmail.com/business",date:new Date(),source:"Globe & Mail",color:"#4ade80",desc:"The TFSA annual contribution limit remains at $7,000 for 2025. Here's how to make the most of your tax-free room."},
-          {title:"TSX rises as commodity prices stabilize",link:"https://financialpost.com",date:new Date(),source:"Financial Post",color:"#facc15",desc:"The Toronto Stock Exchange edged higher as energy and materials sectors provided support amid global economic uncertainty."},
-          {title:"Canada inflation rate — latest CPI data explained",link:"https://www.cbc.ca/news/business",date:new Date(),source:"CBC Business",color:"#f87171",desc:"Canada's inflation rate came in at 2.6% year-over-year. Here's what that means for interest rates and your everyday costs."},
-        ];
-        setArticles(fallback);
-        setError("Live feeds unavailable — showing recent Canadian finance highlights.");
-        setLoading(false);
-        return;
-      }
-
-      const seen=new Set();
-      const deduped=results
-        .sort((a,b)=>b.date-a.date)
-        .filter(a=>{
-          const key=(a.title||"").slice(0,40).toLowerCase();
-          if(!key||seen.has(key))return false;
-          seen.add(key);return true;
-        });
-      setArticles(deduped);
-      setLoading(false);
-    };
-    fetchAll();
-  },[]);
-
-  const filtered=activeSource==="all"?articles:articles.filter(a=>a.source===activeSource);
-  const formatDate=(d)=>{
-    const now=new Date(),diff=Math.floor((now-d)/1000/60);
-    if(diff<60)return `${diff}m ago`;
-    if(diff<1440)return `${Math.floor(diff/60)}h ago`;
-    return d.toLocaleDateString("en-CA",{month:"short",day:"numeric"});
-  };
-
-  return (
-    <div>
-      {/* Source filter */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
-        <button onClick={()=>setActiveSource("all")} style={{background:activeSource==="all"?"#1a4080":"#0d1b3e",border:`1px solid ${activeSource==="all"?"#60a5fa":"#2a4080"}`,borderRadius:20,padding:"5px 14px",cursor:"pointer",color:activeSource==="all"?"#60a5fa":"#8fadd4",fontSize:11,...GS}}>
-          All Sources
-        </button>
-        {NEWS_FEEDS.map(f=>(
-          <button key={f.label} onClick={()=>setActiveSource(f.label)} style={{background:activeSource===f.label?f.color+"22":"#0d1b3e",border:`1px solid ${activeSource===f.label?f.color:"#2a4080"}`,borderRadius:20,padding:"5px 14px",cursor:"pointer",color:activeSource===f.label?f.color:"#8fadd4",fontSize:11,...GS}}>
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {loading&&(
-        <div style={{textAlign:"center",padding:"40px 0"}}>
-          <div style={{fontSize:32,marginBottom:12}}>📰</div>
-          <div style={{fontSize:13,color:"#6b8cce"}}>Loading latest Canadian financial news...</div>
-        </div>
-      )}
-
-      {error&&(
-        <div style={{background:"#1a1a0a",border:"1px solid #facc1544",borderRadius:12,padding:"12px 16px",fontSize:12,color:"#facc15",marginBottom:12,lineHeight:1.6}}>
-          ⚠️ {error}
-        </div>
-      )}
-
-      {!loading&&!error&&filtered.length===0&&(
-        <div style={{textAlign:"center",padding:"40px 0",fontSize:13,color:"#6b8cce"}}>No articles found for this source.</div>
-      )}
-
-      {!loading&&filtered.map((a,i)=>(
-        <a key={i} href={a.link} target="_blank" rel="noopener noreferrer" style={{textDecoration:"none",display:"block",marginBottom:10}}>
-          <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderLeft:`3px solid ${a.color}`,borderRadius:12,padding:"14px 16px",transition:"border-color 0.2s,transform 0.2s",cursor:"pointer"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=a.color;e.currentTarget.style.transform="translateY(-1px)";}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e3a5f";e.currentTarget.style.transform="";}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:6}}>
-              <div style={{fontSize:14,color:"#e8e4d9",lineHeight:1.5,fontWeight:"bold",...GS}}>{a.title}</div>
-              <div style={{fontSize:10,color:"#6b8cce",flexShrink:0,marginTop:2}}>{formatDate(a.date)}</div>
-            </div>
-            {a.desc&&<div style={{fontSize:11,color:"#6b8cce",lineHeight:1.6,marginBottom:6}}>{a.desc}</div>}
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:a.color}}/>
-              <span style={{fontSize:10,color:a.color,letterSpacing:1}}>{a.source}</span>
-              <span style={{fontSize:10,color:"#2a4080",marginLeft:"auto"}}>Read →</span>
-            </div>
-          </div>
-        </a>
-      ))}
-
-      <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"#2a4080"}}>
-        Live feeds from CBC, Globe & Mail, Financial Post, Bank of Canada
-      </div>
-    </div>
-  );
-}
-
-// ─── GOALS TAB ────────────────────────────────────────────────────────────────
-function GoalsTab({data,totalInv,scoreHistory}) {
-  const income=Number(data.budget.income||0);
-  const grossMonthly=Number(data.income?.grossSalary||0)>0?Number(data.income.grossSalary)/12:income;
-  const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
-  const monthlyExp=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
-  const efundTarget=monthlyExp*3;
-  const fhsa=(data.investments?.fhsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
-  const totalDebt=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
-    +(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
-    +data.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
-  const invMonthly=Number(data.budget.investmentMonthly||0);
-  const invRate=grossMonthly>0?(invMonthly/grossMonthly)*100:0;
-  const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
-  const prevScore=scoreHistory.length>1?scoreHistory[scoreHistory.length-2]:null;
-
-  const GOALS=[
-    {
-      id:"home",icon:"🏠",label:"Buy a Home",
-      desc:"Build your FHSA and emergency fund while keeping debt low",
-      items:[
-        {label:"FHSA Balance",val:fhsa,target:40000,fmt:v=>fmtShort(v)},
-        {label:"Emergency Fund (3 months)",val:Math.min(efund,efundTarget),target:efundTarget,fmt:v=>fmtShort(v)},
-        {label:"Debt-free (non-mortgage)",val:Math.max(0,totalDebt===0?1:0),target:1,fmt:()=>totalDebt===0?"✅ Debt free":"Paying down debt"},
-      ],
-      done:fhsa>=40000&&efund>=efundTarget&&totalDebt===0,
-    },
-    {
-      id:"efund",icon:"🛡️",label:"Fully Fund Emergency Fund",
-      desc:`Save ${monthlyExp>0?`${(efundTarget/monthlyExp).toFixed(0)} months`:"3 months"} of expenses (${fmtShort(efundTarget)})`,
-      items:[{label:"Emergency Fund",val:efund,target:Math.max(efundTarget,1),fmt:v=>fmtShort(v)}],
-      done:efund>=efundTarget&&efundTarget>0,
-    },
-    {
-      id:"debt",icon:"💳",label:"Pay Off All Non-Mortgage Debt",
-      desc:"Eliminate credit cards, lines of credit, and personal loans",
-      items:[{label:"Remaining Debt",val:Math.max(0,totalDebt===0?1:0),target:1,fmt:()=>totalDebt===0?"✅ Debt free":fmtShort(totalDebt)+" remaining"}],
-      done:totalDebt===0,
-    },
-    {
-      id:"invest",icon:"📈",label:"Hit 25% Investment Rate",
-      desc:"Invest 25% of your gross income every month",
-      items:[{label:"Investment Rate",val:Math.min(invRate,25),target:25,fmt:v=>v.toFixed(1)+"%"}],
-      done:invRate>=25,
-    },
-    {
-      id:"fi",icon:"🏆",label:"Reach Financial Independence",
-      desc:"Portfolio reaches 25× your annual expenses (4% rule)",
-      items:[{label:"Portfolio vs FI Target",val:totalInv,target:Math.max(monthlyExp*12*25,1),fmt:v=>fmtShort(v)}],
-      done:monthlyExp>0&&totalInv>=monthlyExp*12*25,
-    },
-    {
-      id:"score",icon:"⭐",label:"Improve My Financial Health Score",
-      desc:"Reach an A+ (85+) Financial Health Score",
-      items:[{label:"Current Score",val:latestScore?.score||0,target:85,fmt:v=>v+"/100"}],
-      done:(latestScore?.score||0)>=85,
-    },
-  ];
-
-  const active=GOALS.filter(g=>!g.done);
-  const completed=GOALS.filter(g=>g.done);
-
-  const GoalCard=({goal})=>(
-    <Card style={{marginBottom:12,opacity:goal.done?0.85:1}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-        <span style={{fontSize:28}}>{goal.icon}</span>
-        <div style={{flex:1}}>
-          <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",...GS}}>{goal.label}</div>
-          <div style={{fontSize:11,color:"#6b8cce",marginTop:2,lineHeight:1.5}}>{goal.desc}</div>
-        </div>
-        {goal.done&&<span style={{fontSize:22}}>✅</span>}
-      </div>
-      {goal.items.map((item,i)=>{
-        const pct=Math.min(100,item.target>0?(item.val/item.target)*100:0);
-        return (
-          <div key={i} style={{marginBottom:i<goal.items.length-1?12:0}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-              <span style={{fontSize:12,color:"#8fadd4"}}>{item.label}</span>
-              <span style={{fontSize:12,color:pct>=100?"#4ade80":"#facc15",fontWeight:"bold",...GS}}>{item.fmt(item.val)}</span>
-            </div>
-            <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",background:pct>=100?"#4ade80":pct>=60?"#facc15":"#fb923c",borderRadius:4,transition:"width 0.5s"}}/>
-            </div>
-            <div style={{fontSize:10,color:"#6b8cce",marginTop:3}}>
-              {pct>=100?"Complete!":Math.round(pct)+"% there · target: "+item.fmt(item.target)}
-            </div>
-          </div>
-        );
-      })}
-    </Card>
-  );
-
-  return (
-    <div>
-      {active.length===0&&completed.length>0&&(
-        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"24px"}}>
-          <div style={{fontSize:40,marginBottom:8}}>🎉</div>
-          <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>All goals complete!</div>
-          <div style={{fontSize:13,color:"#6b8cce",marginTop:6}}>You're in exceptional financial health.</div>
-        </Card>
-      )}
-      {active.length>0&&(
-        <div>
-          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:12}}>IN PROGRESS</div>
-          {active.map(g=><GoalCard key={g.id} goal={g}/>)}
-        </div>
-      )}
-      {completed.length>0&&(
-        <div style={{marginTop:active.length>0?20:0}}>
-          <div style={{fontSize:10,color:"#4ade80",letterSpacing:3,marginBottom:12}}>COMPLETED ✅</div>
-          {completed.map(g=><GoalCard key={g.id} goal={g}/>)}
-        </div>
-      )}
-      {!income&&!totalInv&&(
-        <Card style={{textAlign:"center",padding:"32px 16px"}}>
-          <div style={{fontSize:36,marginBottom:12}}>📋</div>
-          <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",marginBottom:8}}>Complete your Check-Up Appointment first</div>
-          <div style={{fontSize:13,color:"#6b8cce",lineHeight:1.7}}>Your goals will auto-populate once you've entered your financial information.</div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ─── RETIREMENT PLANNER ───────────────────────────────────────────────────────
-function RetirementPlanner({data,user,token,toolId}) {
-  const sg=arr=>(arr||[]).reduce((s,x)=>s+Number(x.amount||0),0);
-  const currentNetWorth=sg(data.investments.tfsa)+sg(data.investments.fhsa)+sg(data.investments.rrsp)+sg(data.investments.alternatives)+sg(data.investments.nonReg)
-    +(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0)
-    +(data.bankAccounts||[]).reduce((s,a)=>s+Number(a.amount||0),0)
-    +Number(data.mortgage?.value||0)-Number(data.mortgage?.balance||0)
-    -(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
-    -(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
-
-  const [age,setAge]=useState(String(data.age1||30));
-  const [netWorth,setNetWorth]=useState(String(Math.round(Math.max(0,currentNetWorth))));
-  const [monthlySavings,setMonthlySavings]=useState(String(Number(data.budget.investmentMonthly||0)));
-  const [retireAge,setRetireAge]=useState("65");
-  const [returnRate,setReturnRate]=useState("7");
-  const [pensionPct,setPensionPct]=useState("");
-  const [events,setEvents]=useState([]);
-  const [showEventForm,setShowEventForm]=useState(false);
-  const [newEvent,setNewEvent]=useState({type:"home",year:String(new Date().getFullYear()+5),amount:"",label:""});
-  const [snapName,setSnapName]=useState("");
-  const [snapSaving,setSnapSaving]=useState(false);
-  const [snapMsg,setSnapMsg]=useState("");
-  const [savedSnaps,setSavedSnaps]=useState([]);
-  const [loadingSnaps,setLoadingSnaps]=useState(false);
-
-  const EVENT_TYPES=[
-    {val:"home",label:"🏠 Buy a Home",desc:"Depletes savings by down payment amount"},
-    {val:"retire",label:"🏖️ Retirement",desc:"Income stops, pension starts, 4% withdrawal begins"},
-    {val:"child",label:"👶 Have a Child",desc:"Adds $1,000/mo in expenses"},
-    {val:"education",label:"🎓 Education Cost",desc:"One-time lump sum expense"},
-    {val:"crash",label:"📉 Market Crash",desc:"Portfolio drops 35%"},
-    {val:"career",label:"💼 Career Change",desc:"Monthly savings change"},
-  ];
-
-  // Load saved snapshots
-  useEffect(()=>{
-    if(!user||!token) return;
-    setLoadingSnaps(true);
-    supa.loadSnapshots(user.id,token,toolId).then(snaps=>{
-      setSavedSnaps(Array.isArray(snaps)?snaps:[]);
-      setLoadingSnaps(false);
-    }).catch(()=>setLoadingSnaps(false));
-  },[user,token]);
-
-  const saveSnap=async()=>{
-    if(!user||!token||!snapName.trim()) return;
-    setSnapSaving(true);
-    await supa.saveSnapshot(user.id,token,toolId,snapName.trim(),{age,netWorth,monthlySavings,retireAge,returnRate,pensionPct,events});
-    const snaps=await supa.loadSnapshots(user.id,token,toolId);
-    setSavedSnaps(Array.isArray(snaps)?snaps:[]);
-    setSnapName("");setSnapMsg("Saved!");
-    setTimeout(()=>setSnapMsg(""),2000);
-    setSnapSaving(false);
-  };
-
-  const loadSnap=(snap)=>{
-    const i=snap.inputs||{};
-    if(i.age)setAge(i.age);
-    if(i.netWorth)setNetWorth(i.netWorth);
-    if(i.monthlySavings)setMonthlySavings(i.monthlySavings);
-    if(i.retireAge)setRetireAge(i.retireAge);
-    if(i.returnRate)setReturnRate(i.returnRate);
-    if(i.pensionPct)setPensionPct(i.pensionPct);
-    if(i.events)setEvents(i.events);
-  };
-
-  const deleteSnap=async(id)=>{
-    if(!user||!token) return;
-    await supa.deleteSnapshot(id,token);
-    setSavedSnaps(prev=>prev.filter(s=>s.id!==id));
-  };
-
-  // Build projection data year by year
-  const buildProjection=()=>{
-    const a=Number(age)||30;
-    const ra=Number(retireAge)||65;
-    const r=Number(returnRate||7)/100/12;
-    const pct=Number(pensionPct||0)/100;
-    const monthlyIncome=Number(data.budget.income||0);
-    let nw=Number(netWorth||0);
-    let mSav=Number(monthlySavings||0);
-    const pts=[];
-    let runsOutAge=null;
-
-    for(let yr=a;yr<=95;yr++){
-      // Apply life events this year
-      const yearEvents=events.filter(e=>Number(e.year)===yr);
-      for(const ev of yearEvents){
-        if(ev.type==="home") nw-=Number(ev.amount||0);
-        if(ev.type==="crash") nw*=0.65;
-        if(ev.type==="child") mSav=Math.max(0,mSav-1000);
-        if(ev.type==="education") nw-=Number(ev.amount||0);
-        if(ev.type==="career") mSav=Number(ev.amount||mSav);
-        if(ev.type==="retire"){
-          // retirement handled below
-        }
-      }
-
-      const isRetired=yr>=ra;
-      let monthlyChange;
-      if(isRetired){
-        const withdrawal=(nw*0.04)/12;
-        const pension=monthlyIncome*pct;
-        monthlyChange=pension-withdrawal; // negative if drawing down
-        // actually: nw grows at return rate minus withdrawals
-        for(let m=0;m<12;m++){
-          nw=nw*(1+r)-(withdrawal/12*12/12)+pension;
-        }
-      } else {
-        for(let m=0;m<12;m++){
-          nw=nw*(1+r)+mSav;
-        }
-      }
-
-      if(nw<0&&runsOutAge===null) runsOutAge=yr;
-      pts.push({age:yr,netWorth:Math.max(0,Math.round(nw)),isRetired,hasEvent:yearEvents.length>0,eventLabel:yearEvents.map(e=>e.label||e.type).join(", ")});
-    }
-    return {pts,runsOutAge};
-  };
-
-  const {pts,runsOutAge}=buildProjection();
-  const retirePt=pts.find(p=>p.age===Number(retireAge));
-  const endPt=pts[pts.length-1];
-
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
-
-  return (
-    <div>
-      {/* Saved scenarios */}
-      {user&&(
-        <Card>
-          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>SAVED SCENARIOS</div>
-          {loadingSnaps?<div style={{fontSize:12,color:"#6b8cce"}}>Loading...</div>:savedSnaps.length===0?
-            <div style={{fontSize:12,color:"#6b8cce"}}>No saved scenarios yet.</div>:
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {savedSnaps.map(s=>(
-                <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 12px"}}>
-                  <div>
-                    <div style={{fontSize:13,color:"#e8e4d9",...GS}}>{s.name}</div>
-                    <div style={{fontSize:10,color:"#6b8cce"}}>{new Date(s.created_at).toLocaleDateString("en-CA")}</div>
-                  </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <button onClick={()=>loadSnap(s)} style={{background:"#1a4080",border:"none",borderRadius:6,padding:"5px 10px",color:"#4ade80",cursor:"pointer",fontSize:11,...GS}}>Load</button>
-                    <button onClick={()=>deleteSnap(s.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14}}>×</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          }
-          <div style={{display:"flex",gap:8,marginTop:12}}>
-            <input value={snapName} onChange={e=>setSnapName(e.target.value)} placeholder="Scenario name..." style={{...inp,flex:1,fontSize:13,padding:"8px 12px"}}/>
-            <button onClick={saveSnap} disabled={snapSaving||!snapName.trim()} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:8,padding:"8px 14px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
-              {snapSaving?"Saving...":"Save"}
-            </button>
-          </div>
-          {snapMsg&&<div style={{fontSize:11,color:"#4ade80",marginTop:6}}>{snapMsg}</div>}
-        </Card>
-      )}
-
-      {/* Inputs */}
-      <Card>
-        <SecTitle>Your Details</SecTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-          {[
-            {label:"Current Age",val:age,set:setAge,suffix:"yrs"},
-            {label:"Retire At",val:retireAge,set:setRetireAge,suffix:"yrs"},
-            {label:"Current Net Worth",val:netWorth,set:setNetWorth,prefix:"$"},
-            {label:"Monthly Savings",val:monthlySavings,set:setMonthlySavings,prefix:"$"},
-            {label:"Annual Return",val:returnRate,set:setReturnRate,suffix:"%"},
-            {label:"Pension % of Income",val:pensionPct,set:setPensionPct,suffix:"%",placeholder:"0"},
-          ].map(f=>(
-            <div key={f.label}>
-              <Label>{f.label}</Label>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
-                {f.prefix&&<span style={{color:"#6b8cce",marginRight:4}}>{f.prefix}</span>}
-                <input type="number" value={f.val} onChange={e=>f.set(e.target.value)} placeholder={f.placeholder||"0"}
-                  style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
-                {f.suffix&&<span style={{color:"#6b8cce",fontSize:11}}>{f.suffix}</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Life Events */}
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",...GS}}>LIFE EVENTS</div>
-          <button onClick={()=>setShowEventForm(p=>!p)} style={{background:"#0d2a1a",border:"1px solid #4ade8044",borderRadius:8,padding:"5px 12px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
-            {showEventForm?"Cancel":"+ Add Event"}
-          </button>
-        </div>
-        {showEventForm&&(
-          <div style={{background:"#0d1b3e",borderRadius:10,padding:"14px",marginBottom:12}}>
-            <div style={{marginBottom:10}}>
-              <Label>Event Type</Label>
-              <select value={newEvent.type} onChange={e=>setNewEvent(p=>({...p,type:e.target.value}))}
-                style={{...inp,fontSize:13}}>
-                {EVENT_TYPES.map(t=><option key={t.val} value={t.val}>{t.label}</option>)}
-              </select>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <div>
-                <Label>Year</Label>
-                <input type="number" value={newEvent.year} onChange={e=>setNewEvent(p=>({...p,year:e.target.value}))} style={inp}/>
-              </div>
-              {["home","education","career","child"].includes(newEvent.type)&&(
-                <div>
-                  <Label>{newEvent.type==="career"?"New Monthly Savings ($)":"Amount ($)"}</Label>
-                  <input type="number" value={newEvent.amount} onChange={e=>setNewEvent(p=>({...p,amount:e.target.value}))} placeholder="0" style={inp}/>
-                </div>
-              )}
-            </div>
-            <div style={{marginBottom:10}}>
-              <Label>Label (optional)</Label>
-              <input value={newEvent.label} onChange={e=>setNewEvent(p=>({...p,label:e.target.value}))} placeholder="e.g. Buy condo in Toronto" style={inp}/>
-            </div>
-            <button onClick={()=>{setEvents(p=>[...p,{...newEvent,id:Date.now()}]);setShowEventForm(false);setNewEvent({type:"home",year:String(new Date().getFullYear()+5),amount:"",label:""});}}
-              style={{width:"100%",background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:8,padding:"10px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>
-              Add to Timeline
-            </button>
-          </div>
-        )}
-        {events.length===0?<div style={{fontSize:12,color:"#6b8cce"}}>No life events added yet. Add retirement, home purchase, or other milestones.</div>:
-          events.map((ev,i)=>(
-            <div key={ev.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
-              <div>
-                <span style={{fontSize:13,color:"#e8e4d9",...GS}}>{EVENT_TYPES.find(t=>t.val===ev.type)?.label} </span>
-                <span style={{fontSize:11,color:"#6b8cce"}}>Age {Number(ev.year)-(new Date().getFullYear())+Number(age||30)} ({ev.year}){ev.label&&` · ${ev.label}`}{ev.amount?` · ${fmtShort(ev.amount)}`:""}</span>
-              </div>
-              <button onClick={()=>setEvents(p=>p.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>
-            </div>
-          ))
-        }
-      </Card>
-
-      {/* Chart */}
-      <Card>
-        <SecTitle>Net Worth Projection</SecTitle>
-        {runsOutAge&&<div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:12,color:"#f87171"}}>
-          ⚠️ At current rates your money runs out at age {runsOutAge}. Consider increasing savings or adjusting retirement plans.
-        </div>}
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={pts} margin={{top:5,right:10,left:0,bottom:5}}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f44"/>
-            <XAxis dataKey="age" stroke="#6b8cce" tick={{fontSize:10}} label={{value:"Age",position:"insideBottom",offset:-2,fill:"#6b8cce",fontSize:10}}/>
-            <YAxis stroke="#6b8cce" tick={{fontSize:9}} tickFormatter={v=>fmtShort(v)} width={55}/>
-            <Tooltip formatter={(v)=>[fmtShort(v),"Net Worth"]} labelFormatter={l=>`Age ${l}`} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,fontSize:12}}/>
-            <Line type="monotone" dataKey="netWorth" stroke="#4ade80" strokeWidth={2.5} dot={false}/>
-          </LineChart>
-        </ResponsiveContainer>
-        {/* Key stats */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:14}}>
-          {retirePt&&<div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>AT RETIREMENT (AGE {retireAge})</div>
-            <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(retirePt.netWorth)}</div>
-          </div>}
-          <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>AT AGE 95</div>
-            <div style={{fontSize:18,color:runsOutAge?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>{runsOutAge?`Runs out at ${runsOutAge}`:fmtShort(endPt?.netWorth||0)}</div>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }
@@ -5056,149 +4448,6 @@ function ToolWrapper({title,onBack,onHome,contentId,children}) {
 }
 
 // ─── WHAT-IF SIMULATOR ────────────────────────────────────────────────────────
-function WhatIfSimulator({data}) {
-  const [scenario,setScenario]=useState("invest");
-  const income=Number(data.budget.income||0);
-  const totalAlloc=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
-  const surplus=income-totalAlloc;
-  const sumGroup=arr=>arr.reduce((s,x)=>s+Number(x.amount||0),0);
-  const totalInv=sumGroup(data.investments.tfsa)+sumGroup(data.investments.fhsa)+sumGroup(data.investments.rrsp)+sumGroup(data.investments.alternatives)+sumGroup(data.investments.nonReg);
-
-  const scenarios=[
-    {id:"invest",label:"💹 Invest More",sub:"What if I increased my monthly investment?"},
-    {id:"paydebt",label:"💳 Pay Off Debt",sub:"What if I aggressively paid down debt?"},
-  ];
-
-  return (
-    <div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:20}}>
-        {scenarios.map(s=>(
-          <button key={s.id} onClick={()=>setScenario(s.id)} style={{background:scenario===s.id?"linear-gradient(135deg,#1a2f5a,#1a3a5a)":"#0d1b3e",border:`1px solid ${scenario===s.id?"#60a5fa":"#2a4080"}`,borderRadius:10,padding:"12px 14px",cursor:"pointer",textAlign:"left",color:"#e8e4d9",...GS}}>
-            <div style={{fontSize:14,color:scenario===s.id?"#60a5fa":"#e8e4d9",fontWeight:"bold"}}>{s.label}</div>
-            <div style={{fontSize:11,color:"#6b8cce",marginTop:2}}>{s.sub}</div>
-          </button>
-        ))}
-      </div>
-      {scenario==="invest"&&<InvestMoreSim totalInv={totalInv} surplus={surplus}/>}
-      {scenario==="paydebt"&&<PayDebtSim creditCards={data.creditCards} otherDebts={data.otherDebts}/>}
-    </div>
-  );
-}
-
-function InvestMoreSim({totalInv,surplus}) {
-  const [extra,setExtra]=useState("200");
-  const [years,setYears]=useState("10");
-  const addMonthly=Number(extra||0),n=Number(years||0),r=0.07/12;
-  const futureExtra=addMonthly*((Math.pow(1+r,n*12)-1)/r);
-  const futureExisting=totalInv*Math.pow(1+r,n*12);
-  const totalFuture=futureExtra+futureExisting;
-  return (
-    <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)"}}>
-      <SecTitle>Invest More — What If?</SecTitle>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-        <div><Label>Extra/Month</Label><NumInput value={extra} onChange={setExtra} placeholder="200"/></div>
-        <div><Label>Over (years)</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><input type="number" value={years} onChange={e=>setYears(e.target.value)} placeholder="10" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>yrs</span></div></div>
-      </div>
-      {addMonthly>0&&n>0&&<div style={{background:"#0d2a1a",border:"1px solid #1a4030",borderRadius:10,padding:"14px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>PORTFOLIO IN {n}Y</div><div style={{fontSize:20,color:"#4ade80",fontWeight:"bold"}}>{fmtShort(totalFuture)}</div></div>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>EXTRA GROWTH</div><div style={{fontSize:20,color:"#facc15",fontWeight:"bold"}}>{fmtShort(futureExtra)}</div></div>
-        </div>
-        <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.7}}>Adding <span style={{color:"#4ade80"}}>{fmt(addMonthly)}/mo</span> for <span style={{color:"#4ade80"}}>{n} years</span> at 7% compounds to an extra <span style={{color:"#facc15",fontWeight:"bold"}}>{fmtShort(futureExtra)}</span> — that's <span style={{color:"#facc15"}}>{fmt(addMonthly*n*12)}</span> contributed growing to {fmtShort(futureExtra)}.</div>
-      </div>}
-    </Card>
-  );
-}
-
-function PayDebtSim({creditCards,otherDebts}) {
-  const [extraPayment,setExtraPayment]=useState("200");
-  const totalDebt=(creditCards||[]).reduce((s,c)=>s+Number(c.totalBalance||0),0)+(otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
-  const minPayment=Math.max(25,totalDebt*0.03);
-  const extra=Number(extraPayment||0);
-  const payment=minPayment+extra;
-  const rate=0.19/12;
-  const months=totalDebt>0&&payment>totalDebt*rate?Math.ceil(Math.log(payment/(payment-totalDebt*rate))/Math.log(1+rate)):null;
-  const totalPaid=months?payment*months:0;
-  const interest=totalPaid-totalDebt;
-  const monthsMin=totalDebt>0&&minPayment>totalDebt*rate?Math.ceil(Math.log(minPayment/(minPayment-totalDebt*rate))/Math.log(1+rate)):null;
-  const interestMin=monthsMin?minPayment*monthsMin-totalDebt:0;
-  return (
-    <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)"}}>
-      <SecTitle>Pay Off Debt — What If?</SecTitle>
-      {totalDebt===0?<div style={{fontSize:12,color:"#4ade80",textAlign:"center",padding:"16px 0"}}>🎉 No debt to simulate!</div>:<>
-        <div style={{marginBottom:12}}><Label>Extra Monthly Payment</Label><NumInput value={extraPayment} onChange={setExtraPayment}/></div>
-        {months&&<div style={{background:"#1a0d0d",border:"1px solid #f8717144",borderRadius:10,padding:"14px"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-            <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>DEBT-FREE IN</div><div style={{fontSize:20,color:"#4ade80",fontWeight:"bold"}}>{months} mo</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>INTEREST SAVED</div><div style={{fontSize:20,color:"#facc15",fontWeight:"bold"}}>{fmt(Math.max(0,interestMin-interest))}</div></div>
-          </div>
-          <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.7}}>With min payments only: <span style={{color:"#f87171"}}>{monthsMin} months</span> and <span style={{color:"#f87171"}}>{fmt(interestMin)} interest</span>. Adding <span style={{color:"#4ade80"}}>{fmt(extra)}/mo</span> saves you <span style={{color:"#facc15",fontWeight:"bold"}}>{fmt(Math.max(0,interestMin-interest))} in interest</span>.</div>
-        </div>}
-      </>}
-    </Card>
-  );
-}
-
-function SalarySim({income,totalAlloc,totalInv}) {
-  const [raise,setRaise]=useState("10");
-  const raiseAmt=income*(Number(raise||0)/100);
-  const newIncome=income+raiseAmt;
-  const newSurplus=newIncome-totalAlloc;
-  const extraMonthly=newSurplus-(income-totalAlloc);
-  const future10=totalInv*Math.pow(1.07,10)+extraMonthly*((Math.pow(1+0.07/12,120)-1)/(0.07/12));
-  return (
-    <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)"}}>
-      <SecTitle>Salary Raise — What If?</SecTitle>
-      <Label>Raise Percentage</Label>
-      <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",marginBottom:14}}>
-        <input type="number" value={raise} onChange={e=>setRaise(e.target.value)} placeholder="10" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce"}}>%</span>
-      </div>
-      {Number(raise)>0&&<div style={{background:"#0d2a1a",border:"1px solid #1a4030",borderRadius:10,padding:"14px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>NEW INCOME</div><div style={{fontSize:18,color:"#4ade80",fontWeight:"bold"}}>{fmt(newIncome)}/mo</div></div>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>EXTRA SURPLUS</div><div style={{fontSize:18,color:"#facc15",fontWeight:"bold"}}>{fmt(extraMonthly)}/mo</div></div>
-        </div>
-        <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.7}}>A <span style={{color:"#4ade80"}}>{raise}% raise</span> adds <span style={{color:"#4ade80"}}>{fmt(raiseAmt)}/mo</span>. Invested for 10 years at 7%, that extra surplus grows to <span style={{color:"#facc15",fontWeight:"bold"}}>{fmtShort(future10)}</span>.</div>
-      </div>}
-    </Card>
-  );
-}
-
-function BuyHomeSim({income}) {
-  const [price,setPrice]=useState("500000");
-  const [down,setDown]=useState("20");
-  const [rate,setRate]=useState("5.5");
-  const [amort,setAmort]=useState("25");
-  const homePrice=Number(price||0),downPct=Number(down||0)/100,downAmt=homePrice*downPct,principal=homePrice-downAmt;
-  const r=Number(rate||0)/100/12,n=Number(amort||25)*12;
-  const mp=principal>0&&r>0?principal*r/(1-Math.pow(1+r,-n)):principal/n;
-  const totalPaid=mp*n,totalInterest=totalPaid-principal;
-  const cmbhc=downPct<0.2?principal*(downPct<0.05?0.04:downPct<0.1?0.031:0.028):0;
-  const incomeRequired=mp*4;
-  return (
-    <Card style={{background:"linear-gradient(135deg,#0d1b3e,#111827)"}}>
-      <SecTitle>Buy a Home — What If?</SecTitle>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        <div><Label>Home Price</Label><NumInput value={price} onChange={setPrice} placeholder="500000"/></div>
-        <div><Label>Down Payment %</Label><PctInput value={down} onChange={setDown} placeholder="20"/></div>
-        <div><Label>Interest Rate</Label><PctInput value={rate} onChange={setRate} placeholder="5.5"/></div>
-        <div><Label>Amortization (yrs)</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>yr</span></div></div>
-      </div>
-      {principal>0&&mp>0&&<div style={{background:"#0d1b3e",borderRadius:10,padding:"14px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>DOWN PAYMENT</div><div style={{fontSize:16,color:"#60a5fa",fontWeight:"bold"}}>{fmt(downAmt)}</div></div>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>MONTHLY PAYMENT</div><div style={{fontSize:16,color:"#4ade80",fontWeight:"bold"}}>{fmt(mp)}</div></div>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>TOTAL INTEREST</div><div style={{fontSize:16,color:"#f87171",fontWeight:"bold"}}>{fmtShort(totalInterest)}</div></div>
-          <div style={{textAlign:"center"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>INCOME NEEDED</div><div style={{fontSize:16,color:income>=incomeRequired?"#4ade80":"#f87171",fontWeight:"bold"}}>{fmt(incomeRequired)}</div></div>
-        </div>
-        {cmbhc>0&&<div style={{fontSize:11,color:"#facc15",marginBottom:8}}>⚠️ CMHC Insurance required: {fmt(cmbhc)} (down payment under 20%)</div>}
-        <div style={{fontSize:11,color:income>=incomeRequired?"#4ade80":"#f87171"}}>{income>=incomeRequired?"✅ Your income qualifies":"⚠️ Income may not qualify — lenders typically require 4× monthly payment"}</div>
-      </div>}
-    </Card>
-  );
-}
-
-// ─── STANDALONE TOOLS ─────────────────────────────────────────────────────────
 function StandaloneBudget({prefill=null,user,token,toolId}) {
   const [income,setIncome]=useState(prefill?.income||"");
   const BUCKETS = [
