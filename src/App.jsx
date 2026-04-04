@@ -569,7 +569,10 @@ export default function App() {
 
   return (
     <>
+      {signOutBtn}
+      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
       {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme}/>}
+      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token}/>}
       {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} theme={theme} user={user} token={token}/>}
       {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>setPage("home")} onSignOut={handleSignOut} data={data}/>}
     </>
