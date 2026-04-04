@@ -4187,7 +4187,42 @@ function StatementImporter({onBack,onHome,budgetData}) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [categories, setCategories] = useState(DEFAULT_CATS);
   const [newCat, setNewCat] = useState("");
-  const [memory, setMemory] = useState({}); // merchant → category
+  // Persistent merchant rules from localStorage
+  const loadRules=()=>{try{return JSON.parse(localStorage.getItem("fh_classify_rules")||"{}");}catch{return {};}};
+  const saveRules=(rules)=>{try{localStorage.setItem("fh_classify_rules",JSON.stringify(rules));}catch{}};
+  const [rules,setRules]=useState(loadRules);
+  const [showRules,setShowRules]=useState(false);
+
+  // Fuzzy match: normalize merchant name for matching
+  const normalizeMerchant=(desc)=>desc.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,16);
+
+  // Look up a transaction description against saved rules
+  const lookupRule=(desc)=>{
+    const norm=normalizeMerchant(desc);
+    // Exact key match first
+    if(rules[norm]) return rules[norm];
+    // Partial match — check if any saved key is contained in the description
+    for(const [key,cat] of Object.entries(rules)){
+      if(norm.includes(key)||key.includes(norm.slice(0,8))) return cat;
+    }
+    return null;
+  };
+
+  const saveRule=(desc,cat)=>{
+    const key=normalizeMerchant(desc);
+    const updated={...rules,[key]:cat};
+    setRules(updated);
+    saveRules(updated);
+  };
+
+  const deleteRule=(key)=>{
+    const updated={...rules};
+    delete updated[key];
+    setRules(updated);
+    saveRules(updated);
+  };
+
+  const [memory, setMemory] = useState({}); // session-only fallback
   const [budgetCats, setBudgetCats] = useState(
     budgetData?.categories?.filter(c=>Number(c.amount||0)>0).map(c=>c.name) || []
   );
@@ -4248,13 +4283,13 @@ function StatementImporter({onBack,onHome,budgetData}) {
         if(remaining===0){
           // Deduplicate and assign IDs
           const finalTxns = allTxns.map((t,i)=>({...t,id:i}));
-          // Apply memory
-          const withMemory = finalTxns.map(t=>{
-            const key = t.desc.toLowerCase().slice(0,20);
-            return memory[key] ? {...t,category:memory[key]} : t;
+          // Apply persistent rules — auto-classify known merchants
+          const withRules = finalTxns.map(t=>{
+            const matched=lookupRule(t.desc);
+            return matched ? {...t,category:matched,autoClassified:true} : t;
           });
-          setTransactions(withMemory);
-          const months=[...new Set(withMemory.map(t=>t.month).filter(Boolean))].sort().reverse();
+          setTransactions(withRules);
+          const months=[...new Set(withRules.map(t=>t.month).filter(Boolean))].sort().reverse();
           setAvailableMonths(months);
           setSelectedMonth(months[0]||null);
           setCurrentIdx(0);
@@ -4279,18 +4314,25 @@ function StatementImporter({onBack,onHome,budgetData}) {
   const donutData = Object.entries(spending).map(([name,value])=>({name,value:Math.round(value*100)/100}));
   const totalSpent = Object.values(spending).reduce((s,v)=>s+v,0);
 
-  const assignCategory = (cat, txn=current) => {
+  const assignCategory = (cat, txn=current, remember=false) => {
     if(!txn) return;
-    // Save to memory
-    const key = txn.desc.toLowerCase().slice(0,20);
+    const key = normalizeMerchant(txn.desc);
+    // Always update session memory
     setMemory(m=>({...m,[key]:cat}));
+    // If remember=true, save to localStorage rules
+    if(remember) saveRule(txn.desc, cat);
     setTransactions(prev=>prev.map(t=>{
-      if(t.id===txn.id) return {...t,category:cat};
-      // Auto-apply memory to same merchant name
-      const tk = t.desc.toLowerCase().slice(0,20);
-      if(tk===key&&!t.category) return {...t,category:cat};
+      if(t.id===txn.id) return {...t,category:cat,autoClassified:false};
+      // Auto-apply to same merchant in this session
+      if(normalizeMerchant(t.desc)===key&&!t.category) return {...t,category:cat,autoClassified:false};
       return t;
     }));
+  };
+
+  const alwaysRemember = (txn=current) => {
+    if(!txn||!txn.category) return;
+    saveRule(txn.desc, txn.category);
+    setTransactions(prev=>prev.map(t=>t.id===txn.id?{...t,rulesSaved:true}:t));
   };
 
   const ignoreTransaction = (txn=current) => {
@@ -4468,11 +4510,42 @@ function StatementImporter({onBack,onHome,budgetData}) {
           </Card>
         )}
 
+        {/* Manage rules button */}
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+          <button onClick={()=>setShowRules(p=>!p)} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"5px 12px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+            ⚙️ Saved Rules ({Object.keys(rules).length})
+          </button>
+        </div>
+
+        {/* Rules manager */}
+        {showRules&&(
+          <Card style={{marginBottom:14}}>
+            <SecTitle>Auto-Classify Rules</SecTitle>
+            {Object.keys(rules).length===0
+              ? <div style={{fontSize:12,color:"#6b8cce"}}>No rules saved yet. Classify a transaction and click "Always Remember" to save a rule.</div>
+              : Object.entries(rules).map(([key,cat])=>(
+                <div key={key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#e8e4d9",...GS}}>{key}</div>
+                    <div style={{fontSize:10,color:"#4ade80",marginTop:2}}>→ {cat}</div>
+                  </div>
+                  <button onClick={()=>deleteRule(key)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:"0 4px"}}>×</button>
+                </div>
+              ))
+            }
+          </Card>
+        )}
+
         {/* Current transaction */}
         {current?(
           <div>
-            <Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid #22d3ee44"}}>
-              <div style={{fontSize:9,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>CLASSIFY THIS TRANSACTION</div>
+            <Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${current.autoClassified?"#4ade8066":"#22d3ee44"}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <div style={{fontSize:9,color:"#6b8cce",letterSpacing:2}}>CLASSIFY THIS TRANSACTION</div>
+                {current.autoClassified&&(
+                  <div style={{background:"#0d2a1a",border:"1px solid #4ade8044",borderRadius:6,padding:"2px 8px",fontSize:9,color:"#4ade80",letterSpacing:1}}>⚡ AUTO-CLASSIFIED</div>
+                )}
+              </div>
               <div style={{fontSize:18,color:"#e8e4d9",fontWeight:"bold",marginBottom:4,...GS}}>{current.desc}</div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <div style={{fontSize:12,color:"#6b8cce"}}>{current.date}</div>
@@ -4480,10 +4553,17 @@ function StatementImporter({onBack,onHome,budgetData}) {
                   {current.amount>0?"-":"+"}${Math.abs(current.amount).toFixed(2)}
                 </div>
               </div>
-              {/* Suggest from memory */}
-              {memory[current.desc.toLowerCase().slice(0,20)]&&(
-                <div style={{marginTop:8,fontSize:11,color:"#facc15"}}>
-                  💡 Previously: {memory[current.desc.toLowerCase().slice(0,20)]}
+              {current.category&&(
+                <div style={{marginTop:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:12,color:"#4ade80"}}>✓ {current.category}</div>
+                  {!rules[normalizeMerchant(current.desc)]&&!current.rulesSaved?(
+                    <button onClick={()=>alwaysRemember(current)}
+                      style={{background:"#0d2a1a",border:"1px solid #4ade8066",borderRadius:8,padding:"5px 12px",color:"#4ade80",cursor:"pointer",fontSize:11,...GS}}>
+                      ⚡ Always Remember
+                    </button>
+                  ):(
+                    <div style={{fontSize:11,color:"#6b8cce"}}>✅ Rule saved</div>
+                  )}
                 </div>
               )}
             </Card>
@@ -4492,9 +4572,9 @@ function StatementImporter({onBack,onHome,budgetData}) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
               {allCats.map((cat,i)=>(
                 <button key={cat} onClick={()=>assignCategory(cat)}
-                  style={{background:"#0d1b3e",border:`1px solid ${CAT_COLORS[i%CAT_COLORS.length]}44`,borderRadius:10,padding:"10px 6px",cursor:"pointer",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:12,textAlign:"center",transition:"background 0.15s,border-color 0.15s",...GS}}
+                  style={{background:current.category===cat?CAT_COLORS[i%CAT_COLORS.length]+"33":"#0d1b3e",border:`1px solid ${current.category===cat?CAT_COLORS[i%CAT_COLORS.length]:CAT_COLORS[i%CAT_COLORS.length]+"44"}`,borderRadius:10,padding:"10px 6px",cursor:"pointer",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:12,textAlign:"center",transition:"background 0.15s,border-color 0.15s",...GS}}
                   onMouseEnter={e=>{e.currentTarget.style.background=CAT_COLORS[i%CAT_COLORS.length]+"22";e.currentTarget.style.borderColor=CAT_COLORS[i%CAT_COLORS.length];}}
-                  onMouseLeave={e=>{e.currentTarget.style.background="#0d1b3e";e.currentTarget.style.borderColor=CAT_COLORS[i%CAT_COLORS.length]+"44";}}>
+                  onMouseLeave={e=>{e.currentTarget.style.background=current.category===cat?CAT_COLORS[i%CAT_COLORS.length]+"33":"#0d1b3e";e.currentTarget.style.borderColor=current.category===cat?CAT_COLORS[i%CAT_COLORS.length]:CAT_COLORS[i%CAT_COLORS.length]+"44";}}>
                   {cat}
                 </button>
               ))}
