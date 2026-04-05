@@ -3099,6 +3099,53 @@ function BillCalendar() {
   );
 }
 
+// ─── TOOLS LIST & INDIVIDUAL TOOLS ───────────────────────────────────────────
+const TOOLS_LIST = [
+  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
+  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs",color:"#22d3ee"},
+  {id:"housing",label:"Housing Analysis",icon:"🏠",sub:"Rent vs. Buy & Mortgage Qualifier",color:"#a78bfa"},
+  {id:"networth",label:"Net Worth",icon:"📊",sub:"Assets minus liabilities",color:"#60a5fa"},
+  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month",color:"#facc15"},
+  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Payments and interest on any loan",color:"#fb923c"},
+  {id:"cashflow",label:"Cash Flow",icon:"📅",sub:"90-day rolling cash flow ledger",color:"#22d3ee"},
+  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Fastest path to debt-free",color:"#f87171"},
+  {id:"tax",label:"Tax Estimator",icon:"🇨🇦",sub:"Estimate Canadian take-home pay",color:"#4ade80"},
+];
+
+function IndividualTools({onHome,data,user,token}) {
+  const [tool,setTool]=useState(null);
+  if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
+  if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
+  if(tool==="housing") return <ToolWrapper title="Housing Analysis" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-housing"><HousingAnalysis data={data} user={user} token={token}/></ToolWrapper>;
+  if(tool==="networth") return <ToolWrapper title="Net Worth Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data}/></ToolWrapper>;
+  if(tool==="savings") return <ToolWrapper title="Savings Goal" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data}/></ToolWrapper>;
+  if(tool==="loc") return <ToolWrapper title="Loan Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate=""/></ToolWrapper>;
+  if(tool==="cashflow") return <ToolWrapper title="Cash Flow" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar/></ToolWrapper>;
+  if(tool==="debtopt") return <ToolWrapper title="Debt Optimizer" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
+  if(tool==="tax") return <ToolWrapper title="Canadian Tax Estimator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-tax"><CanadianTaxEstimator data={data}/></ToolWrapper>;
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+      <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
+      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
+        <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Tap a tool to get started.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          {TOOLS_LIST.map(t=>(
+            <button key={t.id} onClick={()=>setTool(t.id)}
+              style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:16,padding:"20px 8px 16px",cursor:"pointer",textAlign:"center",color:"#e8e4d9",width:"100%",transition:"transform 0.2s,box-shadow 0.2s,border-color 0.2s",display:"flex",flexDirection:"column",alignItems:"center",gap:8,...GS}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 24px ${t.color}33`;e.currentTarget.style.borderColor=t.color+"66";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#1e3a5f";}}>
+              <div style={{fontSize:32,marginBottom:2}}>{t.icon}</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS}}>{t.label}</div>
+              <div style={{fontSize:10,color:"#6b8cce",lineHeight:1.4,marginTop:2}}>{t.sub}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── SNAPSHOT BAR ─────────────────────────────────────────────────────────────
 function SnapshotBar({user,token,toolId,getInputs}) {
   const [name,setName]=useState("");
