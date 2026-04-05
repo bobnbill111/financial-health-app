@@ -2804,283 +2804,300 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
   );
 }
 
-// ─── BILL / CASH FLOW CALENDAR ────────────────────────────────────────────────
-// Each entry: { id, name, amount, day, type:"credit"|"debit", repeat:"none"|"monthly"|"biweekly"|"weekly" }
-function BillCalendar({income}) {
-  const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const now = new Date();
-  const [month,setMonth]=useState(now.getMonth());
-  const [year,setYear]=useState(now.getFullYear());
-  const [entries,setEntries]=useState([]);
+// ─── CASH FLOW LEDGER ─────────────────────────────────────────────────────────
+function BillCalendar() {
+  const today=new Date();
+  const todayStr=today.toISOString().split("T")[0];
+
+  // Load saved entries from localStorage
+  const loadEntries=()=>{try{return JSON.parse(localStorage.getItem("fh_cashflow_entries")||"[]");}catch{return [];}};
+  const saveEntries=(e)=>{try{localStorage.setItem("fh_cashflow_entries",JSON.stringify(e));}catch{}};
+  const loadBalance=()=>{try{return localStorage.getItem("fh_cashflow_balance")||"";}catch{return "";}};
+  const saveBalance=(b)=>{try{localStorage.setItem("fh_cashflow_balance",b);}catch{}};
+
+  const [startingBalance,setStartingBalance]=useState(loadBalance);
+  const [entries,setEntries]=useState(loadEntries);
   const [showAdd,setShowAdd]=useState(false);
 
-  // Build rows for selected month: expand repeating entries
-  const daysInMonth = new Date(year, month+1, 0).getDate();
-  const monthLabel = `${MONTHS[month]} ${year}`;
+  // New entry form state
+  const [newDesc,setNewDesc]=useState("");
+  const [newAmt,setNewAmt]=useState("");
+  const [newType,setNewType]=useState("debit"); // debit or credit
+  const [newDate,setNewDate]=useState(todayStr);
+  const [isRecurring,setIsRecurring]=useState(false);
+  const [recurFreq,setRecurFreq]=useState("monthly"); // monthly|biweekly|weekly|daily
+  const [recurStart,setRecurStart]=useState(todayStr);
 
-  const rows = [];
-  entries.forEach(e => {
-    const day = Number(e.day);
-    if(e.repeat==="none"||!e.repeat) {
-      if(e.month===month&&e.year===year) rows.push({...e, displayDay:`${month+1}/${day}`});
-    } else if(e.repeat==="monthly") {
-      if(day<=daysInMonth) rows.push({...e, displayDay:`${month+1}/${day}`});
-    } else if(e.repeat==="biweekly") {
-      let d=day;
-      while(d<=daysInMonth){rows.push({...e,displayDay:`${month+1}/${d}`,_d:d});d+=14;}
-    } else if(e.repeat==="weekly") {
-      let d=day%7||7;
-      while(d<=daysInMonth){rows.push({...e,displayDay:`${month+1}/${d}`,_d:d});d+=7;}
-    }
-  });
+  const persistEntries=(e)=>{setEntries(e);saveEntries(e);};
+  const persistBalance=(b)=>{setStartingBalance(b);saveBalance(b);};
 
-  // Sort by day number
-  const sorted = rows.sort((a,b)=>{
-    const da=Number((a._d||a.day));
-    const db=Number((b._d||b.day));
-    return da-db;
-  });
-
-  // Build running total rows like the spreadsheet
-  const startBalance = entries.find(e=>e.isBalance)?.amount||"0";
-  let running = Number(startBalance);
-  const tableRows = sorted.map(row=>{
-    const amt = Number(row.amount||0);
-    if(row.type==="credit") running+=amt;
-    else running-=amt;
-    return {...row, running};
-  });
-
-  const totalIn=sorted.filter(r=>r.type==="credit").reduce((s,r)=>s+Number(r.amount||0),0);
-  const totalOut=sorted.filter(r=>r.type==="debit").reduce((s,r)=>s+Number(r.amount||0),0);
-
-  const deleteEntry = (id) => setEntries(p=>p.filter(e=>e.id!==id));
-
-  return (
-    <div>
-      {/* Month navigator */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-        <button onClick={()=>{if(month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1);}} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,color:"#8fadd4",padding:"6px 12px",cursor:"pointer",fontSize:16,...GS}}>‹</button>
-        <div style={{fontSize:16,color:"#e8e4d9",fontWeight:"bold",...GS}}>{monthLabel}</div>
-        <button onClick={()=>{if(month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1);}} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,color:"#8fadd4",padding:"6px 12px",cursor:"pointer",fontSize:16,...GS}}>›</button>
-      </div>
-
-      {/* Summary row */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
-        {[{label:"INCOME",val:totalIn,color:"#4ade80"},{label:"EXPENSES",val:totalOut,color:"#f87171"},{label:"NET",val:totalIn-totalOut,color:totalIn-totalOut>=0?"#4ade80":"#f87171"}].map(x=>(
-          <div key={x.label} style={{background:"#0d1b3e",borderRadius:10,padding:"10px 8px",textAlign:"center"}}>
-            <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{x.label}</div>
-            <div style={{fontSize:14,color:x.color,fontWeight:"bold"}}>{fmtShort(x.val)}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Starting balance card */}
-      <div style={{background:"#0d1b3e",borderRadius:10,padding:"10px 14px",marginBottom:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{fontSize:12,color:"#6b8cce"}}>Starting Balance</div>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{color:"#6b8cce",fontSize:13}}>$</span>
-          <input type="number" value={startBalance} onChange={e=>setEntries(p=>{const existing=p.find(x=>x.isBalance);if(existing) return p.map(x=>x.isBalance?{...x,amount:e.target.value}:x);return [...p,{id:"balance",isBalance:true,amount:e.target.value}];})} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:100,textAlign:"right",...GS}}/>
-        </div>
-      </div>
-
-      {/* Table */}
-      {tableRows.length===0?(
-        <div style={{textAlign:"center",padding:"30px 0",color:"#6b8cce",fontSize:13}}>
-          No entries yet for {monthLabel}.<br/>Add income or expenses below.
-        </div>
-      ):(
-        <div style={{background:"#0d1b3e",borderRadius:12,overflow:"hidden",marginBottom:14}}>
-          {/* Header */}
-          <div style={{display:"grid",gridTemplateColumns:"52px 1fr 80px 80px 80px 32px",background:"#1e3a5f",padding:"8px 10px"}}>
-            {["Date","Description","Debit","Credit","Total",""].map(h=>(
-              <div key={h} style={{fontSize:9,color:"#6b8cce",letterSpacing:1,textAlign:h==="Description"?"left":"right",...GS}}>{h}</div>
-            ))}
-          </div>
-          {tableRows.map((row,i)=>(
-            <div key={i} style={{display:"grid",gridTemplateColumns:"52px 1fr 80px 80px 80px 32px",padding:"7px 10px",borderBottom:"1px solid #111827",background:i%2===0?"#0d1b3e":"#0f1e3a",alignItems:"center"}}>
-              <div style={{fontSize:11,color:"#6b8cce",...GS}}>{row.displayDay}</div>
-              <div style={{fontSize:12,color:"#e8e4d9",...GS}}>
-                {row.name}
-                {row.repeat&&row.repeat!=="none"&&<span style={{fontSize:9,color:"#a78bfa",marginLeft:6,border:"1px solid #a78bfa44",borderRadius:10,padding:"1px 5px"}}>{row.repeat}</span>}
-              </div>
-              <div style={{fontSize:11,color:"#f87171",textAlign:"right",...GS}}>{row.type==="debit"?fmt(row.amount):""}</div>
-              <div style={{fontSize:11,color:"#4ade80",textAlign:"right",...GS}}>{row.type==="credit"?fmt(row.amount):""}</div>
-              <div style={{fontSize:11,color:row.running>=0?"#e8e4d9":"#f87171",textAlign:"right",fontWeight:"bold",...GS}}>{fmt(row.running)}</div>
-              <button onClick={()=>deleteEntry(row.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:14,textAlign:"center",opacity:0.6,padding:0}} title="Delete">×</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add entry */}
-      <button onClick={()=>setShowAdd(p=>!p)} style={{width:"100%",background:"#0d1b3e",border:"1px dashed #2a4080",borderRadius:10,color:"#8fadd4",padding:"11px",fontSize:13,cursor:"pointer",marginBottom:10,...GS}}>
-        {showAdd?"▲ Cancel":"+ Add Income / Expense"}
-      </button>
-      {showAdd&&<AddBillEntry month={month} year={year} onAdd={entry=>{setEntries(p=>[...p,entry]);setShowAdd(false);}}/>}
-    </div>
-  );
-}
-
-function AddBillEntry({month,year,onAdd}) {
-  const [name,setName]=useState("");
-  const [amount,setAmount]=useState("");
-  const [day,setDay]=useState("");
-  const [type,setType]=useState("debit");
-  const [repeat,setRepeat]=useState("none");
-
-  const add=()=>{
-    if(!name.trim()||!amount||!day) return;
-    onAdd({
-      id:Date.now()+"_"+Math.random(),
-      name:name.trim(), amount, day:String(Number(day)),
-      type, repeat, month, year,
-    });
-    setName("");setAmount("");setDay("");setRepeat("none");
+  const addEntry=()=>{
+    if(!newDesc.trim()||!newAmt) return;
+    const entry={
+      id:Date.now(),
+      desc:newDesc.trim(),
+      amount:Number(newAmt),
+      type:newType,
+      recurring:isRecurring,
+      freq:isRecurring?recurFreq:null,
+      date:isRecurring?recurStart:newDate,
+    };
+    persistEntries([...entries,entry]);
+    setNewDesc("");setNewAmt("");setNewType("debit");setNewDate(todayStr);
+    setIsRecurring(false);setRecurFreq("monthly");setRecurStart(todayStr);
+    setShowAdd(false);
   };
 
-  return (
-    <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:12,padding:"16px",marginBottom:14}}>
-      <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:12,...GS}}>NEW ENTRY</div>
+  const removeEntry=(id)=>persistEntries(entries.filter(e=>e.id!==id));
 
-      {/* Type toggle */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        {[{val:"debit",label:"💸 Expense",color:"#f87171"},{val:"credit",label:"💰 Income",color:"#4ade80"}].map(t=>(
-          <button key={t.val} onClick={()=>setType(t.val)} style={{background:type===t.val?(t.val==="credit"?"#0d2a1a":"#1a0d0d"):"#0d1b3e",border:`1px solid ${type===t.val?t.color:"#2a4080"}`,borderRadius:8,padding:"10px",cursor:"pointer",color:t.color,fontSize:13,fontWeight:type===t.val?"bold":"normal",...GS}}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+  // Build 90-day rolling rows from today
+  const buildRows=()=>{
+    const rows=[];
+    const endDate=new Date(today);
+    endDate.setDate(endDate.getDate()+90);
 
-      {/* Name + Amount */}
-      <div style={{marginBottom:10}}>
-        <Label>Description</Label>
-        <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Payday, Rent, Bell..." style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        <div>
-          <Label>Amount</Label>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-            <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-            <input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:type==="credit"?"#4ade80":"#f87171",fontSize:15,width:"100%",...GS}}/>
-          </div>
-        </div>
-        <div>
-          <Label>Day of Month</Label>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-            <input type="number" value={day} onChange={e=>setDay(e.target.value)} placeholder="1–31" min="1" max="31" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
-          </div>
-        </div>
-      </div>
+    // Expand all entries into dated rows
+    entries.forEach(entry=>{
+      const startD=new Date(entry.date+"T12:00:00");
+      if(!entry.recurring){
+        if(startD>=today&&startD<=endDate){
+          rows.push({id:entry.id+"-"+entry.date,entryId:entry.id,date:startD,desc:entry.desc,amount:entry.amount,type:entry.type,recurring:false});
+        }
+      } else {
+        let cur=new Date(startD);
+        // Step forward to today if start is in the past
+        while(cur<today){
+          if(entry.freq==="daily") cur.setDate(cur.getDate()+1);
+          else if(entry.freq==="weekly") cur.setDate(cur.getDate()+7);
+          else if(entry.freq==="biweekly") cur.setDate(cur.getDate()+14);
+          else cur.setMonth(cur.getMonth()+1);
+        }
+        while(cur<=endDate){
+          rows.push({id:entry.id+"-"+cur.toISOString(),entryId:entry.id,date:new Date(cur),desc:entry.desc,amount:entry.amount,type:entry.type,recurring:true,freq:entry.freq});
+          if(entry.freq==="daily") cur.setDate(cur.getDate()+1);
+          else if(entry.freq==="weekly") cur.setDate(cur.getDate()+7);
+          else if(entry.freq==="biweekly") cur.setDate(cur.getDate()+14);
+          else cur.setMonth(cur.getMonth()+1);
+        }
+      }
+    });
 
-      {/* Repeat */}
-      <div style={{marginBottom:14}}>
-        <Label>Repeating</Label>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
-          {[{val:"none",label:"Once"},{val:"monthly",label:"Monthly"},{val:"biweekly",label:"Bi-weekly"},{val:"weekly",label:"Weekly"}].map(r=>(
-            <button key={r.val} onClick={()=>setRepeat(r.val)} style={{background:repeat===r.val?"#1a4080":"#0d1b3e",border:`1px solid ${repeat===r.val?"#60a5fa":"#2a4080"}`,borderRadius:8,padding:"7px 4px",cursor:"pointer",color:repeat===r.val?"#60a5fa":"#8fadd4",fontSize:10,...GS}}>
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    // Sort by date
+    rows.sort((a,b)=>a.date-b.date);
+    return rows;
+  };
 
-      <button onClick={add} style={{width:"100%",background:"linear-gradient(135deg,#1a4080,#0d2a5e)",border:"1px solid #2a4080",borderRadius:8,color:"#4ade80",padding:"12px",fontSize:13,cursor:"pointer",...GS}}>
-        Add to Calendar
-      </button>
-    </div>
-  );
-}
+  const rows=buildRows();
 
-// ─── SCORE HISTORY ─────────────────────────────────────────────────────────────
-function ScoreHistory({history,currentScore,onSave}) {
-  if(history.length===0) return (
-    <div>
-      <div style={{textAlign:"center",padding:"30px 0"}}>
-        <div style={{fontSize:40,marginBottom:12}}>📈</div>
-        <p style={{color:"#8fadd4",lineHeight:1.8}}>No score history yet. Complete your appointment and save your score to start tracking progress month over month.</p>
-      </div>
-      {currentScore&&<button onClick={onSave} style={{width:"100%",background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:10,color:"#4ade80",padding:"13px",fontSize:13,cursor:"pointer",...GS}}>Save Current Score ({currentScore.grade} · {currentScore.total}/100)</button>}
-    </div>
-  );
-  const chartData=history.map(h=>({date:h.date,score:h.score}));
+  // Calculate running total
+  let running=Number(startingBalance||0);
+  const rowsWithTotal=rows.map(row=>{
+    if(row.type==="credit") running+=row.amount;
+    else running-=row.amount;
+    return {...row,runningTotal:running};
+  });
+
+  const fmtDate=(d)=>{
+    const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${d.getDate()}/${d.getMonth()+1}`;
+  };
+  const fmtFull=(d)=>`${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]} ${d.getDate()}`;
+
+  const FREQ_LABELS={monthly:"Monthly",biweekly:"Bi-Weekly",weekly:"Weekly",daily:"Daily"};
+
   return (
     <div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2}}>SCORE OVER TIME</div>
-        {currentScore&&<button onClick={onSave} style={{background:"#0d2a1a",border:"1px solid #4ade80",borderRadius:8,color:"#4ade80",padding:"6px 12px",fontSize:11,cursor:"pointer",...GS}}>Save Today's Score</button>}
-      </div>
-      <ResponsiveContainer width="100%" height={160}>
-        <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
-          <XAxis dataKey="date" stroke="#6b8cce" tick={{fontSize:9,...GS}}/>
-          <YAxis domain={[0,100]} stroke="#6b8cce" tick={{fontSize:9,...GS}}/>
-          <Tooltip contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#4ade80"}}/>
-          <Line type="monotone" dataKey="score" stroke="#4ade80" strokeWidth={2} dot={{fill:"#4ade80",r:4}}/>
-        </LineChart>
-      </ResponsiveContainer>
-      <div style={{marginTop:14}}>
-        {[...history].reverse().map((h,i)=>(
-          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #1e3a5f"}}>
-            <div style={{fontSize:12,color:"#8fadd4"}}>{h.date}</div>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <div style={{fontSize:16,color:h.gradeColor,fontWeight:"bold"}}>{h.grade}</div>
-              <div style={{fontSize:12,color:"#6b8cce"}}>{h.score}/100</div>
+      {/* Starting balance */}
+      <Card>
+        <SecTitle>Starting Balance</SecTitle>
+        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
+          <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+          <input type="number" value={startingBalance} onChange={e=>persistBalance(e.target.value)}
+            placeholder="e.g. 2,500.00"
+            style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:22,width:"100%",...GS}}/>
+        </div>
+        <div style={{fontSize:11,color:"#6b8cce",marginTop:6}}>Your current bank balance — the ledger starts here</div>
+      </Card>
+
+      {/* Add entry button */}
+      {!showAdd?(
+        <button onClick={()=>setShowAdd(true)} style={{width:"100%",background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",borderRadius:12,padding:"14px",color:"#4ade80",cursor:"pointer",fontSize:14,marginBottom:14,...GS}}>
+          + Add Entry
+        </button>
+      ):(
+        <Card style={{border:"1px solid #4ade8044",marginBottom:14}}>
+          <div style={{fontSize:10,color:"#4ade80",letterSpacing:2,marginBottom:12}}>NEW ENTRY</div>
+
+          {/* Description */}
+          <div style={{marginBottom:10}}>
+            <Label>Description</Label>
+            <input value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="e.g. Payday, Rent, Mastercard..."
+              style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+          </div>
+
+          {/* Amount + Type */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <Label>Amount</Label>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+                <input type="number" value={newAmt} onChange={e=>setNewAmt(e.target.value)} placeholder="0.00"
+                  style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+              </div>
+            </div>
+            <div>
+              <Label>Type</Label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                {[{val:"debit",label:"💸 Out",color:"#f87171"},{val:"credit",label:"💰 In",color:"#4ade80"}].map(t=>(
+                  <button key={t.val} onClick={()=>setNewType(t.val)}
+                    style={{background:newType===t.val?t.color+"22":"#0d1b3e",border:`1px solid ${newType===t.val?t.color:"#2a4080"}`,borderRadius:8,padding:"9px 4px",cursor:"pointer",color:t.color,fontSize:12,...GS}}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
-// ─── INDIVIDUAL TOOLS HUB ─────────────────────────────────────────────────────
-const TOOLS_LIST = [
-  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
-  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs",color:"#22d3ee"},
-  {id:"housing",label:"Housing Analysis",icon:"🏠",sub:"Rent vs. Buy & Mortgage Qualifier",color:"#a78bfa"},
-  {id:"networth",label:"Net Worth",icon:"📊",sub:"Assets minus liabilities",color:"#60a5fa"},
-  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month",color:"#facc15"},
-  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Payments and interest on any loan",color:"#fb923c"},
-  {id:"cashflow",label:"Cash Flow",icon:"📅",sub:"Map income and bills monthly",color:"#22d3ee"},
-  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Fastest path to debt-free",color:"#f87171"},
-  {id:"tax",label:"Tax Estimator",icon:"🇨🇦",sub:"Estimate Canadian take-home pay",color:"#4ade80"},
-];
+          {/* Date (one-time) or Recurring toggle */}
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <Label>Date</Label>
+              <button onClick={()=>setIsRecurring(p=>!p)}
+                style={{background:isRecurring?"#1a4080":"#0d1b3e",border:`1px solid ${isRecurring?"#60a5fa":"#2a4080"}`,borderRadius:20,padding:"4px 12px",cursor:"pointer",color:isRecurring?"#60a5fa":"#6b8cce",fontSize:11,...GS}}>
+                🔄 Recurring{isRecurring?" ✓":""}
+              </button>
+            </div>
+            {!isRecurring?(
+              <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)}
+                style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+            ):(
+              <div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
+                  <div>
+                    <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>START DATE</div>
+                    <input type="date" value={recurStart} onChange={e=>setRecurStart(e.target.value)}
+                      style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>FREQUENCY</div>
+                    <select value={recurFreq} onChange={e=>setRecurFreq(e.target.value)}
+                      style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",...GS}}>
+                      {["monthly","biweekly","weekly","daily"].map(f=>(
+                        <option key={f} value={f}>{FREQ_LABELS[f]}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
-function IndividualTools({onHome,data,user,token}) {
-  const [tool,setTool]=useState(null);
-  if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
-  if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
-  if(tool==="housing") return <ToolWrapper title="Housing Analysis" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-housing"><HousingAnalysis data={data} user={user} token={token}/></ToolWrapper>;
-  if(tool==="networth") return <ToolWrapper title="Net Worth Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-networth"><StandaloneNetWorth prefill={data}/></ToolWrapper>;
-  if(tool==="savings") return <ToolWrapper title="Savings Goal" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-savings"><SavingsGoalCalc prefill={data}/></ToolWrapper>;
-  if(tool==="loc") return <ToolWrapper title="Loan Simulator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-loc"><LOCSimulator rate=""/></ToolWrapper>;
-  if(tool==="cashflow") return <ToolWrapper title="Cash Flow Calendar" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-cashflow"><BillCalendar income={data.budget.income}/></ToolWrapper>;
-  if(tool==="debtopt") return <ToolWrapper title="Debt Optimizer" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-debtopt"><DebtOptimizer creditCards={data.creditCards} otherDebts={data.otherDebts} locs={data.locs}/></ToolWrapper>;
-  if(tool==="tax") return <ToolWrapper title="Canadian Tax Estimator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-tax"><CanadianTaxEstimator data={data}/></ToolWrapper>;
-
-  return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
-      <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
-      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
-        <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Tap a tool to get started.</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          {TOOLS_LIST.map(t=>(
-            <button key={t.id} onClick={()=>setTool(t.id)}
-              style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:16,padding:"20px 8px 16px",cursor:"pointer",textAlign:"center",color:"#e8e4d9",width:"100%",transition:"transform 0.2s,box-shadow 0.2s,border-color 0.2s",display:"flex",flexDirection:"column",alignItems:"center",gap:8,...GS}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 24px ${t.color}33`;e.currentTarget.style.borderColor=t.color+"66";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#1e3a5f";}}>
-              <div style={{fontSize:32,marginBottom:2}}>{t.icon}</div>
-              <div style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS}}>{t.label}</div>
-              <div style={{fontSize:10,color:"#6b8cce",lineHeight:1.4,marginTop:2}}>{t.sub}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button onClick={addEntry} disabled={!newDesc.trim()||!newAmt}
+              style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:10,padding:"11px",color:"#4ade80",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>
+              Add to Ledger
             </button>
+            <button onClick={()=>{setShowAdd(false);setNewDesc("");setNewAmt("");setIsRecurring(false);}}
+              style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+              Cancel
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Ledger table */}
+      <Card style={{padding:"0",overflow:"hidden"}}>
+        {/* Header */}
+        <div style={{background:"#4ade80",padding:"10px 14px",textAlign:"center"}}>
+          <div style={{fontSize:13,color:"#0a0f1e",fontWeight:"bold",...GS}}>Cash Flow by Date</div>
+          <div style={{fontSize:10,color:"#0a0f1e",marginTop:2,opacity:0.7}}>
+            {fmtFull(today)} → {fmtFull(new Date(today.getFullYear(),today.getMonth(),today.getDate()+90))} (90 days)
+          </div>
+        </div>
+        {/* Column headers */}
+        <div style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",background:"#0d1b3e",padding:"8px 10px",gap:4,borderBottom:"1px solid #1e3a5f"}}>
+          {["Date","Description","Debit","Credit","Total"].map(h=>(
+            <div key={h} style={{fontSize:10,color:"#6b8cce",letterSpacing:1,textAlign:h==="Date"||h==="Description"?"left":"right",textDecoration:"underline",...GS}}>{h}</div>
           ))}
         </div>
-      </div>
+
+        {/* Starting balance row */}
+        {startingBalance&&(
+          <div style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",padding:"8px 10px",gap:4,background:"#111827",borderBottom:"1px solid #1e3a5f"}}>
+            <div style={{fontSize:11,color:"#6b8cce"}}>{fmtDate(today)}</div>
+            <div style={{fontSize:11,color:"#8fadd4",fontStyle:"italic"}}>Opening Balance</div>
+            <div style={{fontSize:11,textAlign:"right"}}></div>
+            <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>{fmt(Number(startingBalance))}</div>
+            <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>{fmt(Number(startingBalance))}</div>
+          </div>
+        )}
+
+        {rowsWithTotal.length===0&&(
+          <div style={{padding:"32px 16px",textAlign:"center",color:"#6b8cce",fontSize:13}}>
+            No entries yet — add your first entry above
+          </div>
+        )}
+
+        {/* Entry rows */}
+        {rowsWithTotal.map((row,i)=>{
+          const isNeg=row.runningTotal<0;
+          const isToday=row.date.toDateString()===today.toDateString();
+          return (
+            <div key={row.id} style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",padding:"7px 10px",gap:4,background:i%2===0?"#111827":"#0f1627",borderBottom:"1px solid #1e3a5f",alignItems:"center"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#1a2235"}
+              onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#111827":"#0f1627"}>
+              <div style={{fontSize:11,color:isToday?"#facc15":"#6b8cce",fontWeight:isToday?"bold":"normal"}}>{fmtDate(row.date)}</div>
+              <div style={{fontSize:11,color:"#e8e4d9",display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.desc}</span>
+                {row.recurring&&<span style={{fontSize:8,color:"#60a5fa",flexShrink:0,border:"1px solid #60a5fa44",borderRadius:4,padding:"1px 4px"}}>{row.freq?.slice(0,2).toUpperCase()}</span>}
+              </div>
+              <div style={{fontSize:11,color:"#f87171",textAlign:"right",fontWeight:"bold"}}>
+                {row.type==="debit"?fmt(row.amount):""}
+              </div>
+              <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>
+                {row.type==="credit"?fmt(row.amount):""}
+              </div>
+              <div style={{fontSize:12,color:isNeg?"#f87171":"#e8e4d9",textAlign:"right",fontWeight:"bold",...GS,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+                {isNeg&&<span style={{fontSize:8,color:"#f87171"}}>⚠</span>}
+                {fmt(row.runningTotal)}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Ending balance */}
+        {rowsWithTotal.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",padding:"10px 10px",gap:4,background:"#0d2a1a",borderTop:"2px solid #4ade8044",alignItems:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce"}}></div>
+            <div style={{fontSize:11,color:"#4ade80",fontWeight:"bold",...GS}}>90-Day Ending Balance</div>
+            <div></div><div></div>
+            <div style={{fontSize:14,color:rowsWithTotal[rowsWithTotal.length-1].runningTotal<0?"#f87171":"#4ade80",textAlign:"right",fontWeight:"bold",...GS}}>
+              {fmt(rowsWithTotal[rowsWithTotal.length-1].runningTotal)}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Entry management */}
+      {entries.length>0&&(
+        <Card>
+          <SecTitle>Manage Entries</SecTitle>
+          {entries.map(e=>(
+            <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"8px 12px",marginBottom:6}}>
+              <div>
+                <div style={{fontSize:13,color:"#e8e4d9",...GS}}>{e.desc}</div>
+                <div style={{fontSize:10,color:e.type==="credit"?"#4ade80":"#f87171",marginTop:2}}>
+                  {e.type==="credit"?"+ ":"- "}{fmt(e.amount)} · {e.recurring?`${FREQ_LABELS[e.freq]} from ${e.date}`:e.date}
+                </div>
+              </div>
+              <button onClick={()=>removeEntry(e.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }
-
 
 // ─── SNAPSHOT BAR ─────────────────────────────────────────────────────────────
 function SnapshotBar({user,token,toolId,getInputs}) {
