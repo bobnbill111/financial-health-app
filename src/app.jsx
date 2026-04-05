@@ -888,7 +888,7 @@ function FinancialPrescription({score,data,totalInv}) {
   const income=Number(data.budget.income||0);
   const totalAlloc=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const surplus=income-totalAlloc;
-  const totalCC=data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalCC=data.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
   const invAmt=score.invMonthly||0;
   const grossMonthly=score.grossMonthly||income;
   const invRate=score.invRate||0;
@@ -957,7 +957,7 @@ function FinancialPrescription({score,data,totalInv}) {
 // ─── POST-SCORE TOOLS ─────────────────────────────────────────────────────────
 function PostScoreTools({data,onCheckup,saveScore,score}) {
   const [openTool,setOpenTool]=useState(null);
-  const totalCC=data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalCC=data.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
   const totalOD=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
   const hasDebts=totalCC>0||totalOD>0||(data.locs||[]).some(l=>Number(l.balance||0)>0);
   const hasSavings=(data.savingsAccounts||[]).some(a=>Number(a.goal||0)>0);
@@ -1113,7 +1113,7 @@ function ScoreGuidance({score,data,totalInv}) {
   const income = Number(data.budget.income||0);
   const totalAlloc = data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const surplus = income - totalAlloc;
-  const totalCC = data.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalCC = data.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
   const totalOD = (data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
   const efund = (data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp = totalAlloc;
@@ -2246,13 +2246,137 @@ function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, inco
 
 const DASH_TABS=["Overview","Goals","Investments","Budget","Savings","Debt","Mortgage","Cash Flow","Score History"];
 
+// ─── GOALS TAB ────────────────────────────────────────────────────────────────
+function GoalsTab({data,totalInv,scoreHistory}) {
+  const income=Number(data.budget.income||0);
+  const grossMonthly=Number(data.income?.grossSalary||0)>0?Number(data.income.grossSalary)/12:income;
+  const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const monthlyExp=data.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+  const efundTarget=monthlyExp*3;
+  const fhsa=(data.investments?.fhsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+  const totalDebt=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+    +(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
+    +(data.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const invMonthly=Number(data.budget.investmentMonthly||0);
+  const invRate=grossMonthly>0?(invMonthly/grossMonthly)*100:0;
+  const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
+
+  const GOALS=[
+    {
+      id:"home",icon:"🏠",label:"Buy a Home",
+      desc:"Build your FHSA and emergency fund while keeping debt low",
+      items:[
+        {label:"FHSA Balance",val:fhsa,target:40000,fmt:v=>fmtShort(v)},
+        {label:"Emergency Fund (3 months)",val:Math.min(efund,efundTarget),target:Math.max(efundTarget,1),fmt:v=>fmtShort(v)},
+        {label:"Non-mortgage debt cleared",val:totalDebt===0?1:0,target:1,fmt:()=>totalDebt===0?"✅ Debt free":"Paying down debt"},
+      ],
+      done:fhsa>=40000&&efund>=efundTarget&&totalDebt===0,
+    },
+    {
+      id:"efund",icon:"🛡️",label:"Fully Fund Emergency Fund",
+      desc:`Save 3 months of expenses${efundTarget>0?" ("+fmtShort(efundTarget)+")":""}`,
+      items:[{label:"Emergency Fund",val:efund,target:Math.max(efundTarget,1),fmt:v=>fmtShort(v)}],
+      done:efund>=efundTarget&&efundTarget>0,
+    },
+    {
+      id:"debt",icon:"💳",label:"Pay Off All Non-Mortgage Debt",
+      desc:"Eliminate credit cards, lines of credit, and personal loans",
+      items:[{label:"Remaining Debt",val:totalDebt===0?1:Math.max(0,1-(totalDebt/Math.max(totalDebt,1))),target:1,fmt:()=>totalDebt===0?"✅ Debt free":fmtShort(totalDebt)+" remaining"}],
+      done:totalDebt===0,
+    },
+    {
+      id:"invest",icon:"📈",label:"Hit 25% Investment Rate",
+      desc:"Invest 25% of your gross income every month",
+      items:[{label:"Investment Rate",val:Math.min(invRate,25),target:25,fmt:v=>v.toFixed(1)+"%"}],
+      done:invRate>=25,
+    },
+    {
+      id:"fi",icon:"🏆",label:"Reach Financial Independence",
+      desc:"Portfolio reaches 25× your annual expenses (4% rule)",
+      items:[{label:"Portfolio vs FI Target",val:totalInv,target:Math.max(monthlyExp*12*25,1),fmt:v=>fmtShort(v)}],
+      done:monthlyExp>0&&totalInv>=monthlyExp*12*25,
+    },
+    {
+      id:"score",icon:"⭐",label:"Reach an A+ Score",
+      desc:"Achieve an A+ Financial Health Score (85+)",
+      items:[{label:"Current Score",val:latestScore?.score||0,target:85,fmt:v=>v+"/100"}],
+      done:(latestScore?.score||0)>=85,
+    },
+  ];
+
+  const active=GOALS.filter(g=>!g.done);
+  const completed=GOALS.filter(g=>g.done);
+
+  const GoalCard=({goal})=>(
+    <Card style={{opacity:goal.done?0.85:1}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <span style={{fontSize:26}}>{goal.icon}</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",...GS}}>{goal.label}</div>
+          <div style={{fontSize:11,color:"#6b8cce",marginTop:2,lineHeight:1.5}}>{goal.desc}</div>
+        </div>
+        {goal.done&&<span style={{fontSize:20}}>✅</span>}
+      </div>
+      {goal.items.map((item,i)=>{
+        const pct=Math.min(100,item.target>0?(item.val/item.target)*100:0);
+        return (
+          <div key={i} style={{marginBottom:i<goal.items.length-1?12:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{fontSize:12,color:"#8fadd4"}}>{item.label}</span>
+              <span style={{fontSize:12,color:pct>=100?"#4ade80":"#facc15",fontWeight:"bold",...GS}}>{item.fmt(item.val)}</span>
+            </div>
+            <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",background:pct>=100?"#4ade80":pct>=60?"#facc15":"#fb923c",borderRadius:4,transition:"width 0.5s"}}/>
+            </div>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:3}}>
+              {pct>=100?"Complete!":Math.round(pct)+"% — target: "+item.fmt(item.target)}
+            </div>
+          </div>
+        );
+      })}
+    </Card>
+  );
+
+  if(!income&&!totalInv) return (
+    <Card style={{textAlign:"center",padding:"32px 16px"}}>
+      <div style={{fontSize:36,marginBottom:12}}>📋</div>
+      <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",marginBottom:8}}>Complete your Check-Up Appointment first</div>
+      <div style={{fontSize:13,color:"#6b8cce",lineHeight:1.7}}>Your goals will auto-populate once you've entered your financial information.</div>
+    </Card>
+  );
+
+  return (
+    <div>
+      {active.length===0&&completed.length>0&&(
+        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"24px"}}>
+          <div style={{fontSize:40,marginBottom:8}}>🎉</div>
+          <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>All goals complete!</div>
+          <div style={{fontSize:13,color:"#6b8cce",marginTop:6}}>You're in exceptional financial health.</div>
+        </Card>
+      )}
+      {active.length>0&&(
+        <div>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:12}}>IN PROGRESS</div>
+          {active.map(g=><GoalCard key={g.id} goal={g}/>)}
+        </div>
+      )}
+      {completed.length>0&&(
+        <div style={{marginTop:active.length>0?20:0}}>
+          <div style={{fontSize:10,color:"#4ade80",letterSpacing:3,marginBottom:12}}>COMPLETED ✅</div>
+          {completed.map(g=><GoalCard key={g.id} goal={g}/>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token}) {
   const [tab,setTab]=useState("Overview");
   const cash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const equity=Math.max(0,Number(d.mortgage.value||0)-Number(d.mortgage.balance||0));
   const totalAssets=cash+totalInv+Number(d.lifeInsurance||0)+savings+equity;
-  const totalCC=d.creditCards.reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const totalCC=d.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
   const totalOD=d.otherDebts.reduce((s,x)=>s+Number(x.balance||0),0);
   const totalLocBal=(d.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
   const totalLiab=totalCC+totalLocBal+Number(d.mortgage.balance||0)+totalOD;
@@ -2597,16 +2721,23 @@ function NetWorthProjection({totalInv,income,totalAlloc,netWorth}) {
 function DebtOptimizer({creditCards,otherDebts,locs}) {
   const [method,setMethod]=useState("avalanche");
   const [extra,setExtra]=useState("0");
-  const debts=[
-    ...creditCards.filter(c=>Number(c.totalBalance||0)>0).map(c=>({name:c.name,balance:Number(c.totalBalance),rate:19.99,minPayment:Math.max(25,Number(c.totalBalance)*0.03)})),
-    ...otherDebts.filter(x=>Number(x.balance||0)>0).map(x=>({name:x.name||x.type,balance:Number(x.balance),rate:Number(x.rate||5),minPayment:Number(x.payment||0)||Math.max(25,Number(x.balance)*0.02)})),
-    ...(locs||[]).filter(l=>Number(l.balance||0)>0).map(l=>({name:l.name||"Line of Credit",balance:Number(l.balance),rate:Number(l.rate||7),minPayment:Math.max(25,(Number(l.balance)*(Number(l.rate||7)/100))/12)})),
+
+  // Build initial debts with editable minPayments
+  const buildDebts=()=>[
+    ...creditCards.filter(c=>Number(c.totalBalance||0)>0&&!c.payInFull).map(c=>({name:c.name,balance:Number(c.totalBalance),rate:19.99,minPayment:String(Math.max(25,Math.round(Number(c.totalBalance)*0.03)))})),
+    ...otherDebts.filter(x=>Number(x.balance||0)>0).map(x=>({name:x.name||x.type,balance:Number(x.balance),rate:Number(x.rate||5),minPayment:String(Number(x.payment||0)||Math.max(25,Math.round(Number(x.balance)*0.02)))})),
+    ...(locs||[]).filter(l=>Number(l.balance||0)>0).map(l=>({name:l.name||"Line of Credit",balance:Number(l.balance),rate:Number(l.rate||7),minPayment:String(Math.max(25,Math.round((Number(l.balance)*(Number(l.rate||7)/100))/12)))})),
   ];
-  const sorted = [...debts].sort((a,b)=>method==="avalanche"?(b.rate-a.rate):(a.balance-b.balance));
-  const totalDebt=debts.reduce((s,x)=>s+x.balance,0);
-  const totalMin=debts.reduce((s,x)=>s+x.minPayment,0);
+  const [debts,setDebts]=useState(buildDebts);
+  const setMinPayment=(i,v)=>setDebts(p=>p.map((d,idx)=>idx===i?{...d,minPayment:v}:d));
+
+  const debtCalc=debts.map(d=>({...d,minPaymentNum:Math.max(0,Number(d.minPayment||0))}));
+  const sorted=[...debtCalc].sort((a,b)=>method==="avalanche"?(b.rate-a.rate):(a.balance-b.balance));
+  const totalDebt=debtCalc.reduce((s,x)=>s+x.balance,0);
+  const totalMin=debtCalc.reduce((s,x)=>s+x.minPaymentNum,0);
   const extraPayment=Number(extra||0);
-  if(debts.length===0) return <div style={{fontSize:12,color:"#6b8cce",textAlign:"center",padding:"10px 0"}}>No debts to optimize</div>;
+
+  if(debts.length===0) return <div style={{fontSize:12,color:"#6b8cce",textAlign:"center",padding:"10px 0"}}>No debts to optimize. Credit cards marked "pay in full" are excluded.</div>;
   return (
     <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -2617,12 +2748,35 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
           </button>
         ))}
       </div>
+
+      {/* Editable minimum payments */}
+      <Card>
+        <SecTitle>Your Debts & Minimum Payments</SecTitle>
+        <div style={{fontSize:11,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>Edit the minimum payment for each debt if needed.</div>
+        {debts.map((debt,i)=>(
+          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"center",marginBottom:10,background:"#0d1b3e",borderRadius:8,padding:"10px 12px"}}>
+            <div>
+              <div style={{fontSize:13,color:"#e8e4d9",marginBottom:2,...GS}}>{debt.name}</div>
+              <div style={{fontSize:11,color:"#6b8cce"}}>{debt.rate}% · {fmt(debt.balance)}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>MIN PAYMENT</div>
+              <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:6,padding:"5px 8px"}}>
+                <span style={{color:"#6b8cce",marginRight:3,fontSize:11}}>$</span>
+                <input type="number" value={debt.minPayment} onChange={e=>setMinPayment(i,e.target.value)}
+                  style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:13,width:60,textAlign:"right",...GS}}/>
+              </div>
+            </div>
+          </div>
+        ))}
+      </Card>
+
       <Label>Extra Monthly Payment</Label>
       <NumInput value={extra} onChange={setExtra} placeholder="0.00"/>
       <div style={{marginTop:14,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Total Debt</div><div style={{fontSize:16,color:"#f87171",fontWeight:"bold"}}>{fmt(totalDebt)}</div></div>
-          <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Min Payments</div><div style={{fontSize:16,color:"#facc15",fontWeight:"bold"}}>{fmt(totalMin)}</div></div>
+          <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Total Debt</div><div style={{fontSize:16,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalDebt)}</div></div>
+          <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Min Payments</div><div style={{fontSize:16,color:"#facc15",fontWeight:"bold",...GS}}>{fmt(totalMin)}</div></div>
         </div>
       </div>
       <div style={{fontSize:11,color:"#6b8cce",marginBottom:10,letterSpacing:2}}>PAYOFF ORDER ({method.toUpperCase()})</div>
@@ -2631,7 +2785,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
           <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#facc15":"#1e3a5f",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:i===0?"#0d1b3e":"#6b8cce",fontWeight:"bold",flexShrink:0}}>{i+1}</div>
           <div style={{flex:1}}>
             <div style={{fontSize:13,color:"#e8e4d9",marginBottom:2}}>{debt.name}</div>
-            <div style={{fontSize:11,color:"#6b8cce"}}>{debt.rate}% · {fmt(debt.balance)}</div>
+            <div style={{fontSize:11,color:"#6b8cce"}}>{debt.rate}% · {fmt(debt.balance)} · min {fmt(debt.minPaymentNum)}/mo</div>
           </div>
           {i===0&&<div style={{fontSize:10,color:"#facc15",border:"1px solid #facc1544",borderRadius:12,padding:"2px 8px"}}>FOCUS</div>}
         </div>
@@ -2639,7 +2793,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
       {extraPayment>0&&sorted[0]&&<div style={{marginTop:10,background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #1a4030",borderRadius:10,padding:"12px"}}>
         <div style={{fontSize:11,color:"#6b8cce",marginBottom:6}}>With {fmt(extraPayment)}/mo extra on {sorted[0].name}:</div>
         {(()=>{
-          const r=sorted[0].rate/100/12,b=sorted[0].balance,p=sorted[0].minPayment+extraPayment;
+          const r=sorted[0].rate/100/12,b=sorted[0].balance,p=sorted[0].minPaymentNum+extraPayment;
           if(r===0){const months=b/p;return <div style={{fontSize:13,color:"#4ade80"}}>Paid off in ~{Math.ceil(months)} months</div>;}
           const months=Math.log(p/(p-b*r))/Math.log(1+r);
           const interest=p*months-b;
@@ -3807,7 +3961,12 @@ function MortgageQualifier({data}) {
 // ─── CANADIAN TAX ESTIMATOR ───────────────────────────────────────────────────
 function CanadianTaxEstimator({data}) {
   const prefillSalary=Number(data?.income?.grossSalary||0)||Number(data?.budget?.income||0)*12||0;
+  const prefillSalary2=Number(data?.income2?.grossSalary||0)||0;
+  const isJoint=data?.isJoint||false;
+  const name1=data?.person1Name||data?.clientName||"Person 1";
+  const name2=data?.person2Name||"Person 2";
   const [salary,setSalary]=useState(String(Math.round(prefillSalary))||"");
+  const [salary2,setSalary2]=useState(String(Math.round(prefillSalary2))||"");
   const [province,setProvince]=useState("ON");
   const [rrspContrib,setRrspContrib]=useState("");
 
@@ -3856,37 +4015,36 @@ function CanadianTaxEstimator({data}) {
     return Math.max(0,tax);
   };
 
-  const gross=Number(salary||0);
-  const rrsp=Math.min(Number(rrspContrib||0),gross*0.18);
-  const taxableIncome=Math.max(0,gross-rrsp);
+  const calcPerson=(sal,rrspAmt)=>{
+    const g=Number(sal||0);
+    const r=Math.min(Number(rrspAmt||0),g*0.18);
+    const ti=Math.max(0,g-r);
+    const ft=Math.max(0,calcTax(ti,fedBrackets)-fedBPA*0.15);
+    const pb=provBrackets[province]||provBrackets.ON;
+    const pbpa={ON:11865,BC:11981,AB:21003,QC:17183,MB:15780,SK:17661,NS:8481,NB:12458,NL:10818,PE:12000}[province]||10000;
+    const pt=Math.max(0,calcTax(ti,pb)-pbpa*(pb[0].rate));
+    const cpp=g>0?Math.min((Math.min(g,68500)-3500)*0.0595,3867):0;
+    const ei=Math.min(g*0.0166,63200*0.0166);
+    const total=ft+pt+cpp+ei;
+    return {gross:g,fedTax:ft,provTax:pt,cpp,ei,total,netAnnual:Math.max(0,g-total),netMonthly:Math.max(0,g-total)/12,effectiveRate:g>0?(total/g)*100:0};
+  };
 
-  // Federal basic personal amount 2024: $15,705
   const fedBPA=15705;
-  const fedTax=Math.max(0,calcTax(taxableIncome,fedBrackets)-fedBPA*0.15);
-
-  // Provincial
+  const p1=calcPerson(salary,rrspContrib);
+  const p2=isJoint?calcPerson(salary2,""):null;
+  const gross=p1.gross;
+  const netMonthly=p1.netMonthly;
+  const netAnnual=p1.netAnnual;
+  const effectiveRate=p1.effectiveRate;
+  const marginalFed=p1.gross>220000?33:p1.gross>154906?29:p1.gross>111733?26:p1.gross>55867?20.5:15;
+  const fedTax=p1.fedTax, provTax=p1.provTax, cpp=p1.cpp, ei=p1.ei;
+  const rrsp=Math.min(Number(rrspContrib||0),gross*0.18);
   const provBracketData=provBrackets[province]||provBrackets.ON;
-  const provBPA={ON:11865,BC:11981,AB:21003,QC:17183,MB:15780,SK:17661,NS:8481,NB:12458,NL:10818,PE:12000}[province]||10000;
-  const provTax=Math.max(0,calcTax(taxableIncome,provBracketData)-provBPA*(provBracketData[0].rate));
-
-  // CPP 2024: 5.95% on earnings between $3,500 and $68,500
-  const cppRate=0.0595, cppMax=68500, cppExempt=3500;
-  const cpp=gross>0?Math.min((Math.min(gross,cppMax)-cppExempt)*cppRate,3867):0;
-
-  // EI 2024: 1.66% up to $63,200 insurable earnings
-  const eiRate=0.0166, eiMax=63200;
-  const ei=Math.min(gross*eiRate,eiMax*eiRate);
-
-  const totalDeductions=fedTax+provTax+cpp+ei;
-  const netAnnual=Math.max(0,gross-totalDeductions);
-  const netMonthly=netAnnual/12;
-  const effectiveRate=gross>0?(totalDeductions/gross)*100:0;
-  const marginalFed=taxableIncome>220000?33:taxableIncome>154906?29:taxableIncome>111733?26:taxableIncome>55867?20.5:15;
 
   return (
     <div>
       <Card>
-        <SecTitle>Your Income</SecTitle>
+        <SecTitle>{isJoint?`${name1}'s Income`:"Your Income"}</SecTitle>
         <div style={{marginBottom:12}}>
           <Label>Gross Annual Salary</Label>
           <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
@@ -3913,11 +4071,57 @@ function CanadianTaxEstimator({data}) {
         </div>
       </Card>
 
+      {/* Person 2 — joint only */}
+      {isJoint&&(
+        <Card>
+          <SecTitle>{name2}'s Income</SecTitle>
+          <div style={{marginBottom:12}}>
+            <Label>Gross Annual Salary</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #60a5fa66",borderRadius:10,padding:"12px 14px"}}>
+              <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
+              <input type="number" value={salary2} onChange={e=>setSalary2(e.target.value)} placeholder="60,000"
+                style={{background:"none",border:"none",outline:"none",color:"#60a5fa",fontSize:22,width:"100%",...GS}}/>
+            </div>
+          </div>
+          {p2&&p2.gross>0&&(
+            <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:12,color:"#8fadd4"}}>Estimated take-home</span>
+                <span style={{fontSize:14,color:"#60a5fa",fontWeight:"bold",...GS}}>{fmt(p2.netMonthly)}/mo</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,color:"#8fadd4"}}>Effective tax rate</span>
+                <span style={{fontSize:13,color:"#facc15",...GS}}>{p2.effectiveRate.toFixed(1)}%</span>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
       {gross>0&&(
         <>
-          {/* Summary card */}
+          {/* Combined summary for joint */}
+          {isJoint&&p2&&p2.gross>0&&(
+            <Card style={{background:"linear-gradient(135deg,#0d1a2e,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"20px 16px"}}>
+              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>COMBINED HOUSEHOLD TAKE-HOME</div>
+              <div style={{fontSize:36,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(p1.netMonthly+p2.netMonthly)}<span style={{fontSize:14,color:"#6b8cce"}}>/mo</span></div>
+              <div style={{fontSize:12,color:"#8fadd4",marginTop:4}}>{fmt(p1.netAnnual+p2.netAnnual)}/year combined</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+                <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px"}}>
+                  <div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>{name1.toUpperCase()}</div>
+                  <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(p1.netMonthly)}/mo</div>
+                </div>
+                <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px"}}>
+                  <div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>{name2.toUpperCase()}</div>
+                  <div style={{fontSize:15,color:"#60a5fa",fontWeight:"bold",...GS}}>{fmt(p2.netMonthly)}/mo</div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Person 1 summary card */}
           <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"24px 16px"}}>
-            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:4}}>ESTIMATED TAKE-HOME PAY</div>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:4}}>{isJoint?`${name1.toUpperCase()} — `:""}ESTIMATED TAKE-HOME PAY</div>
             <div style={{fontSize:42,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(netMonthly)}<span style={{fontSize:16,color:"#6b8cce"}}>/mo</span></div>
             <div style={{fontSize:14,color:"#8fadd4",marginTop:4}}>{fmt(netAnnual)} per year</div>
             <div style={{marginTop:12,fontSize:12,color:"#6b8cce"}}>Effective tax rate: <span style={{color:"#facc15",fontWeight:"bold"}}>{effectiveRate.toFixed(1)}%</span></div>
@@ -3925,7 +4129,7 @@ function CanadianTaxEstimator({data}) {
 
           {/* Breakdown */}
           <Card>
-            <SecTitle>Deduction Breakdown</SecTitle>
+            <SecTitle>{isJoint?`${name1} — `:""}Deduction Breakdown</SecTitle>
             {[
               {label:"Gross Income",val:gross,color:"#4ade80",bold:true},
               {label:`Federal Income Tax (marginal: ${marginalFed}%)`,val:-fedTax,color:"#f87171"},
@@ -4303,7 +4507,9 @@ function StatementImporter({onBack,onHome,budgetData}) {
   const monthTxns = transactions.filter(t=>t.month===selectedMonth&&!t.ignored);
   const unclassified = monthTxns.filter(t=>!t.category);
   const classified = monthTxns.filter(t=>t.category);
-  const current = unclassified[0];
+  // Use currentIdx to control which unclassified txn we're on — don't auto-advance
+  const safeIdx=Math.min(currentIdx,Math.max(0,unclassified.length-1));
+  const current = unclassified[safeIdx]||null;
   const progress = monthTxns.length>0 ? Math.round((classified.length/monthTxns.length)*100) : 0;
 
   // Spending by category for donut
@@ -4579,6 +4785,20 @@ function StatementImporter({onBack,onHome,budgetData}) {
                 </button>
               ))}
             </div>
+
+            {/* Remember buttons — shown when category is selected */}
+            {current.category&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <button onClick={()=>{alwaysRemember(current);setCurrentIdx(p=>p+1);}}
+                  style={{background:"#0d2a1a",border:"1px solid #4ade80",borderRadius:10,padding:"11px",color:"#4ade80",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
+                  ⚡ Remember & Next
+                </button>
+                <button onClick={()=>setCurrentIdx(p=>p+1)}
+                  style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+                  Next →
+                </button>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
@@ -5067,43 +5287,64 @@ function StandaloneNetWorth({prefill=null}) {
 function SavingsGoalCalc({prefill=null}) {
   const initGoals = () => {
     if(prefill?.savingsAccounts?.length>0){
-      return prefill.savingsAccounts.map(a=>({name:a.name,target:a.goal||"",saved:a.saved||"",date:""}));
+      return prefill.savingsAccounts.map(a=>({name:a.name,target:a.goal||"",saved:a.saved||"",months:""}));
     }
-    return [{name:"",target:"",saved:"",date:""}];
+    return [{name:"",target:"",saved:"",months:""}];
   };
   const [goals,setGoals]=useState(initGoals);
   return (
     <div>
-      <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.8,marginBottom:16}}>Enter your goal, how much you've saved, and your deadline — we'll calculate the monthly amount you need to save.</div>
+      <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.8,marginBottom:16}}>Enter your goal, how much you've saved, and how many months you have — we'll calculate the monthly amount you need to save.</div>
       {goals.map((g,i)=>{
         const setF=f=>v=>setGoals(p=>p.map((x,idx)=>idx===i?{...x,[f]:v}:x));
         const needed=Math.max(0,Number(g.target||0)-Number(g.saved||0));
-        const td=new Date(),target=g.date?new Date(g.date+"-01"):null;
-        const months=target?Math.max(1,((target.getFullYear()-td.getFullYear())*12+(target.getMonth()-td.getMonth()))):0;
-        const perMonth=months>0?needed/months:0;
+        const months=Math.max(1,Number(g.months||0));
+        const perMonth=g.months?needed/months:0;
         const pct=Number(g.target||0)>0?Math.min(100,(Number(g.saved||0)/Number(g.target||0))*100):0;
         return (
           <Card key={i}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}><div style={{fontSize:11,color:"#facc15",letterSpacing:2}}>GOAL {i+1}</div>{goals.length>1&&<button onClick={()=>setGoals(p=>p.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:11,color:"#facc15",letterSpacing:2}}>GOAL {i+1}</div>
+              {goals.length>1&&<button onClick={()=>setGoals(p=>p.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>}
+            </div>
             <Label>Goal Name</Label><TxtInput value={g.name} onChange={setF("name")} placeholder="e.g. Emergency Fund, Down Payment"/>
             <div style={{height:10}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               <div><Label>Target Amount</Label><NumInput value={g.target} onChange={setF("target")}/></div>
               <div><Label>Already Saved</Label><NumInput value={g.saved} onChange={setF("saved")}/></div>
             </div>
-            <Label>Target Date</Label>
-            <input type="month" value={g.date} onChange={e=>setF("date")(e.target.value)} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
-            {perMonth>0&&<div style={{marginTop:14,background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #1a4030",borderRadius:10,padding:"14px"}}>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-                <div style={{textAlign:"center",background:"#0a1a0f",borderRadius:8,padding:"12px 8px"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>SAVE / MONTH</div><div style={{fontSize:22,color:"#4ade80",fontWeight:"bold"}}>{fmt(perMonth)}</div></div>
-                <div style={{textAlign:"center",background:"#0d1b3e",borderRadius:8,padding:"12px 8px"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>STILL NEEDED</div><div style={{fontSize:22,color:"#facc15",fontWeight:"bold"}}>{fmt(needed)}</div></div>
+            <Label>Months to Goal</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",marginBottom:perMonth>0?14:0}}>
+              <input type="number" value={g.months} onChange={e=>setF("months")(e.target.value)} placeholder="e.g. 24"
+                style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:16,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>months</span>
+            </div>
+            {perMonth>0&&(
+              <div style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #1a4030",borderRadius:10,padding:"14px"}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                  <div style={{textAlign:"center",background:"#0a1a0f",borderRadius:8,padding:"12px 8px"}}>
+                    <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>SAVE / MONTH</div>
+                    <div style={{fontSize:22,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(perMonth)}</div>
+                  </div>
+                  <div style={{textAlign:"center",background:"#0d1b3e",borderRadius:8,padding:"12px 8px"}}>
+                    <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>STILL NEEDED</div>
+                    <div style={{fontSize:22,color:"#facc15",fontWeight:"bold",...GS}}>{fmt(needed)}</div>
+                  </div>
+                </div>
+                {pct>0&&(
+                  <>
+                    <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden",marginBottom:6}}>
+                      <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+                    </div>
+                    <div style={{fontSize:11,color:"#6b8cce"}}>{Math.round(pct)}% saved · {months} months remaining</div>
+                  </>
+                )}
               </div>
-              {pct>0&&<><div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden",marginBottom:6}}><div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/></div><div style={{fontSize:11,color:"#6b8cce"}}>{Math.round(pct)}% saved · {months} months remaining</div></>}
-            </div>}
+            )}
           </Card>
         );
       })}
-      <button onClick={()=>setGoals(p=>[...p,{name:"",target:"",saved:"",date:""}])} style={{width:"100%",background:"none",border:"1px dashed #facc1544",color:"#6b8cce",borderRadius:10,padding:"12px",cursor:"pointer",fontSize:13,marginBottom:6,...GS}}>+ Add Another Goal</button>
+      <button onClick={()=>setGoals(p=>[...p,{name:"",target:"",saved:"",months:""}])} style={{width:"100%",background:"none",border:"1px dashed #facc1544",color:"#6b8cce",borderRadius:10,padding:"12px",cursor:"pointer",fontSize:13,marginBottom:6,...GS}}>+ Add Another Goal</button>
     </div>
   );
 }
