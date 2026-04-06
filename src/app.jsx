@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar } from "recharts";
 
 // ─── SUPABASE CLIENT ──────────────────────────────────────────────────────────
@@ -2897,11 +2897,18 @@ function BillCalendar() {
     return {...row,runningTotal:running};
   });
 
-  const fmtDate=(d)=>{
-    const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    return `${d.getDate()}/${d.getMonth()+1}`;
+  const ordinal=(n)=>{const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);};
+  const MONTH_NAMES=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const fmtDate=(d)=>`${MONTH_NAMES[d.getMonth()].slice(0,3)} ${ordinal(d.getDate())}`;
+  const fmtFull=(d)=>`${MONTH_NAMES[d.getMonth()]} ${ordinal(d.getDate())}`;
+
+  // Month shading — cycle through 3 distinct dark backgrounds
+  const MONTH_BGAS=["#111827","#0d1b2e","#12101f"]; // blue-grey, navy, purple-dark
+  const getMonthBg=(d,lighter=false)=>{
+    const idx=d.getMonth()%3;
+    const bases=MONTH_BGAS;
+    return lighter?bases[idx].replace(/[0-9a-f]{2}$/,hex=>Math.min(255,parseInt(hex,16)+8).toString(16).padStart(2,"0")):bases[idx];
   };
-  const fmtFull=(d)=>`${["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()]} ${d.getDate()}`;
 
   const FREQ_LABELS={monthly:"Monthly",biweekly:"Bi-Weekly",weekly:"Weekly",daily:"Daily"};
 
@@ -3015,7 +3022,7 @@ function BillCalendar() {
           </div>
         </div>
         {/* Column headers */}
-        <div style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",background:"#0d1b3e",padding:"8px 10px",gap:4,borderBottom:"1px solid #1e3a5f"}}>
+        <div style={{display:"grid",gridTemplateColumns:"80px 1fr 80px 80px 90px",background:"#0d1b3e",padding:"8px 10px",gap:4,borderBottom:"1px solid #1e3a5f"}}>
           {["Date","Description","Debit","Credit","Total"].map(h=>(
             <div key={h} style={{fontSize:10,color:"#6b8cce",letterSpacing:1,textAlign:h==="Date"||h==="Description"?"left":"right",textDecoration:"underline",...GS}}>{h}</div>
           ))}
@@ -3023,12 +3030,12 @@ function BillCalendar() {
 
         {/* Starting balance row */}
         {startingBalance&&(
-          <div style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",padding:"8px 10px",gap:4,background:"#111827",borderBottom:"1px solid #1e3a5f"}}>
+          <div style={{display:"grid",gridTemplateColumns:"80px 1fr 80px 80px 90px",padding:"8px 10px",gap:4,background:"#111827",borderBottom:"1px solid #1e3a5f"}}>
             <div style={{fontSize:11,color:"#6b8cce"}}>{fmtDate(today)}</div>
             <div style={{fontSize:11,color:"#8fadd4",fontStyle:"italic"}}>Opening Balance</div>
             <div style={{fontSize:11,textAlign:"right"}}></div>
-            <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>{fmt(Number(startingBalance))}</div>
-            <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>{fmt(Number(startingBalance))}</div>
+            <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold",...GS}}>{fmt(Number(startingBalance))}</div>
+            <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold",...GS}}>{fmt(Number(startingBalance))}</div>
           </div>
         )}
 
@@ -3038,36 +3045,52 @@ function BillCalendar() {
           </div>
         )}
 
-        {/* Entry rows */}
+        {/* Entry rows with month shading and month dividers */}
         {rowsWithTotal.map((row,i)=>{
           const isNeg=row.runningTotal<0;
           const isToday=row.date.toDateString()===today.toDateString();
+          const prevRow=rowsWithTotal[i-1];
+          const monthChanged=!prevRow||prevRow.date.getMonth()!==row.date.getMonth();
+          const monthBg=getMonthBg(row.date);
+          const MONTH_ACCENT=["#1e3a5f","#1a2a4a","#2a1a4a"]; // blue, navy, purple accent
+          const monthAccent=MONTH_ACCENT[row.date.getMonth()%3];
           return (
-            <div key={row.id} style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",padding:"7px 10px",gap:4,background:i%2===0?"#111827":"#0f1627",borderBottom:"1px solid #1e3a5f",alignItems:"center"}}
-              onMouseEnter={e=>e.currentTarget.style.background="#1a2235"}
-              onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#111827":"#0f1627"}>
-              <div style={{fontSize:11,color:isToday?"#facc15":"#6b8cce",fontWeight:isToday?"bold":"normal"}}>{fmtDate(row.date)}</div>
-              <div style={{fontSize:11,color:"#e8e4d9",display:"flex",alignItems:"center",gap:4,minWidth:0}}>
-                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.desc}</span>
-                {row.recurring&&<span style={{fontSize:8,color:"#60a5fa",flexShrink:0,border:"1px solid #60a5fa44",borderRadius:4,padding:"1px 4px"}}>{row.freq?.slice(0,2).toUpperCase()}</span>}
+            <React.Fragment key={row.id}>
+              {/* Month divider */}
+              {monthChanged&&(
+                <div style={{background:monthBg,borderTop:"2px solid "+monthAccent,borderBottom:"1px solid "+monthAccent,padding:"6px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:11,color:"#8fadd4",fontWeight:"bold",letterSpacing:2,...GS}}>
+                    {MONTH_NAMES[row.date.getMonth()].toUpperCase()} {row.date.getFullYear()}
+                  </div>
+                  <div style={{width:20,height:3,borderRadius:2,background:monthAccent}}/>
+                </div>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"80px 1fr 80px 80px 90px",padding:"7px 10px",gap:4,background:monthBg,borderBottom:"1px solid #1e3a5f22",alignItems:"center",transition:"filter 0.1s"}}
+                onMouseEnter={e=>e.currentTarget.style.filter="brightness(1.3)"}
+                onMouseLeave={e=>e.currentTarget.style.filter=""}>
+                <div style={{fontSize:11,color:isToday?"#facc15":"#6b8cce",fontWeight:isToday?"bold":"normal"}}>{fmtDate(row.date)}</div>
+                <div style={{fontSize:11,color:"#e8e4d9",display:"flex",alignItems:"center",gap:4,minWidth:0}}>
+                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.desc}</span>
+                  {row.recurring&&<span style={{fontSize:8,color:"#60a5fa",flexShrink:0,border:"1px solid #60a5fa44",borderRadius:4,padding:"1px 4px"}}>{row.freq?.slice(0,2).toUpperCase()}</span>}
+                </div>
+                <div style={{fontSize:11,color:"#f87171",textAlign:"right",fontWeight:"bold"}}>
+                  {row.type==="debit"?fmt(row.amount):""}
+                </div>
+                <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>
+                  {row.type==="credit"?fmt(row.amount):""}
+                </div>
+                <div style={{fontSize:12,color:isNeg?"#f87171":"#e8e4d9",textAlign:"right",fontWeight:"bold",...GS,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
+                  {isNeg&&<span style={{fontSize:8,color:"#f87171"}}>⚠</span>}
+                  {fmt(row.runningTotal)}
+                </div>
               </div>
-              <div style={{fontSize:11,color:"#f87171",textAlign:"right",fontWeight:"bold"}}>
-                {row.type==="debit"?fmt(row.amount):""}
-              </div>
-              <div style={{fontSize:11,color:"#4ade80",textAlign:"right",fontWeight:"bold"}}>
-                {row.type==="credit"?fmt(row.amount):""}
-              </div>
-              <div style={{fontSize:12,color:isNeg?"#f87171":"#e8e4d9",textAlign:"right",fontWeight:"bold",...GS,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4}}>
-                {isNeg&&<span style={{fontSize:8,color:"#f87171"}}>⚠</span>}
-                {fmt(row.runningTotal)}
-              </div>
-            </div>
+            </React.Fragment>
           );
         })}
 
         {/* Ending balance */}
         {rowsWithTotal.length>0&&(
-          <div style={{display:"grid",gridTemplateColumns:"50px 1fr 80px 80px 90px",padding:"10px 10px",gap:4,background:"#0d2a1a",borderTop:"2px solid #4ade8044",alignItems:"center"}}>
+          <div style={{display:"grid",gridTemplateColumns:"80px 1fr 80px 80px 90px",padding:"10px 10px",gap:4,background:"#0d2a1a",borderTop:"2px solid #4ade8044",alignItems:"center"}}>
             <div style={{fontSize:10,color:"#6b8cce"}}></div>
             <div style={{fontSize:11,color:"#4ade80",fontWeight:"bold",...GS}}>90-Day Ending Balance</div>
             <div></div><div></div>
