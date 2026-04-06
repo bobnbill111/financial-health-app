@@ -2322,8 +2322,6 @@ function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, inco
   );
 }
 
-const DASH_TABS=["Overview","Goals","Investments","Budget","Savings","Debt","Mortgage","Cash Flow","Score History"];
-
 // ─── GOALS TAB ────────────────────────────────────────────────────────────────
 function GoalsTab({data,totalInv,scoreHistory}) {
   const income=Number(data.budget.income||0);
@@ -2449,7 +2447,7 @@ function GoalsTab({data,totalInv,scoreHistory}) {
 }
 
 function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token}) {
-  const [tab,setTab]=useState("Overview");
+  // ── Computed values ──────────────────────────────────────────────────────────
   const cash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const equity=Math.max(0,Number(d.mortgage.value||0)-Number(d.mortgage.balance||0));
@@ -2459,241 +2457,557 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
   const totalLocBal=(d.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
   const totalLiab=totalCC+totalLocBal+Number(d.mortgage.balance||0)+totalOD;
   const netWorth=totalAssets-totalLiab;
-  const income=Number(d.budget.income||0),totalAlloc=d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
+  const income=Number(d.budget.income||0);
+  const totalAlloc=d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const score=calcScore(d,totalInv);
+  const surplus=income-totalAlloc;
+  const efund=savings;
+  const efundMonths=totalAlloc>0?efund/totalAlloc:0;
+  const grossMonthly=Number(d.income?.grossSalary||0)>0?Number(d.income.grossSalary)/12:income;
+  const invMonthly=Number(d.budget.investmentMonthly||0);
+  const invRate=grossMonthly>0?(invMonthly/grossMonthly)*100:0;
 
-  // FOO steps — manual checkboxes
-  const FOO_LABELS = [
-    {label:"Deductibles Covered", desc:"Insurance deductibles are funded"},
-    {label:"Employer Match", desc:"Contributing enough to get full employer match"},
-    {label:"High-Interest Debt Paid", desc:"Credit cards & high-rate debt cleared"},
-    {label:"Emergency Reserves", desc:"3–6 months of expenses saved"},
-    {label:"FHSA & TFSA", desc:"Maxing registered accounts"},
-    {label:"RRSP Maxed", desc:"Contributing to RRSP limit"},
-    {label:"Hyper Accumulation", desc:"Investing 20%+ of gross income"},
+  // ── FOO ──────────────────────────────────────────────────────────────────────
+  const FOO_LABELS=[
+    {label:"Deductibles Covered",desc:"Insurance deductibles are funded"},
+    {label:"Employer Match",desc:"Contributing enough to get full employer match"},
+    {label:"High-Interest Debt Paid",desc:"Credit cards & high-rate debt cleared"},
+    {label:"Emergency Reserves",desc:"3–6 months of expenses saved"},
+    {label:"FHSA & TFSA",desc:"Maxing registered accounts"},
+    {label:"RRSP Maxed",desc:"Contributing to RRSP limit"},
+    {label:"Hyper Accumulation",desc:"Investing 20%+ of gross income"},
   ];
-  const [fooChecked, setFooChecked] = useState(() => FOO_LABELS.map(() => false));
-  const toggleFoo = (i) => setFooChecked(prev => prev.map((v, idx) => idx === i ? !v : v));
-  const fooComplete = fooChecked.filter(Boolean).length;
+  const [fooChecked,setFooChecked]=useState(()=>FOO_LABELS.map(()=>false));
+  const toggleFoo=(i)=>setFooChecked(prev=>prev.map((v,idx)=>idx===i?!v:v));
+  const fooComplete=fooChecked.filter(Boolean).length;
 
-  return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
-      <NavBar title="Financial Check-up" subtitle={d.clientName||"FinHealth"} onHome={onHome} right={<button onClick={onAppointment} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,color:"#8fadd4",padding:"6px 12px",fontSize:11,cursor:"pointer",...GS}}>Edit</button>}/>
-      <div style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
-        {DASH_TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{background:"none",border:"none",borderBottom:tab===t?"2px solid #4ade80":"2px solid transparent",color:tab===t?"#4ade80":"#8fadd4",padding:"10px 12px",fontSize:10,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap",...GS}}>{t}</button>)}
-      </div>
-      <div style={{padding:"16px 16px 0",maxWidth:520,margin:"0 auto"}}>
-        <FullReportBtn
-          data={d} totalInv={totalInv} netWorth={netWorth}
-          totalAssets={totalAssets} totalLiab={totalLiab}
-          income={income} totalAlloc={totalAlloc} score={score}
-          totalCC={totalCC} totalLocBal={totalLocBal} totalOD={totalOD}
-          savings={savings} equity={equity} cash={cash}
-          fooChecked={fooChecked} fooLabels={FOO_LABELS}
-        />
-      </div>
-      <div style={{padding:"0 16px 20px",maxWidth:520,margin:"0 auto"}}>
+  // ── Dashboard layout state ───────────────────────────────────────────────────
+  const STORAGE_KEY="fh_dashboard_layout_v2";
+  const DEFAULT_LAYOUT=["networth","score","portfolio_chart","benchmarks","foo","budget","goals","score_history","debt"];
 
-        {tab==="Overview"&&<div id="overview-content">
-          <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #1a4030",textAlign:"center",padding:"24px 16px"}}>
-            <div style={{fontSize:11,letterSpacing:3,color:"#6b8cce",marginBottom:6}}>NET WORTH</div>
-            <div style={{fontSize:44,color:"#4ade80",fontWeight:"bold",marginBottom:4}}>{fmtShort(netWorth)}</div>
-            <div style={{fontSize:12,color:"#6b8cce"}}>{fmt(netWorth)}</div>
-          </Card>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-            {[{label:"Cash",val:cash,color:"#60a5fa"},{label:"Investments",val:totalInv,color:"#4ade80"},{label:"Home Equity",val:equity,color:"#a78bfa"},{label:"Savings",val:savings,color:"#34d399"}].map(x=>(
-              <div key={x.label} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:12,padding:"14px"}}><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>{x.label}</div><div style={{fontSize:17,color:x.color,fontWeight:"bold"}}>{fmtShort(x.val)}</div></div>
+  const loadLayout=()=>{
+    try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):DEFAULT_LAYOUT;}
+    catch{return DEFAULT_LAYOUT;}
+  };
+  const [layout,setLayout]=useState(loadLayout);
+  const [editMode,setEditMode]=useState(false);
+  const [showAddPanel,setShowAddPanel]=useState(false);
+  const [expandedTile,setExpandedTile]=useState(null);
+  const [nextSteps,setNextSteps]=useState(()=>{try{return localStorage.getItem("fh_nextsteps")||"";}catch{return "";}});
+  const [dragIdx,setDragIdx]=useState(null);
+  const [dragOver,setDragOver]=useState(null);
+
+  const saveLayout=(l)=>{
+    setLayout(l);
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(l));}catch{}
+  };
+
+  const saveNextSteps=(v)=>{
+    setNextSteps(v);
+    try{localStorage.setItem("fh_nextsteps",v);}catch{}
+  };
+
+  const removeTile=(id)=>saveLayout(layout.filter(t=>t!==id));
+  const addTile=(id)=>{if(!layout.includes(id)){saveLayout([...layout,id]);} setShowAddPanel(false);};
+
+  // Drag handlers
+  const onDragStart=(i)=>setDragIdx(i);
+  const onDragEnter=(i)=>setDragOver(i);
+  const onDragEnd=()=>{
+    if(dragIdx===null||dragOver===null||dragIdx===dragOver){setDragIdx(null);setDragOver(null);return;}
+    const next=[...layout];
+    const [moved]=next.splice(dragIdx,1);
+    next.splice(dragOver,0,moved);
+    saveLayout(next);
+    setDragIdx(null);setDragOver(null);
+  };
+
+  // ── ALL 15 TILE DEFINITIONS ──────────────────────────────────────────────────
+  const TILE_DEFS={
+    networth:{
+      id:"networth",label:"Net Worth Statement",icon:"💎",
+      content:(compact)=>(
+        <div style={{height:"100%",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div style={{textAlign:"center",flex:1,display:"flex",flexDirection:"column",justifyContent:"center"}}>
+            <div style={{fontSize:compact?11:13,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>NET WORTH</div>
+            <div style={{fontSize:compact?32:52,color:netWorth>=0?"#4ade80":"#f87171",fontWeight:"bold",...GS,lineHeight:1}}>{fmtShort(netWorth)}</div>
+            <div style={{fontSize:compact?10:13,color:"#6b8cce",marginTop:4}}>{fmt(netWorth)}</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
+            <div style={{background:"#0d1b3e",borderRadius:8,padding:"8px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>ASSETS</div>
+              <div style={{fontSize:compact?13:16,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(totalAssets)}</div>
+            </div>
+            <div style={{background:"#0d1b3e",borderRadius:8,padding:"8px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>LIABILITIES</div>
+              <div style={{fontSize:compact?13:16,color:"#f87171",fontWeight:"bold",...GS}}>{fmtShort(totalLiab)}</div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    score:{
+      id:"score",label:"Financial Health Score",icon:"⭐",
+      content:(compact)=>score?(
+        <div style={{height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",gap:8}}>
+          <div style={{fontSize:compact?11:13,color:"#6b8cce",letterSpacing:2}}>FINANCIAL HEALTH SCORE</div>
+          <div style={{fontSize:compact?56:80,color:score.gradeColor,fontWeight:"bold",lineHeight:1,...GS}}>{score.grade}</div>
+          <div style={{fontSize:compact?20:28,color:"#e8e4d9",...GS}}>{score.total}<span style={{fontSize:14,color:"#6b8cce"}}>/100</span></div>
+          <div style={{width:"100%",background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
+            <div style={{width:score.total+"%",height:"100%",background:score.gradeColor,borderRadius:6}}/>
+          </div>
+          <div style={{fontSize:11,color:"#6b8cce"}}>Ontario · {score.band} age group</div>
+        </div>
+      ):<div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>Complete your appointment to see your score</div>,
+    },
+    portfolio_chart:{
+      id:"portfolio_chart",label:"Portfolio Breakdown (Chart)",icon:"🥧",
+      content:(compact)=>{
+        const invData=[
+          {name:"TFSA",val:sumGroupHelper(d.investments.tfsa),color:"#4ade80"},
+          {name:"FHSA",val:sumGroupHelper(d.investments.fhsa),color:"#60a5fa"},
+          {name:"RRSP",val:sumGroupHelper(d.investments.rrsp),color:"#a78bfa"},
+          {name:"Alt",val:sumGroupHelper(d.investments.alternatives),color:"#facc15"},
+          {name:"Non-Reg",val:sumGroupHelper(d.investments.nonReg),color:"#fb923c"},
+        ].filter(x=>x.val>0);
+        if(!invData.length) return <div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>No investments entered yet</div>;
+        return (
+          <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:8,textAlign:"center"}}>PORTFOLIO · {fmtShort(totalInv)}</div>
+            <ResponsiveContainer width="100%" height={compact?120:180}>
+              <PieChart><Pie data={invData.map(x=>({name:x.name,value:x.val}))} cx="50%" cy="50%" innerRadius={compact?30:45} outerRadius={compact?55:75} dataKey="value" strokeWidth={0}>
+                {invData.map((x,i)=><Cell key={i} fill={x.color}/>)}
+              </Pie><Tooltip formatter={(v)=>fmtShort(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,fontSize:11}}/></PieChart>
+            </ResponsiveContainer>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",marginTop:8}}>
+              {invData.map(x=><div key={x.name} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#8fadd4"}}><div style={{width:8,height:8,borderRadius:"50%",background:x.color}}/>{x.name}: {fmtShort(x.val)}</div>)}
+            </div>
+          </div>
+        );
+      },
+    },
+    portfolio_numbers:{
+      id:"portfolio_numbers",label:"Portfolio Breakdown (Numbers)",icon:"📋",
+      content:()=>{
+        const rows=[
+          {label:"TFSA",val:sumGroupHelper(d.investments.tfsa),color:"#4ade80"},
+          {label:"FHSA",val:sumGroupHelper(d.investments.fhsa),color:"#60a5fa"},
+          {label:"RRSP",val:sumGroupHelper(d.investments.rrsp),color:"#a78bfa"},
+          {label:"Alternatives",val:sumGroupHelper(d.investments.alternatives),color:"#facc15"},
+          {label:"Non-Registered",val:sumGroupHelper(d.investments.nonReg),color:"#fb923c"},
+        ].filter(r=>r.val>0);
+        if(!rows.length) return <div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>No investments entered yet</div>;
+        return (
+          <div>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:12,textAlign:"center"}}>TOTAL · {fmtShort(totalInv)}</div>
+            {rows.map((r,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:i<rows.length-1?"1px solid #1e3a5f":"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:r.color}}/><span style={{fontSize:13,color:"#e8e4d9"}}>{r.label}</span></div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:14,color:r.color,fontWeight:"bold",...GS}}>{fmt(r.val)}</div>
+                  <div style={{fontSize:10,color:"#6b8cce"}}>{totalInv>0?((r.val/totalInv)*100).toFixed(1):0}%</div>
+                </div>
+              </div>
             ))}
           </div>
-          {score&&<Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${score.gradeColor}44`}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>FINANCIAL HEALTH SCORE</div><div style={{fontSize:13,color:"#8fadd4"}}>Ontario · {score.band} age group</div></div>
-              <div style={{textAlign:"center"}}><div style={{fontSize:40,color:score.gradeColor,fontWeight:"bold",lineHeight:1}}>{score.grade}</div><div style={{fontSize:12,color:"#6b8cce"}}>{score.total}/100</div></div>
+        );
+      },
+    },
+    benchmarks:{
+      id:"benchmarks",label:"Where You Stand",icon:"📊",
+      content:()=>score?<CanadianBenchmarks score={score} data={d} totalInv={totalInv} netWorth={netWorth} income={income} totalAlloc={totalAlloc}/>:<div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>Complete your appointment first</div>,
+    },
+    foo:{
+      id:"foo",label:"Financial Order of Operations",icon:"📋",
+      content:()=>(
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{fontSize:10,letterSpacing:2,color:"#6b8cce"}}>FINANCIAL ORDER OF OPERATIONS</div>
+            <div style={{fontSize:11,color:"#6b8cce"}}>{fooComplete}/{FOO_LABELS.length}</div>
+          </div>
+          <div style={{background:"#0d1b3e",borderRadius:6,height:5,overflow:"hidden",marginBottom:14}}>
+            <div style={{width:`${(fooComplete/FOO_LABELS.length)*100}%`,height:"100%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+          </div>
+          {FOO_LABELS.map((s,i)=>(
+            <button key={i} onClick={()=>toggleFoo(i)} style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:12,padding:"8px 0",borderBottom:i<FOO_LABELS.length-1?"1px solid #1e3a5f":"none",textAlign:"left"}}>
+              <div style={{width:20,height:20,borderRadius:"50%",flexShrink:0,background:fooChecked[i]?"#4ade80":"transparent",border:`2px solid ${fooChecked[i]?"#4ade80":"#2a4080"}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {fooChecked[i]&&<span style={{color:"#0a0f1e",fontSize:11,fontWeight:"bold"}}>✓</span>}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,color:fooChecked[i]?"#4ade80":"#e8e4d9",...GS}}>{s.label}</div>
+                <div style={{fontSize:10,color:"#6b8cce"}}>{s.desc}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      ),
+    },
+    budget:{
+      id:"budget",label:"Budget Snapshot",icon:"💰",
+      content:()=>(
+        <div>
+          <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:12,textAlign:"center"}}>BUDGET SNAPSHOT</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            {[{label:"Income",val:income,color:"#4ade80"},{label:"Spending",val:totalAlloc,color:"#f87171"},{label:"Surplus",val:surplus,color:surplus>=0?"#4ade80":"#f87171"},{label:"Inv. Rate",val:null,color:"#a78bfa",text:invRate.toFixed(1)+"%"}].map((x,i)=>(
+              <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{x.label.toUpperCase()}</div>
+                <div style={{fontSize:16,color:x.color,fontWeight:"bold",...GS}}>{x.text||fmtShort(x.val)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
+            <div style={{width:Math.min(100,income>0?(totalAlloc/income)*100:0)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+            <span style={{fontSize:10,color:"#6b8cce"}}>$0</span>
+            <span style={{fontSize:10,color:"#6b8cce"}}>{income>0?Math.round((totalAlloc/income)*100):0}% allocated</span>
+            <span style={{fontSize:10,color:"#6b8cce"}}>{fmt(income)}</span>
+          </div>
+        </div>
+      ),
+    },
+    goals:{
+      id:"goals",label:"Goals Progress",icon:"🎯",
+      content:()=><GoalsTab data={d} totalInv={totalInv} scoreHistory={scoreHistory}/>,
+    },
+    score_history:{
+      id:"score_history",label:"Score History",icon:"📈",
+      content:()=><ScoreHistory history={scoreHistory} currentScore={score} onSave={()=>saveScore(score)}/>,
+    },
+    debt:{
+      id:"debt",label:"Debt Overview",icon:"💳",
+      content:()=>{
+        const debts=[
+          ...d.creditCards.filter(c=>!c.payInFull&&Number(c.totalBalance||0)>0).map(c=>({name:c.name,val:Number(c.totalBalance),color:"#f87171",rate:"~20%"})),
+          ...(d.locs||[]).filter(l=>Number(l.balance||0)>0).map(l=>({name:l.name||"LOC",val:Number(l.balance),color:"#fb923c",rate:l.rate+"%"})),
+          ...(d.otherDebts||[]).filter(x=>Number(x.balance||0)>0).map(x=>({name:x.name||x.type,val:Number(x.balance),color:"#facc15",rate:x.rate+"%"})),
+        ];
+        const totalDebt=totalCC+totalLocBal+totalOD;
+        if(!totalDebt) return <div style={{color:"#4ade80",textAlign:"center",padding:20,fontSize:15,fontWeight:"bold",...GS}}>✅ No outstanding debt!</div>;
+        return (
+          <div>
+            <div style={{textAlign:"center",marginBottom:12}}>
+              <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2}}>TOTAL NON-MORTGAGE DEBT</div>
+              <div style={{fontSize:36,color:"#f87171",fontWeight:"bold",...GS}}>{fmtShort(totalDebt)}</div>
             </div>
-            <div style={{marginTop:12,background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}><div style={{width:score.total+"%",height:"100%",background:score.gradeColor,borderRadius:6}}/></div>
-          </Card>}
-          <Card>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",...GS}}>FINANCIAL ORDER OF OPERATIONS</div>
-              <div style={{fontSize:11,color:"#6b8cce"}}>{fooComplete}/{FOO_LABELS.length}</div>
+            {debts.map((x,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:i<debts.length-1?"1px solid #1e3a5f":"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:7,height:7,borderRadius:"50%",background:x.color}}/><span style={{fontSize:12,color:"#e8e4d9"}}>{x.name}</span></div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmt(x.val)}</div><div style={{fontSize:9,color:"#6b8cce"}}>{x.rate}</div></div>
+              </div>
+            ))}
+          </div>
+        );
+      },
+    },
+    emergency:{
+      id:"emergency",label:"Emergency Fund",icon:"🛡️",
+      content:()=>{
+        const target=(d.savingsAccounts||[]).find(a=>a.name.toLowerCase().includes("emerg"));
+        const saved=Number(target?.saved||0);
+        const goal=totalAlloc*3;
+        const months=totalAlloc>0?saved/totalAlloc:0;
+        const pct=Math.min(100,goal>0?(saved/goal)*100:0);
+        return (
+          <div style={{textAlign:"center",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",gap:12}}>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2}}>EMERGENCY FUND</div>
+            <div style={{fontSize:48,color:months>=3?"#4ade80":"#facc15",fontWeight:"bold",...GS,lineHeight:1}}>{months.toFixed(1)}</div>
+            <div style={{fontSize:13,color:"#8fadd4"}}>months saved · target: 3</div>
+            <div style={{background:"#0d1b3e",borderRadius:6,height:10,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",background:pct>=100?"#4ade80":"#facc15",borderRadius:6,transition:"width 0.4s"}}/>
             </div>
-            {/* Progress bar */}
-            <div style={{background:"#0d1b3e",borderRadius:6,height:6,overflow:"hidden",marginBottom:16}}>
-              <div style={{width:`${(fooComplete/FOO_LABELS.length)*100}%`,height:"100%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6,transition:"width 0.4s"}}/>
+            <div style={{fontSize:12,color:"#6b8cce"}}>{fmt(saved)} saved · target {fmtShort(goal)}</div>
+          </div>
+        );
+      },
+    },
+    inv_rate:{
+      id:"inv_rate",label:"Investment Rate",icon:"📈",
+      content:()=>{
+        const pct=Math.min(100,(invRate/25)*100);
+        return (
+          <div style={{textAlign:"center",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",gap:10}}>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2}}>INVESTMENT RATE</div>
+            <div style={{fontSize:52,color:invRate>=25?"#4ade80":invRate>=15?"#facc15":"#f87171",fontWeight:"bold",...GS,lineHeight:1}}>{invRate.toFixed(1)}<span style={{fontSize:24}}>%</span></div>
+            <div style={{fontSize:12,color:"#8fadd4"}}>of gross income · target 25%</div>
+            <div style={{background:"#0d1b3e",borderRadius:6,height:10,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",background:invRate>=25?"#4ade80":invRate>=15?"#facc15":"#fb923c",borderRadius:6}}/>
             </div>
-            {FOO_LABELS.map((s,i)=>{
-              const checked = fooChecked[i];
+            <div style={{fontSize:11,color:"#6b8cce"}}>{fmt(invMonthly)}/mo invested</div>
+          </div>
+        );
+      },
+    },
+    savings_goals:{
+      id:"savings_goals",label:"Savings Goals",icon:"🏦",
+      content:()=>{
+        const accts=(d.savingsAccounts||[]).filter(a=>Number(a.goal||0)>0);
+        if(!accts.length) return <div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>No savings goals entered</div>;
+        return (
+          <div>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:12,textAlign:"center"}}>SAVINGS GOALS</div>
+            {accts.map((a,i)=>{
+              const pct=Math.min(100,Number(a.goal)>0?(Number(a.saved||0)/Number(a.goal))*100:0);
               return (
-                <button
-                  key={i}
-                  onClick={()=>toggleFoo(i)}
-                  style={{
-                    width:"100%", background:"none", border:"none", cursor:"pointer",
-                    display:"flex", alignItems:"center", gap:14,
-                    padding:"10px 0",
-                    borderBottom: i < FOO_LABELS.length-1 ? "1px solid #1e3a5f" : "none",
-                    textAlign:"left",
-                  }}
-                >
-                  {/* Checkbox circle */}
-                  <div style={{
-                    width:24, height:24, borderRadius:"50%", flexShrink:0,
-                    background: checked ? "#4ade80" : "transparent",
-                    border: `2px solid ${checked ? "#4ade80" : "#2a4080"}`,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    transition:"background 0.2s, border-color 0.2s",
-                    boxShadow: checked ? "0 0 10px #4ade8055" : "none",
-                  }}>
-                    {checked && <span style={{color:"#0a0f1e",fontSize:13,fontWeight:"bold",lineHeight:1}}>✓</span>}
+                <div key={i} style={{marginBottom:i<accts.length-1?14:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{fontSize:12,color:"#e8e4d9"}}>{a.name}</span>
+                    <span style={{fontSize:12,color:a.color||"#4ade80",fontWeight:"bold",...GS}}>{Math.round(pct)}%</span>
                   </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,color: checked ? "#4ade80" : "#e8e4d9",fontWeight: checked ? "bold" : "normal",transition:"color 0.2s",...GS}}>
-                      <span style={{fontSize:10,color:"#6b8cce",marginRight:6}}>{i+1}.</span>
-                      {s.label}
-                    </div>
-                    <div style={{fontSize:10,color:"#6b8cce",marginTop:2,...GS}}>{s.desc}</div>
+                  <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden",marginBottom:3}}>
+                    <div style={{width:pct+"%",height:"100%",background:a.color||"#4ade80",borderRadius:4}}/>
                   </div>
-                  {checked && <div style={{fontSize:9,color:"#4ade80",border:"1px solid #4ade8044",borderRadius:10,padding:"2px 8px",flexShrink:0,...GS}}>DONE</div>}
-                </button>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontSize:10,color:"#6b8cce"}}>{fmtShort(Number(a.saved||0))} saved</span>
+                    <span style={{fontSize:10,color:"#6b8cce"}}>goal: {fmtShort(Number(a.goal))}</span>
+                  </div>
+                </div>
               );
             })}
-            {fooComplete===FOO_LABELS.length&&(
-              <div style={{marginTop:14,background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:10,padding:"12px",textAlign:"center"}}>
-                <div style={{fontSize:16,marginBottom:4}}>🎉</div>
-                <div style={{fontSize:13,color:"#4ade80",...GS}}>All steps complete — you're in great financial shape!</div>
-              </div>
-            )}
-          </Card>
-          <Card>
-            <SecTitle>Net Worth Growth Projection</SecTitle>
-            <NetWorthProjection totalInv={totalInv} income={income} totalAlloc={totalAlloc} netWorth={netWorth}/>
-          </Card>
-          {score&&<CanadianBenchmarks score={score} data={d} totalInv={totalInv} netWorth={netWorth} income={income} totalAlloc={totalAlloc}/>}
-          <PDFBtn title={`Financial Overview - ${d.clientName||"Report"}`} contentId="overview-content"/>
-        </div>}
-
-        {tab==="Goals"&&<GoalsTab data={d} totalInv={totalInv} scoreHistory={scoreHistory}/>}
-
-        {tab==="Investments"&&<div id="inv-content">
-          <Card style={{textAlign:"center",padding:"18px 16px"}}><div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:4}}>TOTAL PORTFOLIO</div><div style={{fontSize:36,color:"#4ade80",fontWeight:"bold"}}>{fmt(totalInv)}</div></Card>
-          {[{label:"TFSA",val:sumGroupHelper(d.investments.tfsa),color:"#4ade80",rows:d.investments.tfsa},{label:"FHSA",val:sumGroupHelper(d.investments.fhsa),color:"#60a5fa",rows:d.investments.fhsa},{label:"RRSP",val:sumGroupHelper(d.investments.rrsp),color:"#a78bfa",rows:d.investments.rrsp},{label:"Alternatives",val:sumGroupHelper(d.investments.alternatives),color:"#facc15",rows:d.investments.alternatives},{label:"Non-Reg",val:sumGroupHelper(d.investments.nonReg),color:"#fb923c",rows:d.investments.nonReg}].filter(x=>x.val>0).map(item=>(
-            <Card key={item.label}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:9,height:9,borderRadius:"50%",background:item.color}}/><div style={{fontSize:14,color:item.color,fontWeight:"bold"}}>{item.label}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:16,color:item.color,fontWeight:"bold"}}>{fmt(item.val)}</div><div style={{fontSize:10,color:"#6b8cce"}}>{totalInv>0?(item.val/totalInv*100).toFixed(1):0}%</div></div></div>
-              <div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:10}}><div style={{width:totalInv>0?(item.val/totalInv*100)+"%":"0%",height:"100%",background:item.color,borderRadius:4}}/></div>
-              {item.rows.filter(r=>Number(r.amount||0)>0).map((r,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1e3a5f"}}><div style={{fontSize:12,color:"#8fadd4"}}>{r.name}</div><div style={{fontSize:12,color:item.color}}>{fmt(r.amount)}</div></div>)}
-            </Card>
-          ))}
-          <PDFBtn title="Investment Summary" contentId="inv-content"/>
-        </div>}
-
-        {tab==="Budget"&&<div id="budget-content">
-          <Card><SecTitle>Monthly Budget</SecTitle>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><div><div style={{fontSize:10,color:"#6b8cce"}}>Income</div><div style={{fontSize:22,color:"#4ade80",fontWeight:"bold"}}>{fmt(income)}</div></div><div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#6b8cce"}}>Allocated</div><div style={{fontSize:22,color:totalAlloc>income?"#f87171":"#e8e4d9",fontWeight:"bold"}}>{fmt(totalAlloc)}</div></div></div>
-            <div style={{background:"#0d1b3e",borderRadius:6,height:10,overflow:"hidden"}}><div style={{width:Math.min(100,income>0?(totalAlloc/income*100):0)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/></div>
-          </Card>
-          {d.budget.categories.filter(c=>Number(c.amount||0)>0).map((cat,i)=>{
-            const p=income>0?(Number(cat.amount)/income*100):0;
-            return <div key={i} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:8,height:8,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length]}}/><div style={{fontSize:13}}>{cat.name}</div></div><div style={{display:"flex",gap:10,alignItems:"center"}}><div style={{fontSize:11,color:"#6b8cce"}}>{p.toFixed(1)}%</div><div style={{fontSize:14,color:CAT_COLORS[i%CAT_COLORS.length],fontWeight:"bold"}}>{fmt(cat.amount)}</div></div></div>
-              <div style={{background:"#0d1b3e",borderRadius:4,height:5,overflow:"hidden"}}><div style={{width:p+"%",height:"100%",background:CAT_COLORS[i%CAT_COLORS.length],borderRadius:4}}/></div>
-            </div>;
-          })}
-          <PDFBtn title="Budget Summary" contentId="budget-content"/>
-        </div>}
-
-        {tab==="Savings"&&<div id="savings-content">
-          {(d.savingsAccounts||[]).length===0
-            ? <div style={{textAlign:"center",padding:"40px 0",color:"#6b8cce"}}>No savings accounts entered yet.</div>
-            : (d.savingsAccounts||[]).map((acct,i)=>{
-                const sv=Number(acct.saved||0),gl=Number(acct.goal||0),p=gl>0?Math.min(100,(sv/gl)*100):0;
-                return (
-                  <Card key={i}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <div style={{width:9,height:9,borderRadius:"50%",background:acct.color}}/>
-                        <div style={{fontSize:14,color:acct.color,fontWeight:"bold",...GS}}>{acct.name}</div>
-                      </div>
-                      <div style={{fontSize:11,color:"#6b8cce"}}>{Math.round(p)}%</div>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-                      <div><div style={{fontSize:10,color:"#6b8cce"}}>Saved</div><div style={{fontSize:22,color:acct.color,fontWeight:"bold",...GS}}>{fmt(sv)}</div></div>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:10,color:"#6b8cce"}}>Goal</div><div style={{fontSize:22,color:"#e8e4d9",fontWeight:"bold",...GS}}>{fmt(gl)}</div></div>
-                    </div>
-                    <div style={{background:"#0d1b3e",borderRadius:6,height:12,overflow:"hidden",marginBottom:6}}>
-                      <div style={{width:p+"%",height:"100%",background:acct.color,borderRadius:6}}/>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
-                      <div style={{fontSize:11,color:"#6b8cce"}}>{Math.round(p)}% complete</div>
-                      <div style={{fontSize:11,color:"#6b8cce"}}>{fmt(Math.max(0,gl-sv))} remaining</div>
-                    </div>
-                  </Card>
-                );
-              })
-          }
-          <PDFBtn title="Savings Summary" contentId="savings-content"/>
-        </div>}
-
-        {tab==="Debt"&&<div id="debt-content">
-          <Card style={{textAlign:"center",padding:"18px 16px"}}><div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:4}}>TOTAL NON-MORTGAGE DEBT</div><div style={{fontSize:36,color:"#f87171",fontWeight:"bold"}}>{fmt(totalCC+totalLocBal+totalOD)}</div></Card>
-          {d.creditCards.filter(c=>Number(c.totalBalance||0)>0).map((cc,i)=>(
-            <Card key={i}><div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}><div style={{fontSize:14,color:"#e8e4d9",fontWeight:"bold"}}>{cc.name}</div><div style={{fontSize:18,color:"#f87171",fontWeight:"bold"}}>{fmt(cc.totalBalance)}</div></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>{[{l:"Due",v:cc.due,c:"#60a5fa"},{l:"Pending",v:cc.pending,c:"#facc15"},{l:"Bill",v:Number(cc.totalBalance||0)+Number(cc.pending||0)-Number(cc.due||0),c:"#f87171"}].map(r=><div key={r.l} style={{background:"#0d1b3e",borderRadius:8,padding:"10px",textAlign:"center"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>{r.l}</div><div style={{fontSize:13,color:r.c,fontWeight:"bold"}}>{fmt(r.v)}</div></div>)}</div>
-            </Card>
-          ))}
-          {(d.locs||[]).filter(l=>Number(l.balance||0)>0).map((loc,i)=>(
-            <Card key={i}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                <div style={{fontSize:14,color:"#e8e4d9",fontWeight:"bold",...GS}}>{loc.name||"Line of Credit"}</div>
-                <div style={{fontSize:18,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(loc.balance)}</div>
-              </div>
+          </div>
+        );
+      },
+    },
+    cashflow_summary:{
+      id:"cashflow_summary",label:"Cash Flow Summary",icon:"💸",
+      content:()=>{
+        try{
+          const entries=JSON.parse(localStorage.getItem("fh_cashflow_entries")||"[]");
+          const balance=Number(localStorage.getItem("fh_cashflow_balance")||0);
+          const today=new Date();
+          const in30=new Date();in30.setDate(in30.getDate()+30);
+          let income30=0,exp30=0;
+          entries.forEach(e=>{
+            const d=new Date(e.date+"T12:00:00");
+            if(d>=today&&d<=in30){
+              if(e.type==="credit")income30+=e.amount;
+              else exp30+=e.amount;
+            }
+          });
+          return (
+            <div style={{textAlign:"center",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",gap:10}}>
+              <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2}}>NEXT 30 DAYS</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px",textAlign:"center"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>RATE</div><div style={{fontSize:13,color:"#facc15",fontWeight:"bold"}}>{loc.rate}%</div></div>
-                <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px",textAlign:"center"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>MONTHLY INT.</div><div style={{fontSize:13,color:"#f87171",fontWeight:"bold"}}>{loc.rate?fmt((Number(loc.balance)*(Number(loc.rate)/100))/12):"—"}</div></div>
+                <div style={{background:"#0d2a1a",borderRadius:10,padding:"12px"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>COMING IN</div>
+                  <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(income30)}</div>
+                </div>
+                <div style={{background:"#1a0505",borderRadius:10,padding:"12px"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>GOING OUT</div>
+                  <div style={{fontSize:18,color:"#f87171",fontWeight:"bold",...GS}}>{fmtShort(exp30)}</div>
+                </div>
               </div>
-            </Card>
-          ))}
-          {d.otherDebts.filter(x=>Number(x.balance||0)>0).map((debt,i)=>(
-            <Card key={i}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontSize:11,color:"#a78bfa",marginBottom:2}}>{debt.type}</div><div style={{fontSize:14,color:"#e8e4d9"}}>{debt.name}</div></div><div style={{fontSize:18,color:"#f87171",fontWeight:"bold"}}>{fmt(debt.balance)}</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[{l:"Rate",v:debt.rate+"%",c:"#facc15"},{l:"Monthly",v:fmt(debt.payment||0),c:"#60a5fa"}].map(r=><div key={r.l} style={{background:"#0d1b3e",borderRadius:8,padding:"8px",textAlign:"center"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>{r.l}</div><div style={{fontSize:13,color:r.c,fontWeight:"bold"}}>{r.v}</div></div>)}</div></Card>
-          ))}
-          <Card><SecTitle>Debt Payoff Optimizer</SecTitle><DebtOptimizer creditCards={d.creditCards} otherDebts={d.otherDebts} locs={d.locs}/></Card>
-          <PDFBtn title="Debt Summary" contentId="debt-content"/>
-        </div>}
-
-        {tab==="Mortgage"&&<div id="mort-content">
-          {Number(d.mortgage.balance||0)>0?(
-            <div>
-              <Card style={{textAlign:"center",padding:"18px 16px",background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid #a78bfa44"}}>
-                <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:4}}>HOME EQUITY</div>
-                <div style={{fontSize:38,color:"#a78bfa",fontWeight:"bold"}}>{fmtShort(equity)}</div>
-                <div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>{fmt(Number(d.mortgage.value||0))} value · {fmt(Number(d.mortgage.balance||0))} remaining</div>
-              </Card>
-              <Card><SecTitle>Mortgage Details</SecTitle>
-                {[{l:"Balance",v:d.mortgage.balance,c:"#f87171"},{l:"Home Value",v:d.mortgage.value,c:"#4ade80"},{l:"Monthly Payment",v:d.mortgage.monthlyPayment,c:"#60a5fa"}].filter(x=>Number(x.v||0)>0).map(x=>(
-                  <div key={x.l} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1e3a5f"}}><div style={{fontSize:13,color:"#8fadd4"}}>{x.l}</div><div style={{fontSize:13,color:x.c,fontWeight:"bold"}}>{fmt(x.v)}</div></div>
-                ))}
-                {d.mortgage.rate&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1e3a5f"}}><div style={{fontSize:13,color:"#8fadd4"}}>Rate</div><div style={{fontSize:13,color:"#facc15",fontWeight:"bold"}}>{d.mortgage.rate}%</div></div>}
-                {d.mortgage.amortYears&&<div style={{display:"flex",justifyContent:"space-between",padding:"8px 0"}}><div style={{fontSize:13,color:"#8fadd4"}}>Amortization Remaining</div><div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>{d.mortgage.amortYears} yrs</div></div>}
-              </Card>
-              {Number(d.mortgage.balance)>0&&Number(d.mortgage.value)>0&&(()=>{const ltv=(Number(d.mortgage.balance)/Number(d.mortgage.value)*100);return <Card><SecTitle>LTV Ratio</SecTitle><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:13,color:"#8fadd4"}}>Loan-to-Value</div><div style={{fontSize:18,color:ltv>80?"#f87171":"#4ade80",fontWeight:"bold"}}>{ltv.toFixed(1)}%</div></div><div style={{background:"#0d1b3e",borderRadius:6,height:10,overflow:"hidden"}}><div style={{width:Math.min(100,ltv)+"%",height:"100%",background:ltv>80?"#f87171":"#4ade80",borderRadius:6}}/></div><div style={{fontSize:11,color:"#6b8cce",marginTop:6}}>{ltv<=80?"✅ Good LTV (under 80%)":"⚠️ High LTV — consider paying down principal"}</div></Card>;})()} 
-              <PDFBtn title="Mortgage Summary" contentId="mort-content"/>
+              <div style={{fontSize:11,color:"#6b8cce"}}>Current balance: <span style={{color:balance>=0?"#4ade80":"#f87171",fontWeight:"bold",...GS}}>{fmt(balance)}</span></div>
             </div>
-          ):<div style={{textAlign:"center",padding:"50px 0"}}><div style={{fontSize:40,marginBottom:12}}>🏠</div><p style={{color:"#6b8cce",lineHeight:1.8}}>No mortgage entered.</p><NextBtn onClick={onAppointment}>Add Mortgage</NextBtn></div>}
-        </div>}
+          );
+        }catch{return <div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>Open Cash Flow tool to add entries</div>;}
+      },
+    },
+    mortgage:{
+      id:"mortgage",label:"Mortgage Overview",icon:"🏡",
+      content:()=>{
+        const bal=Number(d.mortgage.balance||0);
+        const val=Number(d.mortgage.value||0);
+        if(!bal) return <div style={{color:"#6b8cce",textAlign:"center",padding:20,fontSize:13}}>No mortgage entered</div>;
+        const ltv=val>0?(bal/val)*100:0;
+        return (
+          <div>
+            <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:12,textAlign:"center"}}>MORTGAGE</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+              {[{label:"Balance",val:fmtShort(bal),color:"#f87171"},{label:"Home Value",val:fmtShort(val),color:"#4ade80"},{label:"Equity",val:fmtShort(equity),color:"#4ade80"},{label:"LTV",val:ltv.toFixed(1)+"%",color:ltv>80?"#f87171":"#4ade80"}].map((x,i)=>(
+                <div key={i} style={{background:"#0d1b3e",borderRadius:8,padding:"10px",textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>{x.label}</div>
+                  <div style={{fontSize:14,color:x.color,fontWeight:"bold",...GS}}>{x.val}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
+              <div style={{width:Math.min(100,ltv)+"%",height:"100%",background:ltv>80?"#f87171":"#4ade80",borderRadius:6}}/>
+            </div>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:4,textAlign:"center"}}>LTV {ltv.toFixed(1)}% — target under 80%</div>
+          </div>
+        );
+      },
+    },
+    next_steps:{
+      id:"next_steps",label:"Next Steps",icon:"✍️",
+      content:()=>(
+        <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+          <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:10}}>MY NEXT STEPS</div>
+          <textarea
+            value={nextSteps}
+            onChange={e=>saveNextSteps(e.target.value)}
+            placeholder={"Write your financial next steps here...\n\n• Max my TFSA this month\n• Book mortgage review\n• Increase investment rate to 20%"}
+            style={{flex:1,background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"12px",color:"#e8e4d9",fontSize:13,resize:"none",outline:"none",lineHeight:1.7,fontFamily:"inherit",minHeight:160}}
+          />
+        </div>
+      ),
+    },
+  };
 
-        {tab==="Cash Flow"&&<div id="cashflow-content">
-          <BillCalendar income={income}/>
-          <PDFBtn title="Cash Flow Calendar" contentId="cashflow-content"/>
-        </div>}
+  const ALL_TILE_IDS=Object.keys(TILE_DEFS);
 
-        {tab==="Score History"&&<div id="history-content">
-          <ScoreHistory history={scoreHistory} currentScore={score} onSave={()=>saveScore(score)}/>
-          <PDFBtn title="Score History" contentId="history-content"/>
-        </div>}
+  // ── Expand Modal ─────────────────────────────────────────────────────────────
+  const ExpandModal=({tileId})=>{
+    const def=TILE_DEFS[tileId];
+    if(!def) return null;
+    return (
+      <div onClick={()=>setExpandedTile(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #2a4080",borderRadius:20,padding:"24px",width:"100%",maxWidth:700,maxHeight:"85vh",overflowY:"auto",position:"relative"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <div style={{fontSize:16,color:"#e8e4d9",fontWeight:"bold",...GS}}>{def.icon} {def.label}</div>
+            <button onClick={()=>setExpandedTile(null)} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 12px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>✕ Close</button>
+          </div>
+          {def.content(false)}
+        </div>
+      </div>
+    );
+  };
+
+  // ── Add Tile Panel ───────────────────────────────────────────────────────────
+  const AddPanel=()=>(
+    <div onClick={()=>setShowAddPanel(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #2a4080",borderRadius:20,padding:"24px",width:"100%",maxWidth:560,maxHeight:"80vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <div style={{fontSize:16,color:"#e8e4d9",fontWeight:"bold",...GS}}>Add a Tile</div>
+          <button onClick={()=>setShowAddPanel(false)} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 12px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>✕</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {ALL_TILE_IDS.map(id=>{
+            const def=TILE_DEFS[id];
+            const inLayout=layout.includes(id);
+            return (
+              <button key={id} onClick={()=>!inLayout&&addTile(id)} disabled={inLayout}
+                style={{background:inLayout?"#0d1b3e":"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid ${inLayout?"#1e3a5f":"#2a4080"}`,borderRadius:12,padding:"14px",cursor:inLayout?"default":"pointer",textAlign:"left",opacity:inLayout?0.5:1,transition:"all 0.2s",...GS}}
+                onMouseEnter={e=>{if(!inLayout)e.currentTarget.style.borderColor="#cc0000";}}
+                onMouseLeave={e=>{if(!inLayout)e.currentTarget.style.borderColor="#2a4080";}}>
+                <div style={{fontSize:20,marginBottom:6}}>{def.icon}</div>
+                <div style={{fontSize:12,color:"#e8e4d9",fontWeight:"bold",marginBottom:2,...GS}}>{def.label}</div>
+                {inLayout&&<div style={{fontSize:10,color:"#6b8cce"}}>Already on dashboard</div>}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
-}
 
+  // ── Main Render ──────────────────────────────────────────────────────────────
+  const name=d.clientName||d.person1Name||user?.email?.split("@")[0]||"My";
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+      {expandedTile&&<ExpandModal tileId={expandedTile}/>}
+      {showAddPanel&&<AddPanel/>}
+
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#0d1b3e,#0a0f1e)",borderBottom:"1px solid #1e3a5f",padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
+        <button onClick={onHome} style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+          ← Home
+        </button>
+        <div style={{textAlign:"center"}}>
+          <h1 style={{margin:0,fontSize:"clamp(18px,3vw,28px)",fontWeight:"bold",color:"#e8e4d9",...GS}}>
+            {name}'s Financial Dashboard
+          </h1>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <button onClick={onAppointment} style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+            Edit Info
+          </button>
+          <button onClick={()=>{setEditMode(p=>!p);setShowAddPanel(false);}}
+            style={{background:editMode?"linear-gradient(135deg,#1a0505,#0d1b3e)":"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${editMode?"#cc0000":"#2a4080"}`,borderRadius:10,padding:"8px 16px",color:editMode?"#cc0000":"#e8e4d9",cursor:"pointer",fontSize:13,fontWeight:editMode?"bold":"normal",...GS}}>
+            {editMode?"✓ Done":"⚙️ Edit Dashboard"}
+          </button>
+        </div>
+      </div>
+
+      {/* Edit mode bar */}
+      {editMode&&(
+        <div style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",borderBottom:"1px solid #cc000033",padding:"10px 24px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <span style={{fontSize:12,color:"#cc0000",fontWeight:"bold",...GS}}>⚙️ EDIT MODE</span>
+          <span style={{fontSize:11,color:"#8fadd4"}}>Drag tiles to reorder · click × to remove</span>
+          <button onClick={()=>setShowAddPanel(true)} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:8,padding:"6px 14px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
+            + Add Tile
+          </button>
+          <button onClick={()=>saveLayout(DEFAULT_LAYOUT)} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 14px",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>
+            Reset to Default
+          </button>
+        </div>
+      )}
+
+      {/* Dashboard grid */}
+      <div style={{padding:"20px 24px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:16,alignItems:"start"}}>
+        {layout.map((tileId,idx)=>{
+          const def=TILE_DEFS[tileId];
+          if(!def) return null;
+          const isDragging=dragIdx===idx;
+          const isDragOver=dragOver===idx;
+          return (
+            <div key={tileId}
+              draggable={editMode}
+              onDragStart={()=>onDragStart(idx)}
+              onDragEnter={()=>onDragEnter(idx)}
+              onDragEnd={onDragEnd}
+              onDragOver={e=>e.preventDefault()}
+              style={{
+                background:"linear-gradient(135deg,#111827,#1a2235)",
+                border:`1px solid ${isDragOver?"#cc0000":"#1e3a5f"}`,
+                borderRadius:18,
+                padding:"20px",
+                position:"relative",
+                minHeight:220,
+                cursor:editMode?"grab":"default",
+                opacity:isDragging?0.4:1,
+                transform:isDragOver&&!isDragging?"scale(1.02)":"scale(1)",
+                transition:"transform 0.15s,border-color 0.15s,box-shadow 0.2s",
+                boxShadow:"0 4px 24px rgba(0,0,0,0.3)",
+              }}
+              onMouseEnter={e=>{if(!editMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 32px #cc000044, 0 4px 24px rgba(0,0,0,0.3)";e.currentTarget.style.borderColor="#cc000044";}}}
+              onMouseLeave={e=>{if(!editMode){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 24px rgba(0,0,0,0.3)";e.currentTarget.style.borderColor="#1e3a5f";}}}>
+
+              {/* Edit mode controls */}
+              {editMode&&(
+                <>
+                  <div style={{position:"absolute",top:10,left:12,fontSize:14,color:"#6b8cce",cursor:"grab"}}>⠿</div>
+                  <button onClick={()=>removeTile(tileId)} style={{position:"absolute",top:8,right:8,background:"#1a0505",border:"1px solid #cc000066",borderRadius:6,width:24,height:24,color:"#cc0000",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",...GS}}>×</button>
+                </>
+              )}
+
+              {/* Expand button */}
+              {!editMode&&(
+                <button onClick={()=>setExpandedTile(tileId)}
+                  style={{position:"absolute",top:10,right:10,background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:6,width:24,height:24,color:"#6b8cce",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity 0.2s",...GS}}
+                  className="expand-btn">
+                  ↗
+                </button>
+              )}
+
+              {/* Tile content */}
+              <div style={{paddingTop:editMode?8:0}}>
+                {def.content(true)}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Empty add tile in edit mode */}
+        {editMode&&(
+          <button onClick={()=>setShowAddPanel(true)} style={{background:"none",border:"2px dashed #2a4080",borderRadius:18,minHeight:220,cursor:"pointer",color:"#2a4080",fontSize:32,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,transition:"border-color 0.2s",...GS}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#cc0000";e.currentTarget.style.color="#cc0000";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a4080";e.currentTarget.style.color="#2a4080";}}>
+            +<div style={{fontSize:12,letterSpacing:1}}>ADD TILE</div>
+          </button>
+        )}
+      </div>
+
+      {/* CSS for expand button hover */}
+      <style>{`
+        div:hover .expand-btn { opacity: 1 !important; }
+        @keyframes hbeatDash { 0%,100%{transform:scale(1)} 10%{transform:scale(1.12)} 30%{transform:scale(1.07)} }
+      `}</style>
+    </div>
+  );
+}
 // helper
 const sumGroupHelper = arr => (arr||[]).reduce((s,x)=>s+Number(x.amount||0),0);
 
