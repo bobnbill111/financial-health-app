@@ -2030,6 +2030,84 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
 }
 
 // ─── CHECKUP DASHBOARD ────────────────────────────────────────────────────────
+// ─── SCORE HISTORY ────────────────────────────────────────────────────────────
+function ScoreHistory({history,currentScore,onSave}) {
+  if(!history||history.length===0) return (
+    <Card style={{textAlign:"center",padding:"32px 16px"}}>
+      <div style={{fontSize:36,marginBottom:12}}>📊</div>
+      <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",marginBottom:8,...GS}}>No score history yet</div>
+      <div style={{fontSize:13,color:"#6b8cce",lineHeight:1.7,marginBottom:16}}>Complete your appointment and calculate your score. Come back monthly to track your progress.</div>
+      {currentScore&&<button onClick={onSave} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:10,padding:"12px 24px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>Save Today's Score</button>}
+    </Card>
+  );
+  const sorted=[...history].sort((a,b)=>a.date.localeCompare(b.date));
+  const latest=sorted[sorted.length-1];
+  const prev=sorted.length>1?sorted[sorted.length-2]:null;
+  const change=prev?latest.score-prev.score:null;
+  const chartData=sorted.map(h=>({date:h.date.slice(0,7),score:h.score,grade:h.grade}));
+  return (
+    <div>
+      {/* Latest score hero */}
+      <Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${latest.gradeColor}44`,textAlign:"center",padding:"24px 16px"}}>
+        <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:8}}>LATEST SCORE</div>
+        <div style={{fontSize:72,color:latest.gradeColor,fontWeight:"bold",lineHeight:1,...GS}}>{latest.grade}</div>
+        <div style={{fontSize:28,color:"#e8e4d9",marginTop:4,...GS}}>{latest.score}<span style={{fontSize:14,color:"#6b8cce"}}>/100</span></div>
+        <div style={{fontSize:12,color:"#6b8cce",marginTop:6}}>{latest.date}</div>
+        {change!==null&&(
+          <div style={{marginTop:10,display:"inline-flex",alignItems:"center",gap:6,background:change>=0?"#0d2a1a":"#1a0505",border:`1px solid ${change>=0?"#4ade8044":"#f8717144"}`,borderRadius:20,padding:"4px 14px"}}>
+            <span style={{fontSize:14}}>{change>=0?"📈":"📉"}</span>
+            <span style={{fontSize:13,color:change>=0?"#4ade80":"#f87171",fontWeight:"bold",...GS}}>
+              {change>=0?"+":""}{change} pts from last month
+            </span>
+          </div>
+        )}
+      </Card>
+
+      {/* Trend chart */}
+      {sorted.length>1&&(
+        <Card>
+          <SecTitle>Score Trend</SecTitle>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={chartData} margin={{top:5,right:10,left:0,bottom:5}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f44"/>
+              <XAxis dataKey="date" stroke="#6b8cce" tick={{fontSize:9}} tickFormatter={d=>d.slice(5)}/>
+              <YAxis stroke="#6b8cce" tick={{fontSize:9}} domain={[0,100]} width={28}/>
+              <Tooltip
+                contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,fontSize:12}}
+                formatter={(v,n,p)=>[`${v}/100 (${p.payload.grade})`,""]}
+                labelFormatter={l=>`Month: ${l}`}
+              />
+              <Line type="monotone" dataKey="score" stroke="#4ade80" strokeWidth={2.5} dot={{fill:"#4ade80",r:4}} activeDot={{r:6}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* History table */}
+      <Card>
+        <SecTitle>Score History</SecTitle>
+        {[...sorted].reverse().map((h,i)=>(
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:i<sorted.length-1?"1px solid #1e3a5f":"none"}}>
+            <div>
+              <div style={{fontSize:13,color:"#e8e4d9",...GS}}>{h.date}</div>
+              {i===0&&<div style={{fontSize:10,color:"#4ade80",marginTop:2}}>Most recent</div>}
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{fontSize:13,color:"#8fadd4"}}>{h.score}/100</div>
+              <div style={{fontSize:22,color:h.gradeColor,fontWeight:"bold",minWidth:36,textAlign:"center",...GS}}>{h.grade}</div>
+            </div>
+          </div>
+        ))}
+      </Card>
+      {currentScore&&(
+        <button onClick={onSave} style={{width:"100%",background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>
+          💾 Save Today's Score ({currentScore.grade} · {currentScore.total}/100)
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── FULL REPORT PDF ──────────────────────────────────────────────────────────
 function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, income, totalAlloc, score, totalCC, totalLocBal, totalOD, savings, equity, cash, fooChecked, fooLabels}) {
   const handlePrint = () => {
@@ -2490,6 +2568,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
             <SecTitle>Net Worth Growth Projection</SecTitle>
             <NetWorthProjection totalInv={totalInv} income={income} totalAlloc={totalAlloc} netWorth={netWorth}/>
           </Card>
+          {score&&<CanadianBenchmarks score={score} data={d} totalInv={totalInv} netWorth={netWorth} income={income} totalAlloc={totalAlloc}/>}
           <PDFBtn title={`Financial Overview - ${d.clientName||"Report"}`} contentId="overview-content"/>
         </div>}
 
@@ -3126,7 +3205,7 @@ function BillCalendar() {
 const TOOLS_LIST = [
   {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
   {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs",color:"#22d3ee"},
-  {id:"housing",label:"Housing Analysis",icon:"🏠",sub:"Rent vs. Buy & Mortgage Qualifier",color:"#a78bfa"},
+  {id:"housing",label:"Housing Analysis",icon:"🏠",sub:"Rent vs. Buy, Mortgage & Home Guide",color:"#a78bfa"},
   {id:"networth",label:"Net Worth",icon:"📊",sub:"Assets minus liabilities",color:"#60a5fa"},
   {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month",color:"#facc15"},
   {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Payments and interest on any loan",color:"#fb923c"},
@@ -3827,20 +3906,25 @@ function RentVsBuy({user,token,toolId}) {
 // ─── HOUSING ANALYSIS (wrapper with tabs) ─────────────────────────────────────
 function HousingAnalysis({data,user,token}) {
   const [tab,setTab]=useState("rentvsbuy");
-  const TABS=[{id:"rentvsbuy",label:"🏘️ Rent vs. Buy"},{id:"qualifier",label:"🏦 Mortgage Qualifier"}];
+  const TABS=[
+    {id:"rentvsbuy",label:"🏘️ Rent vs. Buy"},
+    {id:"qualifier",label:"🏦 Mortgage Qualifier"},
+    {id:"firsthome",label:"🔑 First Home Guide"},
+  ];
   return (
     <div>
       {/* Tab bar */}
       <div style={{display:"flex",background:"#0d1b3e",borderRadius:12,padding:4,marginBottom:16,gap:4}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{flex:1,background:tab===t.id?"linear-gradient(135deg,#1a2f5a,#1e3a5f)":"none",border:tab===t.id?"1px solid #2a4080":"1px solid transparent",borderRadius:10,padding:"10px 8px",cursor:"pointer",color:tab===t.id?"#e8e4d9":"#6b8cce",fontSize:13,fontWeight:tab===t.id?"bold":"normal",transition:"all 0.2s",...GS}}>
+            style={{flex:1,background:tab===t.id?"linear-gradient(135deg,#1a2f5a,#1e3a5f)":"none",border:tab===t.id?"1px solid #2a4080":"1px solid transparent",borderRadius:10,padding:"10px 4px",cursor:"pointer",color:tab===t.id?"#e8e4d9":"#6b8cce",fontSize:11,fontWeight:tab===t.id?"bold":"normal",transition:"all 0.2s",...GS}}>
             {t.label}
           </button>
         ))}
       </div>
       {tab==="rentvsbuy"&&<RentVsBuy user={user} token={token} toolId="rentvsbuy"/>}
       {tab==="qualifier"&&<MortgageQualifier data={data}/>}
+      {tab==="firsthome"&&<FirstHomeBuyer data={data}/>}
     </div>
   );
 }
@@ -4243,6 +4327,329 @@ function CanadianTaxEstimator({data}) {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── CANADIAN BENCHMARKS ──────────────────────────────────────────────────────
+function CanadianBenchmarks({score,data,totalInv,netWorth,income,totalAlloc}) {
+  const age=Number(data.age1||0);
+  if(!age||!income) return null;
+  const band=score.band||"30s";
+
+  // Canadian benchmark data by age group (2024 estimates)
+  // Sources: Stats Canada, FCAC, RBC Financial Independence Poll
+  const BENCHMARKS={
+    "20s":{
+      medianNetWorth:22000, medianInv:8000, medianSavingsRate:5,
+      medianEmergFund:1.2, medianDebtRatio:35,
+      top25NW:65000, top10NW:120000,
+    },
+    "30s":{
+      medianNetWorth:110000, medianInv:45000, medianSavingsRate:8,
+      medianEmergFund:2.1, medianDebtRatio:28,
+      top25NW:280000, top10NW:520000,
+    },
+    "40s":{
+      medianNetWorth:285000, medianInv:120000, medianSavingsRate:10,
+      medianEmergFund:2.8, medianDebtRatio:22,
+      top25NW:650000, top10NW:1200000,
+    },
+    "50s":{
+      medianNetWorth:520000, medianInv:250000, medianSavingsRate:12,
+      medianEmergFund:3.5, medianDebtRatio:15,
+      top25NW:1100000, top10NW:2200000,
+    },
+    "60s":{
+      medianNetWorth:750000, medianInv:380000, medianSavingsRate:14,
+      medianEmergFund:4.0, medianDebtRatio:8,
+      top25NW:1600000, top10NW:3000000,
+    },
+  };
+
+  const bm=BENCHMARKS[band]||BENCHMARKS["30s"];
+  const monthlyExp=totalAlloc;
+  const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const efundMonths=monthlyExp>0?efund/monthlyExp:0;
+  const grossMonthly=Number(data.income?.grossSalary||0)>0?Number(data.income.grossSalary)/12:income;
+  const invMonthly=Number(data.budget.investmentMonthly||0);
+  const savingsRate=grossMonthly>0?(invMonthly/grossMonthly)*100:0;
+  const totalDebt=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+    +(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
+    +(data.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const annualIncome=income*12;
+  const debtRatio=annualIncome>0?(totalDebt/annualIncome)*100:0;
+
+  // Percentile calculator — simplified
+  const getPercentile=(val,median,top25,top10)=>{
+    if(val<=0) return {pct:0,label:"Below median",color:"#f87171"};
+    if(val>=top10) return {pct:95,label:"Top 10%",color:"#4ade80"};
+    if(val>=top25) return {pct:80,label:"Top 25%",color:"#4ade80"};
+    if(val>=median) return {pct:60,label:"Above median",color:"#facc15"};
+    if(val>=median*0.5) return {pct:35,label:"Below median",color:"#fb923c"};
+    return {pct:15,label:"Bottom 25%",color:"#f87171"};
+  };
+
+  const getDebtPercentile=(ratio,medianRatio)=>{
+    if(ratio===0) return {pct:95,label:"Top 10% — debt free",color:"#4ade80"};
+    if(ratio<=medianRatio*0.4) return {pct:80,label:"Top 25% — very low debt",color:"#4ade80"};
+    if(ratio<=medianRatio) return {pct:55,label:"Below median — manageable",color:"#facc15"};
+    if(ratio<=medianRatio*1.5) return {pct:30,label:"Above median — reduce debt",color:"#fb923c"};
+    return {pct:10,label:"High debt load",color:"#f87171"};
+  };
+
+  const getSavingsPercentile=(rate,medianRate)=>{
+    if(rate>=25) return {pct:95,label:"Top 5% — exceptional",color:"#4ade80"};
+    if(rate>=medianRate*2) return {pct:80,label:"Top 25%",color:"#4ade80"};
+    if(rate>=medianRate) return {pct:55,label:"Above median",color:"#facc15"};
+    if(rate>=medianRate*0.5) return {pct:35,label:"Below median",color:"#fb923c"};
+    return {pct:10,label:"Bottom 25%",color:"#f87171"};
+  };
+
+  const metrics=[
+    {
+      label:"Net Worth",
+      yours:fmtShort(netWorth),
+      median:fmtShort(bm.medianNetWorth),
+      ...getPercentile(netWorth,bm.medianNetWorth,bm.top25NW,bm.top10NW),
+      icon:"💎",
+    },
+    {
+      label:"Investment Portfolio",
+      yours:fmtShort(totalInv),
+      median:fmtShort(bm.medianInv),
+      ...getPercentile(totalInv,bm.medianInv,bm.medianInv*3,bm.medianInv*7),
+      icon:"📈",
+    },
+    {
+      label:"Savings Rate",
+      yours:savingsRate.toFixed(1)+"%",
+      median:bm.medianSavingsRate+"%",
+      ...getSavingsPercentile(savingsRate,bm.medianSavingsRate),
+      icon:"💰",
+    },
+    {
+      label:"Emergency Fund",
+      yours:efundMonths.toFixed(1)+" months",
+      median:bm.medianEmergFund+" months",
+      ...getPercentile(efundMonths,bm.medianEmergFund,bm.medianEmergFund*1.8,bm.medianEmergFund*2.5),
+      icon:"🛡️",
+    },
+    {
+      label:"Debt-to-Income Ratio",
+      yours:debtRatio.toFixed(0)+"%",
+      median:bm.medianDebtRatio+"%",
+      ...getDebtPercentile(debtRatio,bm.medianDebtRatio),
+      icon:"💳",
+      lowerIsBetter:true,
+    },
+  ];
+
+  return (
+    <Card>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <SecTitle style={{marginBottom:0}}>Where You Stand</SecTitle>
+        <div style={{fontSize:10,color:"#6b8cce"}}>vs. Canadians in their {band}</div>
+      </div>
+      <div style={{fontSize:11,color:"#6b8cce",marginBottom:16,lineHeight:1.6}}>
+        How your key metrics compare to the median Canadian in your age group. Based on Statistics Canada and FCAC data.
+      </div>
+      {metrics.map((m,i)=>(
+        <div key={i} style={{marginBottom:i<metrics.length-1?16:0,paddingBottom:i<metrics.length-1?16:0,borderBottom:i<metrics.length-1?"1px solid #1e3a5f":"none"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:18}}>{m.icon}</span>
+              <div>
+                <div style={{fontSize:13,color:"#e8e4d9",...GS}}>{m.label}</div>
+                <div style={{fontSize:10,color:"#6b8cce",marginTop:1}}>Canadian median: {m.median}</div>
+              </div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:15,color:m.color,fontWeight:"bold",...GS}}>{m.yours}</div>
+              <div style={{fontSize:10,color:m.color,marginTop:2,border:`1px solid ${m.color}44`,borderRadius:10,padding:"1px 8px",display:"inline-block"}}>{m.label}</div>
+            </div>
+          </div>
+          {/* Percentile bar */}
+          <div style={{position:"relative",height:6,background:"#0d1b3e",borderRadius:3,overflow:"visible"}}>
+            <div style={{height:"100%",width:m.pct+"%",background:`linear-gradient(90deg,#1e3a5f,${m.color})`,borderRadius:3,transition:"width 0.6s ease"}}/>
+            {/* Marker at 50% (median) */}
+            <div style={{position:"absolute",top:-3,left:"50%",width:2,height:12,background:"#6b8cce",borderRadius:1,transform:"translateX(-50%)"}}/>
+            {/* User dot */}
+            <div style={{position:"absolute",top:-4,left:`calc(${Math.min(97,m.pct)}% - 6px)`,width:14,height:14,borderRadius:"50%",background:m.color,border:"2px solid #0a0f1e",boxShadow:`0 0 8px ${m.color}88`}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
+            <span style={{fontSize:9,color:"#2a4080"}}>Bottom</span>
+            <span style={{fontSize:10,color:m.color,...GS}}>{m.label}</span>
+            <span style={{fontSize:9,color:"#2a4080"}}>Top 10%</span>
+          </div>
+        </div>
+      ))}
+      <div style={{marginTop:14,background:"#0d1b3e",borderRadius:8,padding:"10px 12px",fontSize:10,color:"#6b8cce",lineHeight:1.7}}>
+        📊 Benchmarks are approximate and based on 2024 Statistics Canada data. Individual circumstances vary significantly.
+      </div>
+    </Card>
+  );
+}
+
+// ─── FIRST HOME BUYER'S GUIDE ─────────────────────────────────────────────────
+function FirstHomeBuyer({data}) {
+  const STORAGE_KEY="fh_firsthome_checks";
+  const loadChecks=()=>{try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");}catch{return {};}};
+  const [checks,setChecks]=useState(loadChecks);
+  const toggle=(id)=>{
+    const updated={...checks,[id]:!checks[id]};
+    setChecks(updated);
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(updated));}catch{}
+  };
+
+  // Pre-fill from appointment data
+  const fhsa=(data?.investments?.fhsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+  const tfsa=(data?.investments?.tfsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
+  const efund=(data?.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const monthlyExp=(data?.budget?.categories||[]).reduce((s,c)=>s+Number(c.amount||0),0);
+  const efundMonths=monthlyExp>0?(efund/monthlyExp):0;
+  const totalDebt=(data?.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+    +(data?.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
+    +(data?.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
+  const income=Number(data?.budget?.income||0)*12;
+
+  const PHASES=[
+    {
+      id:"foundation",
+      phase:"Phase 1",
+      title:"Financial Foundation",
+      color:"#60a5fa",
+      icon:"🏗️",
+      steps:[
+        {id:"efund",label:"Emergency fund of 3+ months saved",desc:`You have ${efundMonths.toFixed(1)} months saved. Target: 3+ months before buying.`,auto:efundMonths>=3},
+        {id:"debt",label:"High-interest debt cleared",desc:`Non-mortgage debt: ${fmt(totalDebt)}. Aim to clear credit cards and high-rate loans first.`,auto:totalDebt===0},
+        {id:"credit",label:"Strong credit score (680+)",desc:"Check your credit score via Equifax or TransUnion. A higher score = better mortgage rate."},
+        {id:"budget",label:"Living within your means consistently",desc:"6+ months of surplus budgeting before taking on a mortgage."},
+        {id:"stable",label:"Stable employment income",desc:"Most lenders want 2+ years at the same employer or in the same field."},
+      ],
+    },
+    {
+      id:"savings",
+      phase:"Phase 2",
+      title:"Saving for the Purchase",
+      color:"#4ade80",
+      icon:"💰",
+      steps:[
+        {id:"fhsa",label:"FHSA opened and contributing",desc:`Your FHSA balance: ${fmtShort(fhsa)}. Max $8,000/yr, up to $40,000 lifetime. Tax-deductible contributions + tax-free withdrawal.`,auto:fhsa>0},
+        {id:"fhsa_max",label:"FHSA on track for $40K max",desc:"$40K from FHSA = $40K tax-free toward your down payment. Maximize this first."},
+        {id:"rrsp_hbp",label:"RRSP Home Buyers' Plan considered",desc:"First-time buyers can withdraw up to $35,000 from RRSP tax-free (must repay over 15 years)."},
+        {id:"down_5",label:"5% minimum down payment saved",desc:"$500K home = $25,000 minimum. Under $500K = 5% down. $500K–$999K = 5% on first $500K + 10% on remainder."},
+        {id:"down_20",label:"Working toward 20% to avoid CMHC",desc:"20% down payment eliminates CMHC mortgage insurance (0.6%–4.0% of mortgage amount)."},
+        {id:"closing",label:"Closing costs saved (1.5–4% of price)",desc:"Budget for: land transfer tax, legal fees (~$2K), home inspection (~$500), title insurance, moving costs."},
+      ],
+    },
+    {
+      id:"preapproval",
+      phase:"Phase 3",
+      title:"Getting Pre-Approved",
+      color:"#a78bfa",
+      icon:"📋",
+      steps:[
+        {id:"docs",label:"Financial documents organized",desc:"T4s (2 years), NOAs, recent pay stubs, bank statements (3 months), investment account statements."},
+        {id:"stress",label:"Understand the stress test",desc:"You must qualify at the higher of: your rate +2%, or 5.25%. Use our Mortgage Qualifier tool to check."},
+        {id:"preapproval",label:"Pre-approval letter obtained",desc:"Shop 2–3 lenders (bank + broker). Pre-approval locks your rate for 90–120 days while you search."},
+        {id:"gds_tds",label:"GDS ≤39% and TDS ≤44%",desc:"Gross Debt Service and Total Debt Service ratios are what lenders use to qualify you. Pre-approval confirms this."},
+        {id:"mortgage_type",label:"Fixed vs variable rate decision made",desc:"Fixed = predictable payments. Variable = typically lower but fluctuates with Bank of Canada rate."},
+      ],
+    },
+    {
+      id:"buying",
+      phase:"Phase 4",
+      title:"The Purchase",
+      color:"#facc15",
+      icon:"🔑",
+      steps:[
+        {id:"realtor",label:"Realtor selected (buyer's agent — free to you)",desc:"The seller pays both agents in Canada. Your realtor costs you nothing."},
+        {id:"inspection",label:"Home inspection completed",desc:"Never skip this. A $400–600 inspection can save you tens of thousands in hidden issues."},
+        {id:"lawyer",label:"Real estate lawyer hired",desc:"Required in Ontario and most provinces. They handle title transfer, closing, and fund disbursement."},
+        {id:"ltt",label:"Land Transfer Tax calculated",desc:"Ontario: 0.5%–2.5% of purchase price. Toronto adds a second LTT. First-time buyers get a rebate up to $4,000 provincial."},
+        {id:"insurance",label:"Home insurance arranged before closing",desc:"Mortgage lenders require proof of home insurance before releasing funds."},
+        {id:"title",label:"Title insurance obtained",desc:"One-time cost (~$250–400). Protects against title fraud and hidden encumbrances."},
+      ],
+    },
+    {
+      id:"ownership",
+      phase:"Phase 5",
+      title:"Owning Your Home",
+      color:"#fb923c",
+      icon:"🏡",
+      steps:[
+        {id:"emergency_home",label:"Home emergency fund (1–3% of value/year)",desc:"Budget $5K–15K/year for a $500K home for repairs, maintenance, appliances. Start a dedicated savings account."},
+        {id:"prepayment",label:"Understand prepayment privileges",desc:"Most mortgages allow 10–20% lump sum annually + payment increases. Use them to pay down faster."},
+        {id:"renewal",label:"Mortgage renewal strategy planned",desc:"Shop around 4–6 months before renewal. Your bank's first offer is rarely the best rate."},
+        {id:"property_tax",label:"Property tax account set up",desc:"Set up monthly pre-authorized payments to your municipality to avoid a large annual bill."},
+        {id:"reassess",label:"Reassess your budget post-purchase",desc:"Update your Financial Health Check-Up with your new mortgage, home value, and revised budget."},
+      ],
+    },
+  ];
+
+  const totalSteps=PHASES.reduce((s,p)=>s+p.steps.length,0);
+  const totalChecked=PHASES.reduce((s,p)=>s+p.steps.filter(step=>checks[step.id]||step.auto).length,0);
+  const overallPct=Math.round((totalChecked/totalSteps)*100);
+
+  return (
+    <div>
+      {/* Overall progress */}
+      <Card style={{background:"linear-gradient(135deg,#0d1b2e,#111827)",border:"1px solid #facc1544",textAlign:"center",padding:"20px 16px"}}>
+        <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>YOUR HOME BUYING PROGRESS</div>
+        <div style={{fontSize:40,color:"#facc15",fontWeight:"bold",...GS}}>{overallPct}<span style={{fontSize:18,color:"#6b8cce"}}>%</span></div>
+        <div style={{fontSize:12,color:"#8fadd4",marginTop:4}}>{totalChecked} of {totalSteps} steps complete</div>
+        <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden",marginTop:12}}>
+          <div style={{width:overallPct+"%",height:"100%",background:"linear-gradient(90deg,#facc15,#4ade80)",borderRadius:6,transition:"width 0.5s"}}/>
+        </div>
+      </Card>
+
+      {PHASES.map(phase=>{
+        const phaseChecked=phase.steps.filter(s=>checks[s.id]||s.auto).length;
+        const phasePct=Math.round((phaseChecked/phase.steps.length)*100);
+        return (
+          <Card key={phase.id}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>{phase.icon}</span>
+                <div>
+                  <div style={{fontSize:10,color:phase.color,letterSpacing:2,...GS}}>{phase.phase.toUpperCase()}</div>
+                  <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",...GS}}>{phase.title}</div>
+                </div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:13,color:phasePct===100?"#4ade80":phase.color,fontWeight:"bold",...GS}}>{phaseChecked}/{phase.steps.length}</div>
+                {phasePct===100&&<div style={{fontSize:10,color:"#4ade80"}}>✅ Complete</div>}
+              </div>
+            </div>
+            <div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}>
+              <div style={{width:phasePct+"%",height:"100%",background:phase.color,borderRadius:4,transition:"width 0.4s"}}/>
+            </div>
+            {phase.steps.map((step,si)=>{
+              const done=checks[step.id]||step.auto||false;
+              return (
+                <button key={step.id} onClick={()=>!step.auto&&toggle(step.id)}
+                  style={{width:"100%",background:"none",border:"none",cursor:step.auto?"default":"pointer",display:"flex",alignItems:"flex-start",gap:12,padding:"10px 0",borderBottom:si<phase.steps.length-1?"1px solid #1e3a5f":"none",textAlign:"left"}}>
+                  <div style={{width:22,height:22,borderRadius:"50%",flexShrink:0,background:done?phase.color:"transparent",border:`2px solid ${done?phase.color:"#2a4080"}`,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",marginTop:1}}>
+                    {done&&<span style={{color:"#0a0f1e",fontSize:11,fontWeight:"bold",lineHeight:1}}>✓</span>}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,color:done?phase.color:"#e8e4d9",fontWeight:done?"bold":"normal",transition:"color 0.2s",...GS}}>{step.label}</div>
+                    <div style={{fontSize:11,color:"#6b8cce",marginTop:3,lineHeight:1.5}}>{step.desc}</div>
+                    {step.auto&&<div style={{fontSize:9,color:phase.color,marginTop:3,letterSpacing:1}}>AUTO-DETECTED FROM YOUR DATA</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </Card>
+        );
+      })}
+
+      <Card style={{background:"#0d1b3e"}}>
+        <div style={{fontSize:11,color:"#6b8cce",lineHeight:1.8}}>
+          🇨🇦 This guide is based on Canadian federal rules and Ontario provincial guidelines. Some details vary by province (land transfer tax, lawyer requirements). Always consult a licensed mortgage professional and real estate lawyer before purchasing.
+        </div>
+      </Card>
     </div>
   );
 }
