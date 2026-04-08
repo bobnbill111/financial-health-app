@@ -79,6 +79,41 @@ const CAT_COLORS = ["#4ade80","#60a5fa","#facc15","#f87171","#a78bfa","#34d399",
 const GS = { fontFamily:"Georgia,serif" };
 const today = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 
+// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+const GLOBAL_CSS = `
+  @keyframes redGlowPulse {
+    0%,100% { box-shadow: 0 0 0px #cc000000; }
+    50% { box-shadow: 0 0 14px #cc000077; }
+  }
+  @keyframes fadeInUp {
+    from { opacity:0; transform:translateY(18px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .glow-btn {
+    transition: box-shadow 0.25s ease, color 0.2s, transform 0.15s, outline 0.2s !important;
+    outline: 2px solid transparent !important;
+  }
+  .glow-btn:hover {
+    box-shadow: 0 0 18px #cc000077, 0 4px 14px rgba(0,0,0,0.35) !important;
+    outline: 2px solid #cc0000 !important;
+    color: #fff !important;
+    transform: translateY(-2px) !important;
+  }
+  .glow-btn.active-tab {
+    outline: 2px solid #cc000066 !important;
+    animation: redGlowPulse 2.5s ease-in-out infinite !important;
+  }
+  .tile-enter {
+    animation: fadeInUp 0.45s ease both;
+  }
+  /* Center arrow in fixed-size buttons */
+  .glow-btn.icon-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+`;
+
 // ─── DEFAULT STATE ─────────────────────────────────────────────────────────────
 const EMPTY = {
   clientName:"", isJoint:null, age1:"", age2:"", person1Name:"", person2Name:"",
@@ -154,7 +189,7 @@ const NavBar = ({title,subtitle,onHome,right}) => (
   <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 0",position:"sticky",top:0,zIndex:100}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+        <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
         <div><div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",...GS}}>{subtitle}</div><div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>{title}</div></div>
       </div>
       {right}
@@ -330,6 +365,7 @@ function AuthScreen({onAuth,onGuest}) {
 
   return (
     <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+      <style>{GLOBAL_CSS}</style>
       {/* Background grid */}
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
       {/* Glow */}
@@ -355,6 +391,7 @@ function AuthScreen({onAuth,onGuest}) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:24}}>
               {[{val:"login",label:"Log In"},{val:"signup",label:"Sign Up"}].map(t=>(
                 <button key={t.val} onClick={()=>{setMode(t.val);reset();}}
+                  className={`glow-btn${mode===t.val?" active-tab":""}`}
                   style={{background:mode===t.val?"#cc0000":"transparent",border:`1px solid ${mode===t.val?"#cc0000":"#2a4080"}`,borderRadius:10,padding:"10px",color:mode===t.val?"#fff":"#8fadd4",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>
                   {t.label}
                 </button>
@@ -443,7 +480,7 @@ function AuthScreen({onAuth,onGuest}) {
         {/* Guest access */}
         <div style={{textAlign:"center",marginTop:20}}>
           <div style={{fontSize:12,color:"#2a4080",marginBottom:10}}>— or —</div>
-          <button onClick={onGuest} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px 24px",color:"#6b8cce",cursor:"pointer",fontSize:13,width:"100%",...GS}}>
+          <button onClick={onGuest} className="glow-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px 24px",color:"#6b8cce",cursor:"pointer",fontSize:13,width:"100%",...GS}}>
             Continue as Guest
           </button>
           <div style={{fontSize:11,color:"#1e3a5f",marginTop:8,lineHeight:1.6}}>
@@ -468,6 +505,15 @@ export default function App() {
 
   const [data,setData]=useState(EMPTY);
   const [scoreHistory,setScoreHistory]=useState([]);
+
+  // Inject global CSS into document head once
+  useEffect(()=>{
+    const el=document.createElement('style');
+    el.id='fh-global-css';
+    el.textContent=GLOBAL_CSS;
+    if(!document.getElementById('fh-global-css')) document.head.appendChild(el);
+    return ()=>{};
+  },[]);
 
   useEffect(()=>{
     const savedToken=localStorage.getItem("fh_token");
@@ -570,6 +616,13 @@ export default function App() {
   return (
     <>
       {signOutBtn}
+      {/* Guest mode banner */}
+      {isGuest&&(
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#1a0a00,#0d1b3e)",borderTop:"1px solid #cc000044",padding:"10px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",zIndex:1000}}>
+          <div style={{fontSize:12,color:"#facc15"}}>⚠️ Guest mode — your data won't be saved between sessions</div>
+          <button onClick={()=>setIsGuest(false)} style={{background:"linear-gradient(135deg,#cc0000,#8b0000)",border:"none",borderRadius:8,padding:"6px 16px",color:"#fff",cursor:"pointer",fontSize:12,...GS}}>Sign Up Free</button>
+        </div>
+      )}
       {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
       {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme}/>}
       {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token}/>}
@@ -663,7 +716,7 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff"}}>My Profile</div>
           </div>
         </div>
@@ -813,7 +866,7 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
       {/* Profile icon / Guest sign-in — top left */}
       <div style={{position:"absolute",top:24,left:24,zIndex:10}}>
         {isGuest?(
-          <button onClick={onSignIn} style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000066",borderRadius:10,padding:"8px 14px",color:"#cc0000",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
+          <button onClick={onSignIn} className="glow-btn" style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000066",borderRadius:10,padding:"8px 14px",color:"#cc0000",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
             Sign In / Sign Up
           </button>
         ):(
@@ -1551,7 +1604,7 @@ function IncomePanel({label,color,inc,setInc,monthlyNet,invMonthly}) {
 }
 
 // ─── APPOINTMENT ──────────────────────────────────────────────────────────────
-const APPT_STEPS=["Start","Income","Accounts","Investments","Savings","Mortgage","Debt","Credit Cards","Line of Credit","Budget","Score"];
+const APPT_STEPS=["Start","Income","Accounts","Investments","Mortgage","Debt","Credit Cards","Line of Credit","Budget","Score"];
 
 function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,theme}) {
   const [step,setStep]=useState("Start");
@@ -1581,13 +1634,20 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
   const score=step==="Score"?calcScore(d,totalInv):null;
   const contentRef=useRef();
 
+  // Auto-save score when score step is reached
+  useEffect(()=>{
+    if(step==="Score"&&score) saveScore(score);
+  },[step]);
+
   return (
     <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
-      <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80"}}>{pct}%</div>}/>
-      <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",transition:"width 0.4s"}}/></div>
+      <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80",...GS}}>Step {prog+1} of {APPT_STEPS.length}</div>}/>
+      <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#cc0000,#4ade80)",transition:"width 0.4s"}}/></div>
       <div style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
         {APPT_STEPS.filter(s=>s!=="Start"&&s!=="Income"&&s!=="Score").map(s=>(
-          <button key={s} onClick={()=>setStep(s)} style={{background:"none",border:"none",borderBottom:step===s?"2px solid #4ade80":"2px solid transparent",color:step===s?"#4ade80":"#8fadd4",padding:"8px 11px",fontSize:10,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap",...GS}}>{s}</button>
+          <button key={s} onClick={()=>setStep(s)}
+            className={`glow-btn${step===s?" active-tab":""}`}
+            style={{background:"none",border:"none",borderBottom:step===s?"2px solid #cc0000":"2px solid transparent",color:step===s?"#cc0000":"#8fadd4",padding:"8px 11px",fontSize:10,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap",...GS}}>{s}</button>
         ))}
       </div>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}} ref={contentRef} id="appt-content">
@@ -1683,6 +1743,46 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               </div>}
             </Card>
             <Card><SecTitle>Life Insurance</SecTitle><Label>Cash Surrender Value</Label><NumInput value={d.lifeInsurance} onChange={v=>setD(p=>({...p,lifeInsurance:v}))}/></Card>
+            <Card>
+              <SecTitle>Savings Accounts</SecTitle>
+              {d.savingsAccounts.map((acct,i)=>(
+                <div key={i} style={{marginBottom:14,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
+                    <input value={acct.name} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,name:e.target.value}:a)}))} placeholder="Account name" style={{background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+                    <button onClick={()=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.filter((_,idx)=>idx!==i)}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>SAVED</div>
+                      <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+                        <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
+                        <input type="number" value={acct.saved} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,saved:e.target.value}:a)}))} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:14,width:"100%",...GS}}/>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>GOAL</div>
+                      <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+                        <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
+                        <input type="number" value={acct.goal} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,goal:e.target.value}:a)}))} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
+                      </div>
+                    </div>
+                  </div>
+                  {Number(acct.saved||0)>0&&Number(acct.goal||0)>0&&(
+                    <div style={{marginTop:8}}>
+                      <div style={{background:"#1e3a5f",borderRadius:4,height:5,overflow:"hidden"}}>
+                        <div style={{width:Math.min(100,(Number(acct.saved)/Number(acct.goal))*100)+"%",height:"100%",background:acct.color||"#4ade80",borderRadius:4}}/>
+                      </div>
+                      <div style={{fontSize:10,color:"#6b8cce",marginTop:3}}>{Math.round((Number(acct.saved)/Number(acct.goal))*100)}% of goal</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              <button onClick={()=>setD(p=>({...p,savingsAccounts:[...p.savingsAccounts,{name:"",saved:"",goal:"",color:CAT_COLORS[p.savingsAccounts.length%CAT_COLORS.length]}]}))} style={{width:"100%",background:"none",border:"1px dashed #4ade8044",color:"#6b8cce",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,...GS}}>+ Add Savings Account</button>
+              {d.savingsAccounts.length>0&&<div style={{marginTop:12,display:"flex",justifyContent:"space-between",borderTop:"1px solid #1e3a5f",paddingTop:10}}>
+                <div style={{fontSize:11,color:"#6b8cce"}}>Total Saved</div>
+                <div style={{fontSize:15,color:"#4ade80",fontWeight:"bold"}}>{fmt(d.savingsAccounts.reduce((s,a)=>s+Number(a.saved||0),0))}</div>
+              </div>}
+            </Card>
             <NextBtn onClick={()=>setStep("Investments")}>Next: Investments →</NextBtn>
           </div>
         )}
@@ -1713,57 +1813,6 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               );
             })}
             <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #1a4030"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div style={{fontSize:11,color:"#6b8cce",letterSpacing:2}}>TOTAL PORTFOLIO</div><div style={{fontSize:26,color:"#4ade80",fontWeight:"bold"}}>{fmt(totalInv)}</div></div></Card>
-            <NextBtn onClick={()=>setStep("Savings")}>Next: Savings →</NextBtn>
-          </div>
-        )}
-
-        {step==="Savings"&&(
-          <div>
-            <Card>
-              <SecTitle>Savings Accounts</SecTitle>
-              <div style={{fontSize:12,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>Add any savings bucket — emergency fund, sinking fund, vacation fund, etc.</div>
-              {d.savingsAccounts.map((acct,i)=>{
-                const sv=Number(acct.saved||0),gl=Number(acct.goal||0),p=gl>0?Math.min(100,(sv/gl)*100):0;
-                return (
-                  <div key={i} style={{background:"#0d1b3e",borderRadius:12,padding:"14px",marginBottom:12}}>
-                    {/* Name row */}
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                      <div style={{width:10,height:10,borderRadius:"50%",background:acct.color,flexShrink:0}}/>
-                      <input
-                        value={acct.name}
-                        onChange={e=>setSavingsAccount(i,"name")(e.target.value)}
-                        style={{background:"none",border:"none",borderBottom:"1px solid #2a4080",outline:"none",color:"#e8e4d9",fontSize:14,flex:1,paddingBottom:3,...GS}}
-                      />
-                      <button onClick={()=>removeSavingsAccount(i)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,flexShrink:0}}>×</button>
-                    </div>
-                    {/* Saved / Goal */}
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                      <div>
-                        <Label>Amount Saved</Label>
-                        <NumInput value={acct.saved} onChange={setSavingsAccount(i,"saved")}/>
-                      </div>
-                      <div>
-                        <Label>Goal Amount</Label>
-                        <NumInput value={acct.goal} onChange={setSavingsAccount(i,"goal")}/>
-                      </div>
-                    </div>
-                    {/* Progress */}
-                    {sv>0&&gl>0&&(
-                      <div>
-                        <div style={{background:"#1a2235",borderRadius:6,height:7,overflow:"hidden",marginBottom:5}}>
-                          <div style={{width:p+"%",height:"100%",background:acct.color,borderRadius:6,transition:"width 0.3s"}}/>
-                        </div>
-                        <div style={{display:"flex",justifyContent:"space-between"}}>
-                          <div style={{fontSize:10,color:"#6b8cce"}}>{Math.round(p)}% complete</div>
-                          <div style={{fontSize:10,color:"#6b8cce"}}>{fmt(gl-sv)} remaining</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <button onClick={addSavingsAccount} style={{width:"100%",background:"none",border:"1px dashed #4ade8044",color:"#6b8cce",borderRadius:8,padding:"10px",cursor:"pointer",fontSize:13,...GS}}>+ Add Savings Account</button>
-            </Card>
             <NextBtn onClick={()=>setStep("Mortgage")}>Next: Mortgage →</NextBtn>
           </div>
         )}
@@ -1987,7 +2036,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
             <div id="score-content">
               <Card style={{textAlign:"center",padding:"28px 16px",background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${score.gradeColor}44`}}>
                 <div style={{fontSize:11,color:"#6b8cce",letterSpacing:3,marginBottom:12}}>FINANCIAL HEALTH SCORE</div>
-                <div style={{fontSize:80,color:score.gradeColor,fontWeight:"bold",lineHeight:1,marginBottom:8}}>{score.grade}</div>
+                <div style={{fontSize:80,color:score.gradeColor,fontWeight:"bold",lineHeight:1,marginBottom:8,animation:"redGlowPulse 2.5s ease-in-out infinite",textShadow:`0 0 24px ${score.gradeColor}88`}}>{score.grade}</div>
                 <div style={{fontSize:32,color:"#e8e4d9",marginBottom:6}}>{score.total}<span style={{fontSize:16,color:"#6b8cce"}}>/100</span></div>
                 <div style={{fontSize:12,color:"#6b8cce"}}>Ontario benchmarks · {score.band} age group · {new Date().toLocaleDateString("en-CA")}</div>
               </Card>
@@ -2175,7 +2224,7 @@ function FullReportBtn({data:d, totalInv, netWorth, totalAssets, totalLiab, inco
   <h2>Assets &amp; Liabilities</h2>
   <div class="grid2">
     <div>
-      ${[{l:"Cash & Accounts",v:cash},{l:"Investments",v:totalInv},{l:"Home Equity",v:equity},{l:"Savings",v:savings},{l:"Life Insurance",v:Number(d.lifeInsurance||0)}].map(x=>`<div class="row"><span class="row-label">${x.l}</span><span class="row-val" style="color:#16a34a">${fmt(x.v)}</span></div>`).join("")}
+      ${[{l:"Cash & Savings",v:cash},{l:"Investments",v:totalInv},{l:"Home Equity",v:equity},{l:"Life Insurance",v:Number(d.lifeInsurance||0)}].map(x=>`<div class="row"><span class="row-label">${x.l}</span><span class="row-val" style="color:#16a34a">${fmt(x.v)}</span></div>`).join("")}
       <div class="row" style="margin-top:6px;"><span style="font-weight:bold">Total Assets</span><span class="row-val" style="color:#16a34a;font-size:15px">${fmt(totalAssets)}</span></div>
     </div>
     <div>
@@ -2479,7 +2528,7 @@ function DashTileContent({id,compact,d,score,totalInv,totalAssets,totalLiab,netW
   if(id==="score") return score?(
     <div style={{height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",gap:8}}>
       <div style={{fontSize:fs(11,13),color:"#6b8cce",letterSpacing:2}}>FINANCIAL HEALTH SCORE</div>
-      <div style={{fontSize:fs(56,80),color:score.gradeColor,fontWeight:"bold",lineHeight:1,...GS}}>{score.grade}</div>
+      <div style={{fontSize:fs(56,80),color:score.gradeColor,fontWeight:"bold",lineHeight:1,...GS,animation:"redGlowPulse 2.5s ease-in-out infinite",textShadow:`0 0 20px ${score.gradeColor}88`}}>{score.grade}</div>
       <div style={{fontSize:fs(20,28),color:"#e8e4d9",...GS}}>{score.total}<span style={{fontSize:14,color:"#6b8cce"}}>/100</span></div>
       <div style={{width:"100%",background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
         <div style={{width:score.total+"%",height:"100%",background:score.gradeColor,borderRadius:6}}/>
@@ -2779,10 +2828,11 @@ function DashAddPanel({allTileMeta,layout,onAdd,onClose}) {
 
 function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token}) {
   // ── Computed values ──────────────────────────────────────────────────────────
-  const cash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
+  const bankCash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const cash=bankCash+savings; // savings accounts are cash-equivalent
   const equity=Math.max(0,Number(d.mortgage.value||0)-Number(d.mortgage.balance||0));
-  const totalAssets=cash+totalInv+Number(d.lifeInsurance||0)+savings+equity;
+  const totalAssets=cash+totalInv+Number(d.lifeInsurance||0)+equity;
   const totalCC=d.creditCards.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
   const totalOD=d.otherDebts.reduce((s,x)=>s+Number(x.balance||0),0);
   const totalLocBal=(d.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0);
@@ -2886,19 +2936,20 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
 
       {/* Header */}
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#0a0f1e)",borderBottom:"1px solid #1e3a5f",padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
-        <button onClick={onHome} style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+        <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
           ← Home
         </button>
         <div style={{textAlign:"center"}}>
-          <h1 style={{margin:0,fontSize:"clamp(18px,3vw,28px)",fontWeight:"bold",color:"#e8e4d9",...GS}}>
+          <h1 style={{margin:0,fontSize:"clamp(18px,3vw,28px)",fontWeight:"bold",background:"linear-gradient(135deg,#fff 40%,#cc0000)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",...GS}}>
             {name}'s Financial Dashboard
           </h1>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
-          <button onClick={onAppointment} style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+          <button onClick={onAppointment} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
             Edit Info
           </button>
           <button onClick={()=>{setEditMode(p=>!p);setShowAddPanel(false);}}
+            className="glow-btn"
             style={{background:editMode?"linear-gradient(135deg,#1a0505,#0d1b3e)":"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid "+(editMode?"#cc0000":"#2a4080"),borderRadius:10,padding:"8px 16px",color:editMode?"#cc0000":"#e8e4d9",cursor:"pointer",fontSize:13,fontWeight:editMode?"bold":"normal",...GS}}>
             {editMode?"✓ Done":"⚙️ Edit Dashboard"}
           </button>
@@ -2936,7 +2987,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
           const isDragging=dragIdx===idx;
           const isDragOver=dragOver===idx;
           return (
-            <div key={tileId} style={{breakInside:"avoid",marginBottom:16}}>
+            <div key={tileId} style={{breakInside:"avoid",marginBottom:16,animationDelay:`${idx*60}ms`}} className="tile-enter">
               <div
                 draggable={editMode}
                 onDragStart={()=>onDragStart(idx)}
@@ -5348,7 +5399,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <button onClick={onBack} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>Statement Importer</div>
           </div>
           <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
@@ -5431,7 +5482,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPhase("setup")} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <button onClick={()=>setPhase("setup")} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Classify Transactions</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -5705,7 +5756,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPhase("classify")} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <button onClick={()=>setPhase("classify")} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Spending Summary</div>
           </div>
           <div style={{fontSize:12,color:"#6b8cce",...GS}}>{monthLabel(selectedMonth)}</div>
@@ -5798,10 +5849,10 @@ function ToolWrapper({title,onBack,onHome,contentId,children}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:20,padding:0}}>&larr;</button>
+            <button onClick={onBack} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>{title}</div>
           </div>
-          <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
+          <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 12px",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
         </div>
       </div>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}} id={contentId}>
