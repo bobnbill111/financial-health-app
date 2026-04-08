@@ -81,36 +81,104 @@ const today = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
 const GLOBAL_CSS = `
+  /* ── Keyframes ── */
   @keyframes redGlowPulse {
-    0%,100% { box-shadow: 0 0 0px #cc000000; }
-    50% { box-shadow: 0 0 14px #cc000077; }
+    0%,100% { text-shadow: 0 0 8px transparent; }
+    50%      { text-shadow: 0 0 18px currentColor; }
   }
   @keyframes fadeInUp {
-    from { opacity:0; transform:translateY(18px); }
+    from { opacity:0; transform:translateY(16px); }
     to   { opacity:1; transform:translateY(0); }
   }
+  @keyframes fadeIn {
+    from { opacity:0; }
+    to   { opacity:1; }
+  }
+
+  /* ── Page fade-in ── */
+  .page-enter {
+    animation: fadeIn 0.22s ease both;
+  }
+
+  /* ── Tile entrance ── */
+  .tile-enter {
+    animation: fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
+  }
+
+  /* ── Nav / tab buttons — underline style, no box ── */
   .glow-btn {
-    transition: box-shadow 0.25s ease, color 0.2s, transform 0.15s, outline 0.2s !important;
-    outline: 2px solid transparent !important;
+    position: relative;
+    transition: color 0.18s ease, transform 0.12s ease !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+  .glow-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: #cc0000;
+    border-radius: 2px;
+    transition: width 0.22s ease, left 0.22s ease;
   }
   .glow-btn:hover {
-    box-shadow: 0 0 18px #cc000077, 0 4px 14px rgba(0,0,0,0.35) !important;
-    outline: 2px solid #cc0000 !important;
-    color: #fff !important;
-    transform: translateY(-2px) !important;
+    color: #ffaaaa !important;
+    transform: translateY(-1px) !important;
+    box-shadow: none !important;
+  }
+  .glow-btn:hover::after {
+    width: 80%;
+    left: 10%;
+  }
+  .glow-btn:active {
+    transform: scale(0.97) translateY(0px) !important;
+    transition: transform 0.08s ease !important;
   }
   .glow-btn.active-tab {
-    outline: 2px solid #cc000066 !important;
-    animation: redGlowPulse 2.5s ease-in-out infinite !important;
+    color: #cc0000 !important;
   }
-  .tile-enter {
-    animation: fadeInUp 0.45s ease both;
+  .glow-btn.active-tab::after {
+    width: 100%;
+    left: 0;
   }
-  /* Center arrow in fixed-size buttons */
-  .glow-btn.icon-btn {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+
+  /* ── Regular action buttons (non-tab) ── */
+  .action-btn {
+    transition: filter 0.18s ease, transform 0.12s ease !important;
+    outline: none !important;
+  }
+  .action-btn:hover {
+    filter: brightness(1.15) !important;
+    transform: translateY(-1px) !important;
+  }
+  .action-btn:active {
+    transform: scale(0.97) !important;
+    transition: transform 0.08s ease !important;
+    filter: brightness(0.95) !important;
+  }
+
+  /* ── Input focus glow ── */
+  input:focus, select:focus, textarea:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px #cc000033, 0 0 8px #cc000022 !important;
+    border-color: #cc000066 !important;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  /* ── Progress bar smooth easing ── */
+  .progress-bar {
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1) !important;
+  }
+
+  /* ── Mobile tile tap state ── */
+  @media (hover: none) {
+    .tile-card:active {
+      transform: scale(0.98) !important;
+      box-shadow: 0 4px 20px #cc000033 !important;
+      transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+    }
   }
 `;
 
@@ -183,7 +251,7 @@ const PctInput = ({value,onChange,placeholder="0.00"}) => (
   </div>
 );
 const NextBtn = ({onClick,children,style={},disabled=false}) => (
-  <button onClick={disabled?undefined:onClick} disabled={disabled} style={{width:"100%",background:disabled?"#1a1a2e":"linear-gradient(135deg,#1a4080,#0d2a5e)",border:`1px solid ${disabled?"#2a2a4a":"#2a4080"}`,borderRadius:10,color:disabled?"#4a5a6a":"#4ade80",padding:"14px",fontSize:14,cursor:disabled?"not-allowed":"pointer",letterSpacing:1,marginBottom:14,opacity:disabled?0.6:1,...GS,...style}}>{children}</button>
+  <button onClick={disabled?undefined:onClick} disabled={disabled} className="action-btn" style={{width:"100%",background:disabled?"#1a1a2e":"linear-gradient(135deg,#1a4080,#0d2a5e)",border:`1px solid ${disabled?"#2a2a4a":"#2a4080"}`,borderRadius:10,color:disabled?"#4a5a6a":"#4ade80",padding:"14px",fontSize:14,cursor:disabled?"not-allowed":"pointer",letterSpacing:1,marginBottom:14,opacity:disabled?0.6:1,...GS,...style}}>{children}</button>
 );
 const NavBar = ({title,subtitle,onHome,right}) => (
   <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 0",position:"sticky",top:0,zIndex:100}}>
@@ -364,7 +432,7 @@ function AuthScreen({onAuth,onGuest}) {
   const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"13px 14px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
       <style>{GLOBAL_CSS}</style>
       {/* Background grid */}
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
@@ -447,7 +515,7 @@ function AuthScreen({onAuth,onGuest}) {
           )}
 
           {/* Submit */}
-          <button onClick={handleSubmit} disabled={loading}
+          <button onClick={handleSubmit} disabled={loading} className="action-btn"
             style={{width:"100%",background:loading?"#1a0505":"linear-gradient(135deg,#cc0000,#8b0000)",border:"1px solid #cc000066",borderRadius:12,padding:"14px",color:"#fff",fontSize:15,fontWeight:"bold",cursor:loading?"not-allowed":"pointer",opacity:loading?0.7:1,...GS}}>
             {loading?"Please wait..."
               :mode==="login"?"Log In →"
@@ -594,7 +662,7 @@ export default function App() {
   const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
 
   if(!authChecked) return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
       <div style={{textAlign:"center"}}>
         <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16}}>
           <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
@@ -639,7 +707,7 @@ function OnboardingScreen({displayName,userEmail,onStart,onSkip}) {
   const fade={opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:"opacity 0.6s ease 0.1s,transform 0.6s ease 0.1s"};
   const name=displayName||userEmail?.split("@")[0]||"there";
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
       <div style={{position:"fixed",top:"40%",left:"50%",width:400,height:400,background:"radial-gradient(circle,#cc000022 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)"}}/>
       <div style={{...fade,position:"relative",width:"100%",maxWidth:440,textAlign:"center"}}>
@@ -712,7 +780,7 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
   const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"12px 14px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -1640,7 +1708,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
   },[step]);
 
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80",...GS}}>Step {prog+1} of {APPT_STEPS.length}</div>}/>
       <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#cc0000,#4ade80)",transition:"width 0.4s"}}/></div>
       <div style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
@@ -2930,7 +2998,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
   const tileProps={d,score,totalInv,totalAssets,totalLiab,netWorth,income,totalAlloc,surplus,invMonthly,invRate,efund,scoreHistory,saveScore,fooChecked,fooComplete,FOO_LABELS,toggleFoo,nextSteps,saveNextSteps};
 
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       {expandedTile&&<DashExpandModal tileId={expandedTile} tileProps={tileProps} tileMeta={getTileMeta(expandedTile)} onClose={()=>setExpandedTile(null)}/>}
       {showAddPanel&&<DashAddPanel allTileMeta={ALL_TILE_META} layout={layout} onAdd={addTile} onClose={()=>setShowAddPanel(false)}/>}
 
@@ -2994,6 +3062,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
                 onDragEnter={()=>onDragEnter(idx)}
                 onDragEnd={onDragEnd}
                 onDragOver={e=>e.preventDefault()}
+                className="tile-card"
                 style={{
                   background:"linear-gradient(135deg,#111827,#1a2235)",
                   border:"1px solid "+(isDragOver?"#cc0000":"#1e3a5f"),
@@ -3568,7 +3637,7 @@ function IndividualTools({onHome,data,user,token}) {
   if(tool==="tax") return <ToolWrapper title="Canadian Tax Estimator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-tax"><CanadianTaxEstimator data={data}/></ToolWrapper>;
 
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
         <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Tap a tool to get started.</div>
@@ -5395,7 +5464,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
   // ── PHASE: SETUP ──
   if(phase==="setup") return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -5478,7 +5547,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
   // ── PHASE: CLASSIFY ──
   if(phase==="classify") return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -5752,7 +5821,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
   // ── PHASE: SUMMARY ──
   const income = Number(budgetIncome||0);
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -5845,7 +5914,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
 function ToolWrapper({title,onBack,onHome,contentId,children}) {
   return (
-    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
