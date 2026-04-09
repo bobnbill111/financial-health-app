@@ -108,6 +108,7 @@ const GLOBAL_CSS = `
   /* ── Nav / tab buttons — underline style, no box ── */
   .glow-btn {
     position: relative;
+    overflow: hidden;
     transition: color 0.18s ease, transform 0.12s ease !important;
     outline: none !important;
     box-shadow: none !important;
@@ -123,12 +124,12 @@ const GLOBAL_CSS = `
     border-radius: 2px;
     transition: width 0.22s ease, left 0.22s ease;
   }
-  .glow-btn:hover {
+  .glow-btn:hover:not(.active-tab) {
     color: #ffaaaa !important;
     transform: translateY(-1px) !important;
     box-shadow: none !important;
   }
-  .glow-btn:hover::after {
+  .glow-btn:hover:not(.active-tab)::after {
     width: 80%;
     left: 10%;
   }
@@ -166,6 +167,7 @@ const GLOBAL_CSS = `
     border-color: #cc000066 !important;
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
+  button:focus { outline: none !important; }
 
   /* ── Progress bar smooth easing ── */
   .progress-bar {
@@ -459,8 +461,8 @@ function AuthScreen({onAuth,onGuest}) {
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:24}}>
               {[{val:"login",label:"Log In"},{val:"signup",label:"Sign Up"}].map(t=>(
                 <button key={t.val} onClick={()=>{setMode(t.val);reset();}}
-                  className={`glow-btn${mode===t.val?" active-tab":""}`}
-                  style={{background:mode===t.val?"#cc0000":"transparent",border:`1px solid ${mode===t.val?"#cc0000":"#2a4080"}`,borderRadius:10,padding:"10px",color:mode===t.val?"#fff":"#8fadd4",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>
+                  className="action-btn"
+                  style={{background:mode===t.val?"#cc0000":"transparent",border:"1px solid "+(mode===t.val?"#cc0000":"#2a4080"),borderRadius:10,padding:"10px",color:mode===t.val?"#fff":"#8fadd4",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>
                   {t.label}
                 </button>
               ))}
