@@ -3041,7 +3041,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
       )}
 
       {/* Dashboard grid — masonry via CSS columns */}
-      <div style={{padding:"20px 24px",columnCount:3,columnGap:16}}>
+      <div className="page-enter" style={{padding:"20px 24px",columnCount:3,columnGap:16}}>
         {[...layout, ...(editMode?["__add__"]:[])].map((tileId,idx)=>{
           if(tileId==="__add__") return (
             <div key="add" style={{breakInside:"avoid",marginBottom:16}}>
@@ -3057,7 +3057,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
           const isDragging=dragIdx===idx;
           const isDragOver=dragOver===idx;
           return (
-            <div key={tileId} style={{breakInside:"avoid",marginBottom:16,animationDelay:`${idx*60}ms`}} className="tile-enter">
+            <div key={tileId} style={{breakInside:"avoid",marginBottom:16}}>
               <div
                 draggable={editMode}
                 onDragStart={()=>onDragStart(idx)}
