@@ -403,6 +403,7 @@ function AuthScreen({onAuth,onGuest}) {
   const [loading,setLoading]=useState(false);
   const [msg,setMsg]=useState(null); // {type:"error"|"success", text}
   const [showPw,setShowPw]=useState(false);
+  const [rememberMe,setRememberMe]=useState(true);
 
   const reset=()=>{setMsg(null);setPassword("");setConfirm("");};
 
@@ -441,8 +442,10 @@ function AuthScreen({onAuth,onGuest}) {
       setLoading(false);
       if(res.error){setMsg({type:"error",text:"Incorrect email or password."});return;}
       if(res.access_token){
-        localStorage.setItem("fh_token",res.access_token);
-        localStorage.setItem("fh_uid",res.user.id);
+        const store = rememberMe ? localStorage : sessionStorage;
+        store.setItem("fh_token",res.access_token);
+        store.setItem("fh_uid",res.user.id);
+        localStorage.setItem("fh_email",email.trim());
         onAuth(res.user,res.access_token);
       }
     }
@@ -519,7 +522,13 @@ function AuthScreen({onAuth,onGuest}) {
 
           {/* Forgot link */}
           {mode==="login"&&(
-            <div style={{textAlign:"right",marginBottom:20}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+                <div onClick={()=>setRememberMe(p=>!p)} style={{width:18,height:18,borderRadius:4,border:"2px solid "+(rememberMe?"#cc0000":"#2a4080"),background:rememberMe?"#cc0000":"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s",cursor:"pointer"}}>
+                  {rememberMe&&<span style={{color:"#fff",fontSize:11,fontWeight:"bold",lineHeight:1}}>✓</span>}
+                </div>
+                <span style={{fontSize:12,color:"#6b8cce",userSelect:"none"}}>Remember me</span>
+              </label>
               <button onClick={()=>{setMode("forgot");reset();}} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>
                 Forgot password?
               </button>
@@ -603,8 +612,8 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    const savedToken=localStorage.getItem("fh_token");
-    const savedUid=localStorage.getItem("fh_uid");
+    const savedToken=localStorage.getItem("fh_token")||sessionStorage.getItem("fh_token");
+    const savedUid=localStorage.getItem("fh_uid")||sessionStorage.getItem("fh_uid");
     const savedEmail=localStorage.getItem("fh_email")||"";
     if(savedToken&&savedUid){
       supa.loadData(savedUid,savedToken).then(row=>{
