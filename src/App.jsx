@@ -174,6 +174,17 @@ const GLOBAL_CSS = `
     transition: width 0.5s cubic-bezier(0.4,0,0.2,1) !important;
   }
 
+  /* ── Dashboard tile hover — pure CSS, no JS ── */
+  .tile-hoverable {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    will-change: transform;
+  }
+  .tile-hoverable:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 32px #cc000033, 0 4px 24px rgba(0,0,0,0.3) !important;
+    border-color: #cc000055 !important;
+  }
+
   /* ── Mobile tile tap state ── */
   @media (hover: none) {
     .tile-card:active {
@@ -3064,7 +3075,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
                 onDragEnter={()=>onDragEnter(idx)}
                 onDragEnd={onDragEnd}
                 onDragOver={e=>e.preventDefault()}
-                className="tile-card"
+                className={"tile-card"+(editMode?"":" tile-hoverable")}
                 style={{
                   background:"linear-gradient(135deg,#111827,#1a2235)",
                   border:"1px solid "+(isDragOver?"#cc0000":"#1e3a5f"),
@@ -3073,13 +3084,9 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
                   position:"relative",
                   cursor:editMode?"grab":"default",
                   opacity:isDragging?0.4:1,
-                  transform:isDragOver&&!isDragging?"scale(1.02)":"scale(1)",
-                  transition:"transform 0.15s,border-color 0.15s,box-shadow 0.2s",
+                  transform:isDragOver&&!isDragging?"scale(1.02)":"none",
                   boxShadow:"0 4px 24px rgba(0,0,0,0.3)",
-                }}
-                onMouseEnter={e=>{if(!editMode){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 32px #cc000044, 0 4px 24px rgba(0,0,0,0.3)";e.currentTarget.style.borderColor="#cc000044";}}}
-                onMouseLeave={e=>{if(!editMode){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 24px rgba(0,0,0,0.3)";e.currentTarget.style.borderColor="#1e3a5f";}}}>
-                {editMode&&(
+                }}>                {editMode&&(
                   <>
                     <div style={{position:"absolute",top:10,left:12,fontSize:14,color:"#6b8cce",cursor:"grab"}}>⠿</div>
                     <button onClick={()=>removeTile(tileId)} style={{position:"absolute",top:8,right:8,background:"#1a0505",border:"1px solid #cc000066",borderRadius:6,width:24,height:24,color:"#cc0000",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",...GS}}>×</button>
