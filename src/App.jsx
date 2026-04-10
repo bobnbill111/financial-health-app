@@ -176,13 +176,13 @@ const GLOBAL_CSS = `
 
   /* ── Dashboard tile hover — pure CSS, no JS ── */
   .tile-hoverable {
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     will-change: transform;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
   }
   .tile-hoverable:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 32px #cc000033, 0 4px 24px rgba(0,0,0,0.3) !important;
-    border-color: #cc000055 !important;
+    box-shadow: 0 8px 32px rgba(204,0,0,0.2), 0 4px 24px rgba(0,0,0,0.3);
   }
 
   /* ── Mobile tile tap state ── */
@@ -3085,7 +3085,6 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
                   cursor:editMode?"grab":"default",
                   opacity:isDragging?0.4:1,
                   transform:isDragOver&&!isDragging?"scale(1.02)":"none",
-                  boxShadow:"0 4px 24px rgba(0,0,0,0.3)",
                 }}>                {editMode&&(
                   <>
                     <div style={{position:"absolute",top:10,left:12,fontSize:14,color:"#6b8cce",cursor:"grab"}}>⠿</div>
