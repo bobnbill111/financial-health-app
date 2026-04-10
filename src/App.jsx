@@ -352,10 +352,13 @@ function calcScore(d, totalInv) {
   const invRateScore = Math.min(30, Math.round((invRate/invTarget)*30));
   const budgetScore = surplus>=0 ? 10 : Math.max(0, Math.round(10 + (surplus/monthlyIncome)*20));
 
+  const efundBase = monthlyExp > 0 ? monthlyExp : monthlyIncome * 0.7; // fallback: estimate expenses as 70% of income
+  const efundMonths = efundBase > 0 ? efund / efundBase : 0;
+
   const scores = [
     {label:"Investment Rate",score:invRateScore,max:30,desc:`${invRate.toFixed(1)}% of gross income invested (target: 25%)`},
     {label:"Portfolio Size",score:Math.min(25,Math.round((totalInv/bm.invAmount)*25)),max:25,desc:`${fmtShort(totalInv)} saved (benchmark: ${fmtShort(bm.invAmount)})`},
-    {label:"Emergency Fund",score:Math.min(20,Math.round(((monthlyExp>0?efund/monthlyExp:0)/bm.efundMonths)*20)),max:20,desc:`${monthlyExp>0?(efund/monthlyExp).toFixed(1):0} months (target: ${bm.efundMonths})`},
+    {label:"Emergency Fund",score:Math.min(20,Math.round((efundMonths/bm.efundMonths)*20)),max:20,desc:`${efundMonths.toFixed(1)} months saved (target: ${bm.efundMonths})`},
     {label:"Debt Management",score:Math.max(0,Math.round(annualIncome>0?15-Math.max(0,(totalDebt/annualIncome-bm.debtRatio)*100):0)),max:15,desc:`Non-mortgage debt ${annualIncome>0?(totalDebt/annualIncome*100).toFixed(0):0}% of income (target <${bm.debtRatio*100}%)`},
     {label:"Budget Balance",score:budgetScore,max:10,desc:surplus>=0?`${fmt(surplus)}/mo surplus — on track`:`${fmt(Math.abs(surplus))}/mo deficit — spending exceeds income`},
   ];
@@ -1029,7 +1032,7 @@ function FinancialPrescription({score,data,totalInv}) {
   const invRate=score.invRate||0;
   const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp=totalAlloc;
-  const efundMonths=monthlyExp>0?(efund/monthlyExp):0;
+  const efundMonths=monthlyExp>0?(efund/monthlyExp):monthlyIncome>0?(efund/(monthlyIncome*0.7)):0;
 
   // Generate 3 hyper-specific prescriptions based on their actual numbers
   const rxItems=[];
@@ -1252,7 +1255,7 @@ function ScoreGuidance({score,data,totalInv}) {
   const totalOD = (data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0);
   const efund = (data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp = totalAlloc;
-  const efundMonths = monthlyExp>0?(efund/monthlyExp).toFixed(1):0;
+  const efundBase2=monthlyExp>0?monthlyExp:monthlyIncome*0.7; const efundMonths = efundBase2>0?(efund/efundBase2).toFixed(1):"0";
   const invCat = data.budget.categories.find(c=>c.name==="Investments");
   const invAmount = Number(invCat?.amount||0);
 
@@ -4885,7 +4888,7 @@ function FirstHomeBuyer({data}) {
   const tfsa=(data?.investments?.tfsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
   const efund=(data?.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp=(data?.budget?.categories||[]).reduce((s,c)=>s+Number(c.amount||0),0);
-  const efundMonths=monthlyExp>0?(efund/monthlyExp):0;
+  const efundMonths=monthlyExp>0?(efund/monthlyExp):monthlyIncome>0?(efund/(monthlyIncome*0.7)):0;
   const totalDebt=(data?.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
     +(data?.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
     +(data?.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
