@@ -259,7 +259,7 @@ const NavBar = ({title,subtitle,onHome,right}) => (
   <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 0",position:"sticky",top:0,zIndex:100}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
+        <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
         <div><div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",...GS}}>{subtitle}</div><div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>{title}</div></div>
       </div>
       {right}
@@ -550,7 +550,7 @@ function AuthScreen({onAuth,onGuest}) {
         {/* Guest access */}
         <div style={{textAlign:"center",marginTop:20}}>
           <div style={{fontSize:12,color:"#2a4080",marginBottom:10}}>— or —</div>
-          <button onClick={onGuest} className="glow-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px 24px",color:"#6b8cce",cursor:"pointer",fontSize:13,width:"100%",...GS}}>
+          <button onClick={onGuest} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px 24px",color:"#6b8cce",cursor:"pointer",fontSize:13,width:"100%",...GS}}>
             Continue as Guest
           </button>
           <div style={{fontSize:11,color:"#1e3a5f",marginTop:8,lineHeight:1.6}}>
@@ -786,7 +786,7 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
+            <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff"}}>My Profile</div>
           </div>
         </div>
@@ -936,7 +936,7 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
       {/* Profile icon / Guest sign-in — top left */}
       <div style={{position:"absolute",top:24,left:24,zIndex:10}}>
         {isGuest?(
-          <button onClick={onSignIn} className="glow-btn" style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000066",borderRadius:10,padding:"8px 14px",color:"#cc0000",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
+          <button onClick={onSignIn} className="action-btn" style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000066",borderRadius:10,padding:"8px 14px",color:"#cc0000",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
             Sign In / Sign Up
           </button>
         ):(
@@ -3006,7 +3006,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
 
       {/* Header */}
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#0a0f1e)",borderBottom:"1px solid #1e3a5f",padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
-        <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+        <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
           ← Home
         </button>
         <div style={{textAlign:"center"}}>
@@ -3015,11 +3015,11 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
           </h1>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
-          <button onClick={onAppointment} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+          <button onClick={onAppointment} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"8px 16px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
             Edit Info
           </button>
           <button onClick={()=>{setEditMode(p=>!p);setShowAddPanel(false);}}
-            className="glow-btn"
+            className="action-btn"
             style={{background:editMode?"linear-gradient(135deg,#1a0505,#0d1b3e)":"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid "+(editMode?"#cc0000":"#2a4080"),borderRadius:10,padding:"8px 16px",color:editMode?"#cc0000":"#e8e4d9",cursor:"pointer",fontSize:13,fontWeight:editMode?"bold":"normal",...GS}}>
             {editMode?"✓ Done":"⚙️ Edit Dashboard"}
           </button>
@@ -5470,7 +5470,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
+            <button onClick={onBack} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>Statement Importer</div>
           </div>
           <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
@@ -5553,7 +5553,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPhase("setup")} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
+            <button onClick={()=>setPhase("setup")} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Classify Transactions</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -5827,7 +5827,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPhase("classify")} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
+            <button onClick={()=>setPhase("classify")} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Spending Summary</div>
           </div>
           <div style={{fontSize:12,color:"#6b8cce",...GS}}>{monthLabel(selectedMonth)}</div>
@@ -5920,10 +5920,10 @@ function ToolWrapper({title,onBack,onHome,contentId,children}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
+            <button onClick={onBack} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>{title}</div>
           </div>
-          <button onClick={onHome} className="glow-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 12px",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
+          <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 12px",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
         </div>
       </div>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}} id={contentId}>
