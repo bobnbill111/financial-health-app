@@ -175,7 +175,7 @@ const GLOBAL_CSS = `
   }
 
   /* ── Dashboard tile hover — pure CSS, no JS ── */
-  .tile-hoverable {
+  .tile-card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     will-change: transform;
     box-shadow: 0 4px 24px rgba(0,0,0,0.3);
@@ -183,6 +183,9 @@ const GLOBAL_CSS = `
   .tile-hoverable:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 32px rgba(204,0,0,0.2), 0 4px 24px rgba(0,0,0,0.3);
+  }
+  .tile-dragover {
+    transform: scale(1.02);
   }
 
   /* ── Mobile tile tap state ── */
@@ -3075,7 +3078,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
                 onDragEnter={()=>onDragEnter(idx)}
                 onDragEnd={onDragEnd}
                 onDragOver={e=>e.preventDefault()}
-                className={"tile-card"+(editMode?"":" tile-hoverable")}
+                className={"tile-card"+(editMode?"":" tile-hoverable")+(isDragOver&&!isDragging?" tile-dragover":"")}
                 style={{
                   background:"linear-gradient(135deg,#111827,#1a2235)",
                   border:"1px solid "+(isDragOver?"#cc0000":"#1e3a5f"),
@@ -3084,8 +3087,8 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
                   position:"relative",
                   cursor:editMode?"grab":"default",
                   opacity:isDragging?0.4:1,
-                  transform:isDragOver&&!isDragging?"scale(1.02)":"none",
-                }}>                {editMode&&(
+                }}>
+                {editMode&&(
                   <>
                     <div style={{position:"absolute",top:10,left:12,fontSize:14,color:"#6b8cce",cursor:"grab"}}>⠿</div>
                     <button onClick={()=>removeTile(tileId)} style={{position:"absolute",top:8,right:8,background:"#1a0505",border:"1px solid #cc000066",borderRadius:6,width:24,height:24,color:"#cc0000",cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",...GS}}>×</button>
