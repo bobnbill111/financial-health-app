@@ -4773,28 +4773,28 @@ function CanadianBenchmarks({score,data,totalInv,netWorth,income,totalAlloc}) {
 
   // Percentile calculator — simplified
   const getPercentile=(val,median,top25,top10)=>{
-    if(val<=0) return {pct:0,label:"Below median",color:"#f87171"};
-    if(val>=top10) return {pct:95,label:"Top 10%",color:"#4ade80"};
-    if(val>=top25) return {pct:80,label:"Top 25%",color:"#4ade80"};
-    if(val>=median) return {pct:60,label:"Above median",color:"#facc15"};
-    if(val>=median*0.5) return {pct:35,label:"Below median",color:"#fb923c"};
-    return {pct:15,label:"Bottom 25%",color:"#f87171"};
+    if(val<=0) return {pct:0,standing:"Below median",color:"#f87171"};
+    if(val>=top10) return {pct:95,standing:"Top 10%",color:"#4ade80"};
+    if(val>=top25) return {pct:80,standing:"Top 25%",color:"#4ade80"};
+    if(val>=median) return {pct:60,standing:"Above median",color:"#facc15"};
+    if(val>=median*0.5) return {pct:35,standing:"Below median",color:"#fb923c"};
+    return {pct:15,standing:"Bottom 25%",color:"#f87171"};
   };
 
   const getDebtPercentile=(ratio,medianRatio)=>{
-    if(ratio===0) return {pct:95,label:"Top 10% — debt free",color:"#4ade80"};
-    if(ratio<=medianRatio*0.4) return {pct:80,label:"Top 25% — very low debt",color:"#4ade80"};
-    if(ratio<=medianRatio) return {pct:55,label:"Below median — manageable",color:"#facc15"};
-    if(ratio<=medianRatio*1.5) return {pct:30,label:"Above median — reduce debt",color:"#fb923c"};
-    return {pct:10,label:"High debt load",color:"#f87171"};
+    if(ratio===0) return {pct:95,standing:"Top 10% — debt free",color:"#4ade80"};
+    if(ratio<=medianRatio*0.4) return {pct:80,standing:"Top 25% — very low debt",color:"#4ade80"};
+    if(ratio<=medianRatio) return {pct:55,standing:"Below median — manageable",color:"#facc15"};
+    if(ratio<=medianRatio*1.5) return {pct:30,standing:"Above median — reduce debt",color:"#fb923c"};
+    return {pct:10,standing:"High debt load",color:"#f87171"};
   };
 
   const getSavingsPercentile=(rate,medianRate)=>{
-    if(rate>=25) return {pct:95,label:"Top 5% — exceptional",color:"#4ade80"};
-    if(rate>=medianRate*2) return {pct:80,label:"Top 25%",color:"#4ade80"};
-    if(rate>=medianRate) return {pct:55,label:"Above median",color:"#facc15"};
-    if(rate>=medianRate*0.5) return {pct:35,label:"Below median",color:"#fb923c"};
-    return {pct:10,label:"Bottom 25%",color:"#f87171"};
+    if(rate>=25) return {pct:95,standing:"Top 5% — exceptional",color:"#4ade80"};
+    if(rate>=medianRate*2) return {pct:80,standing:"Top 25%",color:"#4ade80"};
+    if(rate>=medianRate) return {pct:55,standing:"Above median",color:"#facc15"};
+    if(rate>=medianRate*0.5) return {pct:35,standing:"Below median",color:"#fb923c"};
+    return {pct:10,standing:"Bottom 25%",color:"#f87171"};
   };
 
   const metrics=[
@@ -4838,79 +4838,45 @@ function CanadianBenchmarks({score,data,totalInv,netWorth,income,totalAlloc}) {
 
   return (
     <div>
-      {/* Header */}
       <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 24px",marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <div style={{fontSize:18,color:"#e8e4d9",fontWeight:"bold",...GS}}>Where You Stand</div>
           <div style={{fontSize:11,color:"#6b8cce",background:"#0d1b3e",borderRadius:20,padding:"4px 12px"}}>Canadians in their {band}</div>
         </div>
-        <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.6}}>
-          How your key metrics compare to the median Canadian in your age group. Based on Statistics Canada and FCAC data.
-        </div>
+        <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.6}}>How your key metrics compare to the median Canadian in your age group. Based on Statistics Canada and FCAC data.</div>
       </div>
 
-      {/* Metric cards */}
       {metrics.map((m,i)=>(
-        <div key={i} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:`1px solid #1e3a5f`,borderRadius:16,padding:"20px 24px",marginBottom:12}}>
-
-          {/* Category header */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,paddingBottom:10,borderBottom:"1px solid #1e3a5f"}}>
-            <span style={{fontSize:22}}>{m.icon}</span>
+        <div key={i} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 24px",marginBottom:12}}>
+          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Average {m.label}</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16,paddingBottom:14,borderBottom:"1px solid #1e3a5f"}}>
             <div>
-              <div style={{fontSize:15,color:"#e8e4d9",fontWeight:"bold",...GS}}>{m.label}</div>
-              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:1,textTransform:"uppercase",marginTop:1}}>
-                {m.lowerIsBetter?"Lower is better":"Higher is better"} · Canadian median: {m.median}
-              </div>
+              <div style={{fontSize:28,color:"#e8e4d9",fontWeight:"bold",...GS,lineHeight:1}}>{m.median}</div>
+              <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Canadian average</div>
             </div>
-            <div style={{marginLeft:"auto",textAlign:"right"}}>
-              <div style={{fontSize:20,color:m.color,fontWeight:"bold",...GS}}>{m.yours}</div>
-              <div style={{fontSize:10,color:m.color,marginTop:2}}>{m.label2||m.label}</div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:22,color:m.color,fontWeight:"bold",...GS,lineHeight:1}}>{m.yours}</div>
+              <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Yours</div>
             </div>
           </div>
-
-          {/* Standing badge */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div style={{background:m.color+"22",border:`1px solid ${m.color}44`,borderRadius:20,padding:"4px 14px",display:"inline-flex",alignItems:"center",gap:6}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:m.color}}/>
-              <span style={{fontSize:12,color:m.color,fontWeight:"bold",...GS}}>{m.label}</span>
-            </div>
-            <div style={{fontSize:11,color:"#6b8cce"}}>
-              Approx. top <span style={{color:"#e8e4d9",fontWeight:"bold"}}>{100-m.pct}%</span> of Canadians
-            </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div style={{fontSize:13,color:m.color,fontWeight:"bold",...GS}}>{m.label}</div>
+            <div style={{fontSize:11,color:"#6b8cce"}}>Top {100-m.pct}% of Canadians</div>
           </div>
-
-          {/* Percentile bar */}
-          <div style={{position:"relative",height:8,background:"#0d1b3e",borderRadius:4,overflow:"visible",marginBottom:6}}>
-            <div style={{height:"100%",width:m.pct+"%",background:`linear-gradient(90deg,#1e3a5f,${m.color})`,borderRadius:4,transition:"width 0.6s ease"}}/>
-            {/* Median marker */}
-            <div style={{position:"absolute",top:-4,left:"50%",width:2,height:16,background:"#6b8cce44",borderRadius:1,transform:"translateX(-50%)"}}/>
-            {/* User dot */}
+          <div style={{position:"relative",height:8,background:"#0d1b3e",borderRadius:4,overflow:"visible"}}>
+            <div style={{height:"100%",width:m.pct+"%",background:`linear-gradient(90deg,#1e3a5f,${m.color})`,borderRadius:4}}/>
+            <div style={{position:"absolute",top:-4,left:"50%",width:2,height:16,background:"#6b8cce33",borderRadius:1,transform:"translateX(-50%)"}}/>
             <div style={{position:"absolute",top:-5,left:`calc(${Math.min(95,m.pct)}% - 7px)`,width:18,height:18,borderRadius:"50%",background:m.color,border:"2px solid #0a0f1e",boxShadow:`0 0 10px ${m.color}88`}}/>
           </div>
-
-          {/* Bar labels */}
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
             <span style={{fontSize:9,color:"#2a4080",letterSpacing:1}}>BOTTOM</span>
-            <span style={{fontSize:9,color:"#6b8cce"}}>← median</span>
             <span style={{fontSize:9,color:"#2a4080",letterSpacing:1}}>TOP 10%</span>
-          </div>
-
-          {/* Comparison row */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:14}}>
-            <div style={{background:"#0d1b3e",borderRadius:10,padding:"10px 14px",textAlign:"center"}}>
-              <div style={{fontSize:9,color:"#6b8cce",letterSpacing:1,marginBottom:4}}>YOUR {m.label.toUpperCase()}</div>
-              <div style={{fontSize:17,color:m.color,fontWeight:"bold",...GS}}>{m.yours}</div>
-            </div>
-            <div style={{background:"#0d1b3e",borderRadius:10,padding:"10px 14px",textAlign:"center"}}>
-              <div style={{fontSize:9,color:"#6b8cce",letterSpacing:1,marginBottom:4}}>CANADIAN MEDIAN</div>
-              <div style={{fontSize:17,color:"#6b8cce",fontWeight:"bold",...GS}}>{m.median}</div>
-            </div>
           </div>
         </div>
       ))}
 
       <div style={{background:"#0d1b3e",borderRadius:12,padding:"12px 16px",fontSize:10,color:"#6b8cce",lineHeight:1.7}}>
-        📊 Benchmarks are approximate and based on 2024 Statistics Canada data. Individual circumstances vary significantly.
+        Benchmarks are approximate and based on 2024 Statistics Canada data. Individual circumstances vary significantly.
       </div>
     </div>
   );
