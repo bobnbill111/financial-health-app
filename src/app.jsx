@@ -2964,7 +2964,9 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
     ...(locs||[]).filter(l=>Number(l.balance||0)>0).map(l=>({name:l.name||"Line of Credit",balance:Number(l.balance),rate:Number(l.rate||7),minPayment:String(Math.max(25,Math.round((Number(l.balance)*(Number(l.rate||7)/100))/12)))})),
   ];
   const [debts,setDebts]=useState(buildDebts);
-  const setMinPayment=(i,v)=>setDebts(p=>p.map((d,idx)=>idx===i?{...d,minPayment:v}:d));
+  const addDebt=()=>setDebts(p=>[...p,{name:"",balance:0,rate:5,minPayment:"25"}]);
+  const removeDebt=(i)=>setDebts(p=>p.filter((_,idx)=>idx!==i));
+  const updateDebt=(i,f,v)=>setDebts(p=>p.map((d,idx)=>idx===i?{...d,[f]:f==="balance"||f==="rate"?Number(v):v}:d));
 
   const debtCalc=debts.map(d=>({...d,minPaymentNum:Math.max(0,Number(d.minPayment||0))}));
   const sorted=[...debtCalc].sort((a,b)=>method==="avalanche"?(b.rate-a.rate):(a.balance-b.balance));
@@ -2972,7 +2974,6 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
   const totalMin=debtCalc.reduce((s,x)=>s+x.minPaymentNum,0);
   const extraPayment=Number(extra||0);
 
-  // Simulate full payoff with snowball/avalanche
   const simulatePayoff=(debtsArr,extraAmt)=>{
     if(!debtsArr.length) return {months:0,totalInterest:0,timeline:[]};
     let balances=debtsArr.map(d=>({...d,bal:d.balance}));
@@ -2980,43 +2981,28 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
     const timeline=[];
     while(balances.some(d=>d.bal>0.01)&&months<600){
       months++;
-      let pot=extraAmt;
-      // Pay minimums on all
-      balances=balances.map(d=>{
-        if(d.bal<=0) return d;
+      let freed=extraAmt;
+      const next=balances.map(d=>{
+        if(d.bal<=0.01){freed+=d.minPaymentNum;return {...d,bal:0};}
         const ic=d.bal*(d.rate/100/12);
-        const minPay=Math.min(d.minPaymentNum,d.bal+ic);
-        const pp=minPay-ic;
+        const pp=Math.max(0,Math.min(d.minPaymentNum,d.bal+ic)-ic);
         totalInterest+=ic;
         return {...d,bal:Math.max(0,d.bal-pp)};
       });
-      // Apply extra to focus debt
-      const focusIdx=balances.findIndex(d=>d.bal>0.01);
-      if(focusIdx>=0){
-        balances[focusIdx]={...balances[focusIdx],bal:Math.max(0,balances[focusIdx].bal-pot)};
-      }
-      // Roll over freed minimums
-      balances.forEach((d,i)=>{if(d.bal<=0.01&&d.minPaymentNum>0){balances[focusIdx]={...balances[focusIdx],bal:Math.max(0,balances[focusIdx].bal-d.minPaymentNum)};}});
+      balances=next;
+      const fi=balances.findIndex(d=>d.bal>0.01);
+      if(fi>=0&&freed>0) balances[fi]={...balances[fi],bal:Math.max(0,balances[fi].bal-freed)};
       const total=balances.reduce((s,d)=>s+d.bal,0);
       if(months%3===0||total<1) timeline.push({month:months,balance:Math.round(total)});
     }
     return {months,totalInterest,timeline};
   };
 
-  const avalancheOrder=[...debtCalc].sort((a,b)=>b.rate-a.rate);
-  const snowballOrder=[...debtCalc].sort((a,b)=>a.balance-b.balance);
-  const avResult=simulatePayoff(avalancheOrder,extraPayment);
-  const sbResult=simulatePayoff(snowballOrder,extraPayment);
+  const avResult=simulatePayoff([...debtCalc].sort((a,b)=>b.rate-a.rate),extraPayment);
+  const sbResult=simulatePayoff([...debtCalc].sort((a,b)=>a.balance-b.balance),extraPayment);
   const currentResult=method==="avalanche"?avResult:sbResult;
-
-  // Debt-free date
-  const debtFreeDate=()=>{
-    const d=new Date();
-    d.setMonth(d.getMonth()+currentResult.months);
-    return d.toLocaleDateString("en-CA",{year:"numeric",month:"long"});
-  };
-
-  if(debts.length===0) return <div style={{fontSize:12,color:"#6b8cce",textAlign:"center",padding:"10px 0"}}>No debts to optimize. Credit cards marked "pay in full" are excluded.</div>;
+  const debtFreeDate=()=>{const d=new Date();d.setMonth(d.getMonth()+currentResult.months);return d.toLocaleDateString("en-CA",{year:"numeric",month:"long"});};
+  const hasResults=debts.length>0&&totalDebt>0;
 
   return (
     <div>
@@ -3029,8 +3015,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
         ))}
       </div>
 
-      {/* Debt-free headline */}
-      {currentResult.months>0&&(
+      {hasResults&&currentResult.months>0&&(
         <div style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #1a4030",borderRadius:14,padding:"16px 20px",marginBottom:14}}>
           <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:6}}>DEBT-FREE DATE</div>
           <div style={{fontSize:22,color:"#4ade80",fontWeight:"bold",...GS,marginBottom:4}}>{debtFreeDate()}</div>
@@ -3042,8 +3027,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
         </div>
       )}
 
-      {/* Avalanche vs Snowball comparison */}
-      {avResult.months>0&&sbResult.months>0&&(
+      {hasResults&&avResult.months>0&&sbResult.months>0&&(
         <Card>
           <SecTitle>Method Comparison</SecTitle>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -3052,7 +3036,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
                 <div style={{fontSize:10,color,fontWeight:"bold",letterSpacing:1,marginBottom:8}}>{label.toUpperCase()}</div>
                 <div style={{fontSize:13,color:"#e8e4d9",marginBottom:4,...GS}}>{r.months} months</div>
                 <div style={{fontSize:11,color:"#f87171"}}>{fmt(r.totalInterest)} interest</div>
-                {method===label.toLowerCase()&&<div style={{fontSize:9,color:"#4ade80",marginTop:4}}>← selected</div>}
+                {method===label.toLowerCase()&&<div style={{fontSize:9,color:"#4ade80",marginTop:4}}>selected</div>}
               </div>
             ))}
           </div>
@@ -3064,14 +3048,13 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
         </Card>
       )}
 
-      {/* Payoff chart */}
-      {currentResult.timeline.length>0&&(
+      {hasResults&&currentResult.timeline.length>0&&(
         <Card>
           <SecTitle>Payoff Timeline</SecTitle>
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={currentResult.timeline} margin={{top:5,right:10,left:0,bottom:5}}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
-              <XAxis dataKey="month" stroke="#6b8cce" tick={{fontSize:9,...GS}} label={{value:"months",position:"insideBottomRight",offset:-5,fill:"#6b8cce",fontSize:9}}/>
+              <XAxis dataKey="month" stroke="#6b8cce" tick={{fontSize:9,...GS}}/>
               <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
               <Tooltip formatter={v=>[fmt(v),"Balance"]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
               <Line type="monotone" dataKey="balance" stroke="#f87171" strokeWidth={2} dot={false}/>
@@ -3080,52 +3063,86 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
         </Card>
       )}
 
-      {/* Editable minimum payments */}
       <Card>
-        <SecTitle>Your Debts & Minimum Payments</SecTitle>
-        <div style={{fontSize:11,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>Edit the minimum payment for each debt if needed.</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <SecTitle style={{marginBottom:0}}>Your Debts</SecTitle>
+          <button onClick={addDebt} className="action-btn" style={{background:"#0d2a1a",border:"1px solid #4ade8066",borderRadius:8,padding:"5px 12px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>+ Add Debt</button>
+        </div>
+        {debts.length===0&&(
+          <div style={{textAlign:"center",padding:"20px",color:"#6b8cce",fontSize:12,lineHeight:1.8}}>
+            No debts loaded — click <strong style={{color:"#4ade80"}}>+ Add Debt</strong> to enter manually.
+            <div style={{fontSize:10,marginTop:4}}>Credit cards set to pay-in-full are excluded.</div>
+          </div>
+        )}
         {debts.map((debt,i)=>(
-          <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10,alignItems:"center",marginBottom:10,background:"#0d1b3e",borderRadius:8,padding:"10px 12px"}}>
-            <div>
-              <div style={{fontSize:13,color:"#e8e4d9",marginBottom:2,...GS}}>{debt.name}</div>
-              <div style={{fontSize:11,color:"#6b8cce"}}>{debt.rate}% · {fmt(debt.balance)}</div>
+          <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"12px",marginBottom:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
+              <input value={debt.name} onChange={e=>updateDebt(i,"name",e.target.value)} placeholder="Debt name (e.g. Car Loan)"
+                style={{background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+              <button onClick={()=>removeDebt(i)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>x</button>
             </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>MIN PAYMENT</div>
-              <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:6,padding:"5px 8px"}}>
-                <span style={{color:"#6b8cce",marginRight:3,fontSize:11}}>$</span>
-                <input type="number" value={debt.minPayment} onChange={e=>setMinPayment(i,e.target.value)} style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:13,width:60,textAlign:"right",...GS}}/>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              <div>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>BALANCE</div>
+                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 8px"}}>
+                  <span style={{color:"#6b8cce",marginRight:3,fontSize:12}}>$</span>
+                  <input type="number" value={debt.balance||""} onChange={e=>updateDebt(i,"balance",e.target.value)} placeholder="0"
+                    style={{background:"none",border:"none",outline:"none",color:"#f87171",fontSize:13,width:"100%",...GS}}/>
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>RATE %</div>
+                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 8px"}}>
+                  <input type="number" value={debt.rate||""} onChange={e=>updateDebt(i,"rate",e.target.value)} placeholder="5"
+                    style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:13,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>%</span>
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>MIN PMT</div>
+                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 8px"}}>
+                  <span style={{color:"#6b8cce",marginRight:3,fontSize:12}}>$</span>
+                  <input type="number" value={debt.minPayment||""} onChange={e=>updateDebt(i,"minPayment",e.target.value)} placeholder="25"
+                    style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:13,width:"100%",...GS}}/>
+                </div>
               </div>
             </div>
           </div>
         ))}
+        {debts.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
+            <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Total Debt</div><div style={{fontSize:16,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalDebt)}</div></div>
+            <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Min Payments</div><div style={{fontSize:16,color:"#facc15",fontWeight:"bold",...GS}}>{fmt(totalMin)}</div></div>
+          </div>
+        )}
       </Card>
 
-      <Label>Extra Monthly Payment</Label>
-      <NumInput value={extra} onChange={setExtra} placeholder="0.00"/>
-
-      <div style={{marginTop:14,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Total Debt</div><div style={{fontSize:16,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalDebt)}</div></div>
-          <div><div style={{fontSize:10,color:"#6b8cce",marginBottom:3}}>Min Payments</div><div style={{fontSize:16,color:"#facc15",fontWeight:"bold",...GS}}>{fmt(totalMin)}</div></div>
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <SecTitle style={{marginBottom:0}}>Extra Monthly Payment</SecTitle>
+          <div style={{fontSize:11,color:"#6b8cce"}}>Applied to focus debt first</div>
         </div>
-      </div>
+        <NumInput value={extra} onChange={setExtra} placeholder="0.00"/>
+      </Card>
 
-      <div style={{fontSize:11,color:"#6b8cce",marginBottom:10,letterSpacing:2}}>PAYOFF ORDER ({method.toUpperCase()})</div>
-      {sorted.map((debt,i)=>(
-        <div key={i} style={{display:"flex",gap:12,alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-          <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#facc15":"#1e3a5f",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:i===0?"#0d1b3e":"#6b8cce",fontWeight:"bold",flexShrink:0}}>{i+1}</div>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,color:"#e8e4d9",marginBottom:2}}>{debt.name}</div>
-            <div style={{fontSize:11,color:"#6b8cce"}}>{debt.rate}% · {fmt(debt.balance)} · min {fmt(debt.minPaymentNum)}/mo</div>
-          </div>
-          {i===0&&<div style={{fontSize:10,color:"#facc15",border:"1px solid #facc1544",borderRadius:12,padding:"2px 8px"}}>FOCUS</div>}
+      {hasResults&&(
+        <div>
+          <div style={{fontSize:11,color:"#6b8cce",marginBottom:10,letterSpacing:2}}>PAYOFF ORDER ({method.toUpperCase()})</div>
+          {sorted.map((debt,i)=>(
+            <div key={i} style={{display:"flex",gap:12,alignItems:"center",background:"#0d1b3e",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+              <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#facc15":"#1e3a5f",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:i===0?"#0d1b3e":"#6b8cce",fontWeight:"bold",flexShrink:0}}>{i+1}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,color:"#e8e4d9",marginBottom:2}}>{debt.name||"Unnamed"}</div>
+                <div style={{fontSize:11,color:"#6b8cce"}}>{debt.rate}% · {fmt(debt.balance)} · min {fmt(debt.minPaymentNum)}/mo</div>
+              </div>
+              {i===0&&<div style={{fontSize:10,color:"#facc15",border:"1px solid #facc1544",borderRadius:12,padding:"2px 8px"}}>FOCUS</div>}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
-
 // ─── CASH FLOW LEDGER ─────────────────────────────────────────────────────────
 function BillCalendar() {
   const today=new Date();
@@ -3721,8 +3738,9 @@ function MoneyFlowMap({data}) {
 
           {/* Arrows from sources to accounts */}
           {state.flows.filter(f=>state.sources.find(s=>s.id===f.from)).map(f=>(
-            <div key={f.id} style={{textAlign:"center",marginBottom:4}}>
-              <div style={{fontSize:10,color:"#cc000099"}}>↓ {f.label&&<span style={{color:"#6b8cce"}}>{f.label}</span>} {f.amount&&<span style={{color:"#facc15",fontWeight:"bold",...GS}}>{fmt(Number(f.amount))}</span>}</div>
+            <div key={f.id} style={{textAlign:"center",marginBottom:6}}>
+              <div style={{fontSize:20,color:"#cc000088",lineHeight:1}}>↓</div>
+              <div style={{fontSize:11,color:"#6b8cce"}}>{f.label&&<span>{f.label}</span>} {f.amount&&<span style={{color:"#facc15",fontWeight:"bold",...GS}}>{fmt(Number(f.amount))}</span>}</div>
             </div>
           ))}
 
@@ -3751,7 +3769,7 @@ function MoneyFlowMap({data}) {
                     {outflows.length>0&&(
                       <div style={{marginTop:6}}>
                         {outflows.map(f=>(
-                          <div key={f.id} style={{fontSize:10,color:"#cc0000"}}>→ {f.amount?fmt(Number(f.amount)):""} to {getName(f.to)}</div>
+                          <div key={f.id} style={{fontSize:11,color:"#cc0000",fontWeight:"bold"}}>→ {f.amount?fmt(Number(f.amount)):""} <span style={{color:"#6b8cce",fontWeight:"normal"}}>to {getName(f.to)}</span></div>
                         ))}
                       </div>
                     )}
