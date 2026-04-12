@@ -1042,7 +1042,7 @@ function FinancialPrescription({score,data,totalInv}) {
   const invRate=score.invRate||0;
   const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp=totalAlloc;
-  const efundMonths=monthlyExp>0?(efund/monthlyExp):monthlyIncome>0?(efund/(monthlyIncome*0.7)):0;
+  const efundMonths=monthlyExp>0?(efund/monthlyExp):income>0?(efund/(income*0.7)):0;
 
   // Generate 3 hyper-specific prescriptions based on their actual numbers
   const rxItems=[];
@@ -3463,18 +3463,22 @@ function BillCalendar() {
 
 // ─── TOOLS LIST & INDIVIDUAL TOOLS ───────────────────────────────────────────
 const TOOLS_LIST = [
-  {id:"budget",label:"Budget Builder",icon:"💰",sub:"Build and visualize your monthly budget",color:"#4ade80"},
-  {id:"statement",label:"Statement Importer",icon:"🏧",sub:"Upload bank & credit card CSVs",color:"#22d3ee"},
-  {id:"housing",label:"Housing Analysis",icon:"🏠",sub:"Rent vs. Buy, Mortgage & Home Guide",color:"#a78bfa"},
-  {id:"networth",label:"Net Worth",icon:"📊",sub:"Assets minus liabilities",color:"#60a5fa"},
-  {id:"savings",label:"Savings Goal",icon:"🎯",sub:"How much to save per month",color:"#facc15"},
-  {id:"loc",label:"Loan Simulator",icon:"🏦",sub:"Payments and interest on any loan",color:"#fb923c"},
-  {id:"cashflow",label:"Cash Flow",icon:"📅",sub:"90-day rolling cash flow ledger",color:"#22d3ee"},
-  {id:"debtopt",label:"Debt Optimizer",icon:"⚡",sub:"Fastest path to debt-free",color:"#f87171"},
-  {id:"tax",label:"Tax Estimator",icon:"🇨🇦",sub:"Estimate Canadian take-home pay",color:"#4ade80"},
-  {id:"moneyflow",label:"Money Flow Map",icon:"🗺️",sub:"Map where every dollar goes",color:"#a78bfa"},
-  {id:"benchmarks",label:"Where You Stand",icon:"📊",sub:"How you compare to Canadian averages",color:"#22d3ee"},
-  {id:"compound",label:"Compound Interest",icon:"📐",sub:"See how your money grows over time",color:"#4ade80"},
+  // PLAN
+  {id:"budget",    label:"Budget Builder",      icon:"⚖️", sub:"Build and visualize your monthly budget",    group:"PLAN"},
+  {id:"networth",  label:"Net Worth",            icon:"💰", sub:"Assets, liabilities & allocation",           group:"PLAN"},
+  {id:"savings",   label:"Savings Goal",         icon:"🎯", sub:"How much to save per month",                 group:"PLAN"},
+  // ANALYZE
+  {id:"tax",       label:"Tax Estimator",        icon:"🇨🇦", sub:"Estimate Canadian take-home pay",            group:"ANALYZE"},
+  {id:"housing",   label:"Housing Analysis",     icon:"🏠", sub:"Rent vs. Buy, Mortgage & Home Guide",        group:"ANALYZE"},
+  {id:"compound",  label:"Compound Interest",    icon:"📈", sub:"See how your money grows over time",         group:"ANALYZE"},
+  // OPTIMIZE
+  {id:"debtopt",   label:"Debt Optimizer",       icon:"🔗", sub:"Fastest path to debt-free",                 group:"OPTIMIZE"},
+  {id:"loc",       label:"Loan Simulator",       icon:"🔢", sub:"Payments and interest on any loan",          group:"OPTIMIZE"},
+  {id:"cashflow",  label:"Cash Flow",            icon:"💸", sub:"90-day rolling cash flow ledger",            group:"OPTIMIZE"},
+  // MISCELLANEOUS
+  {id:"statement", label:"Statement Importer",   icon:"📂", sub:"Upload & categorize bank statements",        group:"MISCELLANEOUS"},
+  {id:"moneyflow", label:"Money Flow Map",       icon:"🔀", sub:"Map where every dollar goes",               group:"MISCELLANEOUS"},
+  {id:"benchmarks",label:"Where You Stand",      icon:"📊", sub:"Compare to Canadian averages",              group:"MISCELLANEOUS"},
 ];
 
 function IndividualTools({onHome,data,totalInv,user,token}) {
@@ -3496,18 +3500,25 @@ function IndividualTools({onHome,data,totalInv,user,token}) {
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
       <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
-        <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.7,marginBottom:20}}>Tap a tool to get started.</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-          {TOOLS_LIST.map(t=>(
-            <button key={t.id} onClick={()=>setTool(t.id)}
-              className="action-btn"
-              style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 8px 16px",cursor:"pointer",textAlign:"center",color:"#e8e4d9",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:8,...GS}}>
-              <div style={{fontSize:32,marginBottom:2}}>{t.icon}</div>
-              <div style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS}}>{t.label}</div>
-              <div style={{fontSize:10,color:"#6b8cce",lineHeight:1.4,marginTop:2}}>{t.sub}</div>
-            </button>
-          ))}
-        </div>
+        {["PLAN","ANALYZE","OPTIMIZE","MISCELLANEOUS"].map(group=>{
+          const groupTools=TOOLS_LIST.filter(t=>t.group===group);
+          return (
+            <div key={group} style={{marginBottom:28}}>
+              <div style={{fontSize:10,color:"#4a5a6a",letterSpacing:3,fontWeight:"bold",marginBottom:12,paddingBottom:8,borderBottom:"1px solid #1e3a5f"}}>{group}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                {groupTools.map(t=>(
+                  <button key={t.id} onClick={()=>setTool(t.id)}
+                    className="action-btn"
+                    style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px 10px 14px",cursor:"pointer",textAlign:"center",color:"#e8e4d9",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:6,...GS}}>
+                    <div style={{fontSize:28,lineHeight:1,marginBottom:2}}>{t.icon}</div>
+                    <div style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS}}>{t.label}</div>
+                    <div style={{fontSize:10,color:"#8fadd4",lineHeight:1.5}}>{t.sub}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -5075,7 +5086,8 @@ function FirstHomeBuyer({data}) {
   const tfsa=(data?.investments?.tfsa||[]).reduce((s,x)=>s+Number(x.amount||0),0);
   const efund=(data?.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
   const monthlyExp=(data?.budget?.categories||[]).reduce((s,c)=>s+Number(c.amount||0),0);
-  const efundMonths=monthlyExp>0?(efund/monthlyExp):monthlyIncome>0?(efund/(monthlyIncome*0.7)):0;
+  const monthlyIncomeFHB=Number(data?.budget?.income||0);
+  const efundMonths=monthlyExp>0?(efund/monthlyExp):monthlyIncomeFHB>0?(efund/(monthlyIncomeFHB*0.7)):0;
   const totalDebt=(data?.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
     +(data?.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
     +(data?.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
