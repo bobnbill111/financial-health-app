@@ -4455,203 +4455,438 @@ function HousingAnalysis({data,user,token}) {
 
 // ─── MORTGAGE QUALIFIER ────────────────────────────────────────────────────────
 function MortgageQualifier({data}) {
-  const prefillIncome=Number(data?.budget?.income||0)*12;
-  const prefillDebt=(data?.otherDebts||[]).reduce((s,x)=>s+Number(x.payment||0),0)
-    +(data?.locs||[]).reduce((s,l)=>s+Number(l.balance||0)*(Number(l.rate||6)/100)/12,0)
-    +data?.creditCards?.filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0)*0.03,0)||0;
+  // Pre-fill from appointment data
+  const prefillGross=Number(data?.income?.grossSalary||0)||Number(data?.budget?.income||0)*12||0;
+  const prefillGross2=Number(data?.income2?.grossSalary||0)||0;
+  const prefillCC=(data?.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0)*0.03,0);
+  const prefillLOC=(data?.locs||[]).reduce((s,l)=>s+Number(l.balance||0)*(Number(l.rate||6)/100)/12,0);
+  const prefillOther=(data?.otherDebts||[]).reduce((s,x)=>s+Number(x.payment||0),0);
 
-  const [grossIncome,setGrossIncome]=useState(String(Math.round(prefillIncome))||"");
-  const [coIncome,setCoIncome]=useState("");
-  const [monthlyDebts,setMonthlyDebts]=useState(String(Math.round(prefillDebt))||"");
+  // ── Income inputs ──────────────────────────────────────────────────────────
+  const [income1,setIncome1]=useState(String(Math.round(prefillGross))||"");
+  const [income2,setIncome2]=useState(String(Math.round(prefillGross2))||"");
+  const [rentalIncome,setRentalIncome]=useState("");       // gross monthly rental; 50% included
+  const [bonusIncome,setBonusIncome]=useState("");         // 2-yr average annual; 100% included
+
+  // ── Mortgage inputs ────────────────────────────────────────────────────────
   const [downPayment,setDownPayment]=useState("");
-  const [rate,setRate]=useState("5.25");
+  const [contractRate,setContractRate]=useState("5.25");
+  const [benchmark,setBenchmark]=useState("5.25");         // editable OSFI floor
   const [amort,setAmort]=useState("25");
-  const [propTax,setPropTax]=useState("");
-  const [condoFee,setCondoFee]=useState("0");
-  const [heatCost,setHeatCost]=useState("150");
 
-  const totalGross=(Number(grossIncome||0)+Number(coIncome||0));
-  const monthlyGross=totalGross/12;
-  const stressRate=Math.max(Number(rate||5.25)+2, 5.25);
-  const r=stressRate/100/12;
+  // ── Property cost inputs ───────────────────────────────────────────────────
+  const [taxMode,setTaxMode]=useState("annual");           // "annual" | "mpac"
+  const [propTaxAnnual,setPropTaxAnnual]=useState("");     // annual $ amount
+  const [mpacValue,setMpacValue]=useState("");             // MPAC assessed value
+  const [mpacRate,setMpacRate]=useState("0.6");            // mill rate %
+  const [heatCost,setHeatCost]=useState("200");
+  const [condoFee,setCondoFee]=useState("0");
+
+  // ── Debt inputs ────────────────────────────────────────────────────────────
+  const [carLoan,setCarLoan]=useState("");
+  const [studentLoan,setStudentLoan]=useState("");
+  const [locDebt,setLocDebt]=useState(String(Math.round(prefillLOC))||"");
+  const [ccBalance,setCcBalance]=useState(String(Math.round(prefillCC/0.03))||""); // store balance, compute 3%
+  const [otherDebt,setOtherDebt]=useState(String(Math.round(prefillOther))||"");
+
+  // ── Parameters (editable) ─────────────────────────────────────────────────
+  const [gdsLimit,setGdsLimit]=useState("39");
+  const [tdsLimit,setTdsLimit]=useState("44");
+  const [showAdvanced,setShowAdvanced]=useState(false);
+  const [showBreakdown,setShowBreakdown]=useState(false);
+
+  // ── Calculations ───────────────────────────────────────────────────────────
+  // Qualifying income
+  const grossAnnual=(Number(income1||0)+Number(income2||0))
+    +(Number(rentalIncome||0)*12*0.5)      // 50% rental inclusion
+    +(Number(bonusIncome||0));             // 2-yr avg bonus already annualised
+  const grossMonthly=grossAnnual/12;
+
+  // Stress test rate
+  const cr=Number(contractRate||5.25);
+  const bm=Number(benchmark||5.25);
+  const stressRate=Math.max(cr+2, bm);
+  const rStress=stressRate/100/12;
+  const rActual=cr/100/12;
   const n=Number(amort||25)*12;
 
-  // Max GDS = 39% of gross monthly (housing costs / gross)
-  // Max TDS = 44% of gross monthly (all debts / gross)
-  // Housing costs = mortgage P&I + property tax + heat + 50% condo fee
-  const monthlyPropTax=Number(propTax||0)/12;
-  const monthlyHeat=Number(heatCost||150);
+  // Property tax monthly
+  const propTaxMonthly=taxMode==="annual"
+    ? Number(propTaxAnnual||0)/12
+    : Number(mpacValue||0)*(Number(mpacRate||0.6)/100)/12;
+
+  // Housing costs (excluding mortgage P&I)
+  const monthlyHeat=Number(heatCost||200);
   const monthlyCondo=Number(condoFee||0)*0.5;
-  const otherHousing=monthlyPropTax+monthlyHeat+monthlyCondo;
+  const otherHousing=propTaxMonthly+monthlyHeat+monthlyCondo;
 
-  // Max mortgage payment from GDS
-  const maxGDSPayment=monthlyGross*0.39-otherHousing;
-  // Max mortgage payment from TDS
-  const maxTDSPayment=monthlyGross*0.44-otherHousing-Number(monthlyDebts||0);
-  const maxPayment=Math.max(0,Math.min(maxGDSPayment,maxTDSPayment));
+  // Monthly debt obligations
+  const debtPayments=
+    Number(carLoan||0)
+    +Number(studentLoan||0)
+    +Number(locDebt||0)
+    +Number(ccBalance||0)*0.03             // 3% of CC balance
+    +Number(otherDebt||0);
 
-  // Max principal from payment
-  const maxPrincipal=maxPayment>0&&r>0?maxPayment*((1-Math.pow(1+r,-n))/r):0;
-  const maxPurchase=maxPrincipal+Number(downPayment||0);
+  // Helper: reverse amortization formula → max principal from max payment
+  const maxPrincipalFromPayment=(pmt)=>
+    pmt>0&&rStress>0 ? pmt*((1-Math.pow(1+rStress,-n))/rStress) : 0;
+
+  // Solve backwards from GDS
+  const gdsMax=Number(gdsLimit||39)/100;
+  const tdsMax=Number(tdsLimit||44)/100;
+  const maxPmtGDS=Math.max(0, grossMonthly*gdsMax - otherHousing);
+  const maxMortgageGDS=maxPrincipalFromPayment(maxPmtGDS);
+
+  // Solve backwards from TDS
+  const maxPmtTDS=Math.max(0, grossMonthly*tdsMax - otherHousing - debtPayments);
+  const maxMortgageTDS=maxPrincipalFromPayment(maxPmtTDS);
+
+  // Binding constraint
+  const maxMortgage=Math.max(0, Math.min(maxMortgageGDS, maxMortgageTDS));
+  const limitedBy=maxMortgageGDS<=maxMortgageTDS?"GDS":"TDS";
+  const maxPurchase=maxMortgage+Number(downPayment||0);
+
+  // Actual monthly payment at contract rate
+  const actualPayment=maxMortgage>0&&rActual>0
+    ? maxMortgage*rActual/(1-Math.pow(1+rActual,-n)) : 0;
+
+  // GDS and TDS at the qualifying mortgage
+  const qualifyingPmt=maxMortgage>0&&rStress>0
+    ? maxMortgage*rStress/(1-Math.pow(1+rStress,-n)) : 0;
+  const gdsRatio=grossMonthly>0?((qualifyingPmt+otherHousing)/grossMonthly)*100:0;
+  const tdsRatio=grossMonthly>0?((qualifyingPmt+otherHousing+debtPayments)/grossMonthly)*100:0;
 
   // CMHC insurance
   const dp=Number(downPayment||0);
   const dpPct=maxPurchase>0?(dp/maxPurchase)*100:0;
-  const cmhc=dp>0&&maxPurchase>0&&dpPct<20
-    ? maxPrincipal*(dpPct<5?0.04:dpPct<10?0.031:0.028)
-    : 0;
+  const cmhcRate=dpPct>=20?0:dpPct>=15?0.028:dpPct>=10?0.031:0.04;
+  const cmhc=dpPct<20&&dp>0?maxMortgage*cmhcRate:0;
 
-  // Qualifying check
-  const gdsRatio=monthlyGross>0?((maxPayment+otherHousing)/monthlyGross)*100:0;
-  const tdsRatio=monthlyGross>0?((maxPayment+otherHousing+Number(monthlyDebts||0))/monthlyGross)*100:0;
-
-  const actualPayment=maxPrincipal>0&&r>0?maxPrincipal*r/(1-Math.pow(1+r,-n)):0;
-
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+  const dollarInput=(val,set,placeholder,color="#e8e4d9")=>(
+    <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+      <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
+      <input type="number" value={val} onChange={e=>set(e.target.value)} placeholder={placeholder}
+        style={{background:"none",border:"none",outline:"none",color,fontSize:14,width:"100%",...GS}}/>
+    </div>
+  );
 
   return (
     <div>
+      {/* ── Income ── */}
       <Card>
         <SecTitle>Income</SecTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
-          <div>
-            <Label>Gross Annual Income</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={grossIncome} onChange={e=>setGrossIncome(e.target.value)} placeholder="80,000" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
-            </div>
-          </div>
-          <div>
-            <Label>Co-Applicant Income</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={coIncome} onChange={e=>setCoIncome(e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <SecTitle>Monthly Debts & Down Payment</SecTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div>
-            <Label>Existing Monthly Debts</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={monthlyDebts} onChange={e=>setMonthlyDebts(e.target.value)} placeholder="500" style={{background:"none",border:"none",outline:"none",color:"#f87171",fontSize:15,width:"100%",...GS}}/>
-              <span style={{color:"#6b8cce",fontSize:11}}>/mo</span>
-            </div>
-            <div style={{fontSize:10,color:"#6b8cce",marginTop:4,lineHeight:1.5}}>Car payments, student loans, etc.</div>
-          </div>
-          <div>
-            <Label>Down Payment</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={downPayment} onChange={e=>setDownPayment(e.target.value)} placeholder="60,000" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:15,width:"100%",...GS}}/>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <SecTitle>Mortgage Details</SecTitle>
+        <div style={{fontSize:11,color:"#6b8cce",marginBottom:10}}>Enter <strong style={{color:"#e8e4d9"}}>gross annual</strong> income before taxes.</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div><Label>Applicant 1 Income</Label>{dollarInput(income1,setIncome1,"85,000","#4ade80")}</div>
+          <div><Label>Applicant 2 Income</Label>{dollarInput(income2,setIncome2,"0","#4ade80")}</div>
+        </div>
+        <button onClick={()=>setShowAdvanced(p=>!p)} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:11,padding:0,...GS}}>
+          {showAdvanced?"▲ Hide":"▼ Show"} rental & bonus income
+        </button>
+        {showAdvanced&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:10}}>
+            <div>
+              <Label>Monthly Rental Income</Label>
+              {dollarInput(rentalIncome,setRentalIncome,"0","#facc15")}
+              <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>50% included in qualifying income</div>
+            </div>
+            <div>
+              <Label>Annual Bonus / Overtime</Label>
+              {dollarInput(bonusIncome,setBonusIncome,"0","#facc15")}
+              <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>2-year average — enter annual avg</div>
+            </div>
+          </div>
+        )}
+        {grossMonthly>0&&<div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
+          Qualifying gross income: <span style={{color:"#4ade80",...GS}}>{fmt(grossMonthly)}/mo</span> ({fmt(grossAnnual)}/yr)
+        </div>}
+      </Card>
+
+      {/* ── Mortgage ── */}
+      <Card>
+        <SecTitle>Mortgage</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div><Label>Down Payment</Label>{dollarInput(downPayment,setDownPayment,"50,000","#60a5fa")}</div>
           <div>
-            <Label>Rate (%)</Label>
-            <input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="5.25" style={inp}/>
+            <Label>Contract Rate (%)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <input type="number" value={contractRate} onChange={e=>setContractRate(e.target.value)} placeholder="5.25" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>%</span>
+            </div>
           </div>
           <div>
             <Label>Amortization</Label>
             <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
-              <span style={{color:"#6b8cce",fontSize:11}}>yrs</span>
+              <input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>yrs</span>
             </div>
           </div>
           <div>
-            <Label>Annual Property Tax</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={propTax} onChange={e=>setPropTax(e.target.value)} placeholder="4,000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
-            </div>
-          </div>
-          <div>
-            <Label>Monthly Heat Cost</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={heatCost} onChange={e=>setHeatCost(e.target.value)} placeholder="150" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
-            </div>
-          </div>
-          <div>
-            <Label>Monthly Condo Fee (if any)</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-              <input type="number" value={condoFee} onChange={e=>setCondoFee(e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
+            <Label>OSFI Benchmark Rate (%)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #a78bfa44",borderRadius:8,padding:"10px 12px"}}>
+              <input type="number" value={benchmark} onChange={e=>setBenchmark(e.target.value)} placeholder="5.25" style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:14,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>%</span>
             </div>
           </div>
         </div>
-        <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#6b8cce",lineHeight:1.6}}>
-          ⚡ Stress test rate: <span style={{color:"#facc15"}}>{stressRate.toFixed(2)}%</span> (your rate + 2%, min 5.25% per OSFI rules)
+        <div style={{background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
+          Stress test rate: <span style={{color:"#f87171",...GS}}>{stressRate.toFixed(2)}%</span>
+          <span style={{color:"#4a5a6a",marginLeft:6}}>(max of {cr}% + 2% = {(cr+2).toFixed(2)}% vs benchmark {bm}%)</span>
         </div>
       </Card>
 
-      {/* Results */}
-      {totalGross>0&&(
-        <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044"}}>
-          <SecTitle>Qualification Results</SecTitle>
-          <div style={{textAlign:"center",marginBottom:16}}>
-            <div style={{fontSize:11,color:"#6b8cce",marginBottom:4,letterSpacing:2}}>MAXIMUM PURCHASE PRICE</div>
-            <div style={{fontSize:40,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(maxPurchase)}</div>
-            <div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>Based on Canadian stress test (OSFI B-20)</div>
+      {/* ── Property Costs ── */}
+      <Card>
+        <SecTitle>Property Costs</SecTitle>
+        {/* Property tax toggle */}
+        <div style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <Label>Property Tax</Label>
+            <div style={{display:"flex",gap:4,background:"#0d1b3e",borderRadius:8,padding:3}}>
+              {[{id:"annual",label:"Annual $"},{id:"mpac",label:"% of MPAC"}].map(m=>(
+                <button key={m.id} onClick={()=>setTaxMode(m.id)} className={`glow-btn${taxMode===m.id?" active-tab":""}`}
+                  style={{background:taxMode===m.id?"#1a2235":"transparent",border:"none",borderRadius:6,padding:"4px 10px",color:taxMode===m.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {taxMode==="annual"?(
+            <div>
+              {dollarInput(propTaxAnnual,setPropTaxAnnual,"4,000")}
+              <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Annual property tax → {fmt(Number(propTaxAnnual||0)/12)}/mo</div>
+            </div>
+          ):(
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>MPAC ASSESSED VALUE</div>
+                {dollarInput(mpacValue,setMpacValue,"500,000")}
+              </div>
+              <div>
+                <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>MILL RATE (%)</div>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" value={mpacRate} onChange={e=>setMpacRate(e.target.value)} placeholder="0.6" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:12}}>%</span>
+                </div>
+              </div>
+              <div style={{gridColumn:"1/-1",fontSize:9,color:"#6b8cce"}}>
+                Estimated annual tax: {fmt(Number(mpacValue||0)*(Number(mpacRate||0.6)/100))} → {fmt(propTaxMonthly)}/mo
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <Label>Monthly Heating</Label>
+            {dollarInput(heatCost,setHeatCost,"200")}
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>CMHC standard: $200/mo</div>
+          </div>
+          <div>
+            <Label>Monthly Condo Fee</Label>
+            {dollarInput(condoFee,setCondoFee,"0")}
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>50% included in GDS/TDS</div>
+          </div>
+        </div>
+        {otherHousing>0&&<div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
+          Non-mortgage housing costs: <span style={{color:"#e8e4d9",...GS}}>{fmt(otherHousing)}/mo</span>
+          <span style={{color:"#4a5a6a",marginLeft:6}}>(tax {fmt(propTaxMonthly)} + heat {fmt(monthlyHeat)} + 50% condo {fmt(monthlyCondo)})</span>
+        </div>}
+      </Card>
+
+      {/* ── Monthly Debts ── */}
+      <Card>
+        <SecTitle>Monthly Debt Obligations</SecTitle>
+        <div style={{fontSize:11,color:"#6b8cce",marginBottom:10}}>All existing debt payments that appear on your credit bureau.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div><Label>Car Loan Payment</Label>{dollarInput(carLoan,setCarLoan,"0","#f87171")}</div>
+          <div><Label>Student Loan Payment</Label>{dollarInput(studentLoan,setStudentLoan,"0","#f87171")}</div>
+          <div>
+            <Label>LOC Monthly Payment</Label>
+            {dollarInput(locDebt,setLocDebt,"0","#f87171")}
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Enter actual monthly payment</div>
+          </div>
+          <div>
+            <Label>Credit Card Balance</Label>
+            {dollarInput(ccBalance,setCcBalance,"0","#f87171")}
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>3% of balance = {fmt(Number(ccBalance||0)*0.03)}/mo used</div>
+          </div>
+          <div style={{gridColumn:"1/-1"}}>
+            <Label>Other Monthly Debts</Label>
+            {dollarInput(otherDebt,setOtherDebt,"0","#f87171")}
+          </div>
+        </div>
+        {debtPayments>0&&<div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
+          Total monthly debts: <span style={{color:"#f87171",...GS}}>{fmt(debtPayments)}/mo</span>
+        </div>}
+      </Card>
+
+      {/* ── Parameters ── */}
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <SecTitle style={{marginBottom:0}}>Qualifying Parameters</SecTitle>
+          <div style={{fontSize:10,color:"#6b8cce"}}>OSFI defaults</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <Label>GDS Limit (%)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8044",borderRadius:8,padding:"10px 12px"}}>
+              <input type="number" value={gdsLimit} onChange={e=>setGdsLimit(e.target.value)} placeholder="39" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:14,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>%</span>
+            </div>
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Gross Debt Service — default 39%</div>
+          </div>
+          <div>
+            <Label>TDS Limit (%)</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #60a5fa44",borderRadius:8,padding:"10px 12px"}}>
+              <input type="number" value={tdsLimit} onChange={e=>setTdsLimit(e.target.value)} placeholder="44" style={{background:"none",border:"none",outline:"none",color:"#60a5fa",fontSize:14,width:"100%",...GS}}/>
+              <span style={{color:"#6b8cce",fontSize:12}}>%</span>
+            </div>
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Total Debt Service — default 44%</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── Results ── */}
+      {grossMonthly>0&&(
+        <>
+          {/* Headline */}
+          <div style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",borderRadius:16,padding:"20px 24px",marginBottom:12}}>
+            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>MAXIMUM PURCHASE PRICE</div>
+            <div style={{fontSize:44,color:"#4ade80",fontWeight:"bold",...GS,lineHeight:1}}>{fmtShort(maxPurchase)}</div>
+            <div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>{fmt(maxPurchase)} · Limited by <span style={{color:limitedBy==="GDS"?"#4ade80":"#60a5fa",fontWeight:"bold"}}>{limitedBy} ({limitedBy==="GDS"?gdsLimit:tdsLimit}%)</span></div>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          {/* Key numbers */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
             {[
-              {label:"Max Mortgage",val:fmtShort(maxPrincipal),color:"#4ade80"},
-              {label:"Monthly Payment",val:fmt(actualPayment)+"/mo",color:"#facc15"},
-              {label:"CMHC Insurance",val:cmhc>0?fmtShort(cmhc):"None needed",color:cmhc>0?"#f87171":"#4ade80"},
+              {label:"Max Mortgage",val:fmtShort(maxMortgage),color:"#4ade80"},
+              {label:"Actual Monthly Pmt",val:fmt(actualPayment)+"/mo",color:"#facc15",sub:"at "+cr+"% contract rate"},
+              {label:"Qualifying Pmt",val:fmt(qualifyingPmt)+"/mo",color:"#fb923c",sub:"at "+stressRate.toFixed(2)+"% stress rate"},
               {label:"Down Payment",val:dp>0?fmtShort(dp)+" ("+dpPct.toFixed(1)+"%)":"Not entered",color:"#60a5fa"},
-            ].map((r,i)=>(
-              <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
-                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{r.label.toUpperCase()}</div>
-                <div style={{fontSize:14,color:r.color,fontWeight:"bold",...GS}}>{r.val}</div>
+              {label:"CMHC Insurance",val:cmhc>0?fmtShort(cmhc)+" ("+dpPct.toFixed(1)+"% dp)":"None",color:cmhc>0?"#f87171":"#4ade80"},
+              {label:"Amortization",val:amort+" years",color:"#a78bfa"},
+            ].map((item,i)=>(
+              <div key={i} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{item.label.toUpperCase()}</div>
+                <div style={{fontSize:15,color:item.color,fontWeight:"bold",...GS}}>{item.val}</div>
+                {item.sub&&<div style={{fontSize:9,color:"#4a5a6a",marginTop:2}}>{item.sub}</div>}
               </div>
             ))}
           </div>
 
-          {/* GDS/TDS bars */}
-          <div style={{marginBottom:10}}>
+          {/* GDS/TDS ratios */}
+          <Card>
+            <SecTitle>Ratio Analysis</SecTitle>
             {[
-              {label:"GDS Ratio",val:gdsRatio,max:39,desc:"Housing costs vs income (max 39%)"},
-              {label:"TDS Ratio",val:tdsRatio,max:44,desc:"All debts vs income (max 44%)"},
+              {label:"GDS Ratio",val:gdsRatio,limit:Number(gdsLimit||39),desc:`Housing costs ÷ gross income (limit ${gdsLimit}%)`,color:"#4ade80"},
+              {label:"TDS Ratio",val:tdsRatio,limit:Number(tdsLimit||44),desc:`All debts ÷ gross income (limit ${tdsLimit}%)`,color:"#60a5fa"},
             ].map((ratio,i)=>(
-              <div key={i} style={{marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{fontSize:12,color:"#8fadd4"}}>{ratio.label}</span>
-                  <span style={{fontSize:12,color:ratio.val>ratio.max?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>{ratio.val.toFixed(1)}% / {ratio.max}%</span>
+              <div key={i} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:13,color:"#e8e4d9",...GS}}>{ratio.label}</span>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:14,color:ratio.val>ratio.limit?"#f87171":ratio.color,fontWeight:"bold",...GS}}>{ratio.val.toFixed(1)}%</span>
+                    <span style={{fontSize:11,color:"#6b8cce"}}>/ {ratio.limit}%</span>
+                    {limitedBy===ratio.label.split(" ")[0]&&<span style={{fontSize:9,color:"#facc15",border:"1px solid #facc1544",borderRadius:8,padding:"1px 6px"}}>LIMITING</span>}
+                  </div>
                 </div>
-                <div style={{background:"#0d1b3e",borderRadius:4,height:8,overflow:"hidden"}}>
-                  <div style={{width:Math.min(100,(ratio.val/ratio.max)*100)+"%",height:"100%",background:ratio.val>ratio.max?"#f87171":"#4ade80",borderRadius:4,transition:"width 0.4s"}}/>
+                <div style={{background:"#0d1b3e",borderRadius:5,height:10,overflow:"hidden",marginBottom:4}}>
+                  <div style={{width:Math.min(100,(ratio.val/ratio.limit)*100)+"%",height:"100%",background:ratio.val>ratio.limit?"#f87171":ratio.color,borderRadius:5,transition:"width 0.5s ease"}}/>
                 </div>
-                <div style={{fontSize:10,color:"#6b8cce",marginTop:3}}>{ratio.desc}</div>
+                <div style={{fontSize:10,color:"#6b8cce"}}>{ratio.desc}</div>
               </div>
             ))}
-          </div>
 
+            {/* GDS vs TDS side-by-side */}
+            <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",marginTop:4}}>
+              <div style={{fontSize:10,color:"#6b8cce",letterSpacing:1,marginBottom:8}}>CONSTRAINT COMPARISON</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center",fontSize:11}}>
+                <div style={{textAlign:"center",background:limitedBy==="GDS"?"#1a4030":"#111827",borderRadius:8,padding:"8px",border:limitedBy==="GDS"?"1px solid #4ade8044":"1px solid transparent"}}>
+                  <div style={{color:"#6b8cce",marginBottom:3}}>Max from GDS</div>
+                  <div style={{color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(maxMortgageGDS)}</div>
+                </div>
+                <div style={{color:"#4a5a6a",textAlign:"center"}}>vs</div>
+                <div style={{textAlign:"center",background:limitedBy==="TDS"?"#0d1a2e":"#111827",borderRadius:8,padding:"8px",border:limitedBy==="TDS"?"1px solid #60a5fa44":"1px solid transparent"}}>
+                  <div style={{color:"#6b8cce",marginBottom:3}}>Max from TDS</div>
+                  <div style={{color:"#60a5fa",fontWeight:"bold",...GS}}>{fmtShort(maxMortgageTDS)}</div>
+                </div>
+              </div>
+              <div style={{fontSize:10,color:"#6b8cce",marginTop:8,textAlign:"center"}}>
+                Lower of the two = <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(maxMortgage)}</span> max mortgage
+              </div>
+            </div>
+          </Card>
+
+          {/* Step-by-step breakdown */}
+          <Card>
+            <button onClick={()=>setShowBreakdown(p=>!p)} style={{width:"100%",background:"none",border:"none",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",padding:0}}>
+              <SecTitle style={{marginBottom:0}}>Step-by-Step Math</SecTitle>
+              <span style={{color:"#6b8cce",fontSize:12}}>{showBreakdown?"▲ Hide":"▼ Show"}</span>
+            </button>
+            {showBreakdown&&(
+              <div style={{marginTop:12,fontSize:11,lineHeight:2.2}}>
+                {[
+                  ["Gross annual income",fmt(grossAnnual),"incl. 50% rental, bonus avg"],
+                  ["Gross monthly income",fmt(grossMonthly),"÷ 12"],
+                  ["Stress test rate",stressRate.toFixed(2)+"%","max("+cr+"% + 2%, "+bm+"% benchmark)"],
+                  ["─────","",""],
+                  ["GDS limit ("+gdsLimit+"%)",fmt(grossMonthly*Number(gdsLimit||39)/100)+"/mo","max allowable housing cost"],
+                  ["− Non-mortgage costs","−"+fmt(otherHousing)+"/mo","tax + heat + 50% condo"],
+                  ["= Max mortgage payment (GDS)",fmt(maxPmtGDS)+"/mo",""],
+                  ["→ Max mortgage principal (GDS)",fmtShort(maxMortgageGDS),"PV at "+stressRate.toFixed(2)+"%, "+amort+"yr"],
+                  ["─────","",""],
+                  ["TDS limit ("+tdsLimit+"%)",fmt(grossMonthly*Number(tdsLimit||44)/100)+"/mo","max allowable debt cost"],
+                  ["− Non-mortgage housing","−"+fmt(otherHousing)+"/mo",""],
+                  ["− Monthly debts","−"+fmt(debtPayments)+"/mo","car+student+LOC+CC(3%)+other"],
+                  ["= Max mortgage payment (TDS)",fmt(maxPmtTDS)+"/mo",""],
+                  ["→ Max mortgage principal (TDS)",fmtShort(maxMortgageTDS),"PV at "+stressRate.toFixed(2)+"%, "+amort+"yr"],
+                  ["─────","",""],
+                  ["Binding constraint",limitedBy,"lower of GDS vs TDS"],
+                  ["Max mortgage",fmtShort(maxMortgage),""],
+                  ["+ Down payment",dp>0?fmtShort(dp):"$0",""],
+                  ["= Max purchase price",fmtShort(maxPurchase),""],
+                  ["─────","",""],
+                  ["Actual payment at "+cr+"%",fmt(actualPayment)+"/mo","what you actually pay"],
+                  ["Qualifying payment at "+stressRate.toFixed(2)+"%",fmt(qualifyingPmt)+"/mo","what you qualify at"],
+                ].map(([label,val,note],i)=>label==="─────"?(
+                  <div key={i} style={{borderTop:"1px solid #1e3a5f",margin:"4px 0"}}/>
+                ):(
+                  <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,padding:"1px 0"}}>
+                    <div>
+                      <span style={{color:"#8fadd4"}}>{label}</span>
+                      {note&&<span style={{color:"#4a5a6a",marginLeft:6,fontSize:9}}>{note}</span>}
+                    </div>
+                    <span style={{color:"#e8e4d9",fontWeight:"bold",...GS,textAlign:"right"}}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Warnings */}
           {dpPct>0&&dpPct<5&&(
-            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#f87171",lineHeight:1.6}}>
-              ⚠️ Minimum down payment in Canada is 5% for homes under $500K, or 5% on the first $500K + 10% on the remainder up to $1M.
+            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#f87171",lineHeight:1.7,marginBottom:12}}>
+              ⚠️ Minimum down payment is 5% for homes under $500K, or 5% on first $500K + 10% on remainder up to $1M. Homes over $1M require 20%.
             </div>
           )}
-          {maxPurchase<=0&&(
-            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#f87171",lineHeight:1.6}}>
-              ⚠️ Based on your debts and income, it may be difficult to qualify. Consider reducing debts or increasing your down payment.
+          {maxPurchase>1000000&&dpPct<20&&(
+            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#f87171",lineHeight:1.7,marginBottom:12}}>
+              ⚠️ Homes over $1M require a minimum 20% down payment — CMHC insurance is not available.
             </div>
           )}
-        </Card>
+          {maxMortgage<=0&&(
+            <div style={{background:"#1a0505",border:"1px solid #f8717144",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#f87171",lineHeight:1.7}}>
+              ⚠️ Your existing debts or housing costs exceed the qualifying ratios at this income level. Consider reducing debts, increasing income, or a larger down payment.
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
+
 
 // ─── CANADIAN TAX ESTIMATOR ───────────────────────────────────────────────────
 function CanadianTaxEstimator({data}) {
