@@ -73,10 +73,16 @@ const supa = {
 };
 
 
-const fmt = (n) => "$" + Number(n||0).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtShort = (n) => { const v=Number(n||0); if(v>=1e6) return "$"+(v/1e6).toFixed(1)+"M"; if(v>=1000) return "$"+(v/1000).toFixed(1)+"K"; return fmt(v); };
+const fmt = (n) => { const v=Number(n||0); return isNaN(v) ? "$0.00" : "$" + v.toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2}); };
+const fmtShort = (n) => { const v=Number(n||0); if(isNaN(v)) return "$0"; if(v>=1e6) return "$"+(v/1e6).toFixed(1)+"M"; if(v>=1000) return "$"+(v/1000).toFixed(1)+"K"; return fmt(v); };
 const CAT_COLORS = ["#4ade80","#60a5fa","#facc15","#f87171","#a78bfa","#34d399","#fb923c","#e879f9","#94a3b8","#22d3ee"];
 const GS = { fontFamily:"Georgia,serif" };
+const copyToClipboard = (text, setCopied) => {
+  navigator.clipboard.writeText(text).then(()=>{
+    setCopied(true);
+    setTimeout(()=>setCopied(false), 1800);
+  }).catch(()=>{});
+};
 const today = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
 
 // ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
@@ -167,7 +173,8 @@ const GLOBAL_CSS = `
     border-color: #cc000066 !important;
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
   }
-  button:focus { outline: none !important; }
+  button:focus:not(:focus-visible) { outline: none !important; }
+  button:focus-visible { outline: 2px solid #cc0000 !important; outline-offset: 2px !important; }
 
   /* ── Progress bar smooth easing ── */
   .progress-bar {
@@ -184,11 +191,26 @@ const GLOBAL_CSS = `
     transform: translateY(-3px);
     box-shadow: 0 8px 32px rgba(204,0,0,0.2), 0 4px 24px rgba(0,0,0,0.3);
   }
+  .empty-state {
+    opacity: 0.55;
+    border-style: dashed !important;
+    background: #0a0f1e !important;
+  }
+  button:disabled, button[disabled] {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+    filter: grayscale(0.3) !important;
+  }
   .tile-dragover {
     transform: scale(1.02);
   }
 
   /* ── Mobile tile tap state ── */
+  @media (max-width: 380px) {
+    .tools-grid {
+      grid-template-columns: 1fr 1fr !important;
+    }
+  }
   @media (hover: none) {
     .tile-card:active {
       transform: scale(0.98) !important;
@@ -257,22 +279,22 @@ const EMPTY = {
 };
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
-const Card = ({children,style={}}) => <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14,...style}}>{children}</div>;
+const Card = ({children,style={}}) => <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14,...style}}>{children}</div>;
 const Label = ({children}) => <div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",marginBottom:6,...GS}}>{children}</div>;
-const SecTitle = ({children,style={}}) => <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",marginBottom:14,...GS,...style}}>{children}</div>;
+const SecTitle = ({children,style={}}) => <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",marginBottom:12,...GS,...style}}>{children}</div>;
 const NumInput = ({value,onChange,placeholder="0.00"}) => (
-  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
     <span style={{color:"#6b8cce",marginRight:6,fontSize:14}}>$</span>
-    <input type="number" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
+    <input type="number" inputMode="decimal" autoComplete="off" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
   </div>
 );
 const TxtInput = ({value,onChange,placeholder}) => (
-  <input type="text" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+  <input type="text" autoComplete="off" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+    style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
 );
 const PctInput = ({value,onChange,placeholder="0.00"}) => (
-  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
-    <input type="number" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
+  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+    <input type="number" inputMode="decimal" autoComplete="off" value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
     <span style={{color:"#6b8cce"}}>%</span>
   </div>
 );
@@ -283,13 +305,34 @@ const NavBar = ({title,subtitle,onHome,right}) => (
   <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 0",position:"sticky",top:0,zIndex:100}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
+        <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
         <div><div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",...GS}}>{subtitle}</div><div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>{title}</div></div>
       </div>
       {right}
     </div>
   </div>
 );
+
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+class ErrorBoundary extends React.Component {
+  constructor(props){super(props);this.state={hasError:false,error:null};}
+  static getDerivedStateFromError(e){return {hasError:true,error:e};}
+  componentDidCatch(e,info){console.error("Tool error:",e,info);}
+  render(){
+    if(this.state.hasError) return (
+      <div style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717144",borderRadius:14,padding:"24px",textAlign:"center",margin:"20px 0"}}>
+        <div style={{fontSize:24,marginBottom:12}}>⚠️</div>
+        <div style={{fontSize:15,color:"#f87171",fontWeight:"bold",marginBottom:8,...GS}}>Something went wrong</div>
+        <div style={{fontSize:12,color:"#6b8cce",marginBottom:16}}>This tool ran into an error. Your data is safe.</div>
+        <button onClick={()=>this.setState({hasError:false,error:null})} className="action-btn"
+          style={{background:"#1a2235",border:"1px solid #2a4080",borderRadius:8,padding:"8px 20px",color:"#e8e4d9",cursor:"pointer",fontSize:13,...GS}}>
+          Try Again
+        </button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
 
 // ─── PDF GENERATOR ────────────────────────────────────────────────────────────
 function PDFBtn({title,contentId}) {
@@ -461,7 +504,7 @@ function AuthScreen({onAuth,onGuest}) {
     }
   };
 
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"13px 14px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"13px 14px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
@@ -806,19 +849,19 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
     setPwLoading(false);
   };
 
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"12px 14px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"12px 14px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
+            <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff"}}>My Profile</div>
           </div>
         </div>
       </div>
-      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
+      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}}>
         {/* Avatar */}
         <div style={{textAlign:"center",marginBottom:24}}>
           <div style={{width:80,height:80,borderRadius:"50%",background:"linear-gradient(135deg,#cc0000,#8b0000)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:"bold",color:"#fff",margin:"0 auto 12px",...GS}}>
@@ -829,7 +872,7 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
         </div>
 
         {/* Account info */}
-        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14}}>
           <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:14}}>ACCOUNT</div>
           <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1e3a5f"}}>
             <span style={{fontSize:13,color:"#8fadd4"}}>Email</span>
@@ -842,10 +885,10 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
         </div>
 
         {/* Change password */}
-        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+        <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:pwMode?16:0}}>
             <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>Change Password</div>
-            <button onClick={()=>{setPwMode(p=>!p);setPwMsg(null);}} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"5px 12px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+            <button onClick={()=>{setPwMode(p=>!p);setPwMsg(null);}} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"5px 12px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
               {pwMode?"Cancel":"Change"}
             </button>
           </div>
@@ -882,7 +925,7 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
             <div style={{fontSize:14,color:"#f87171",fontWeight:"bold",marginBottom:8}}>Are you sure?</div>
             <div style={{fontSize:12,color:"#8fadd4",marginBottom:14,lineHeight:1.6}}>This will permanently delete your account and all your financial data. This cannot be undone.</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <button onClick={()=>setShowDelete(false)} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"10px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>Cancel</button>
+              <button onClick={()=>setShowDelete(false)} style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"10px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>Cancel</button>
               <button onClick={onSignOut} style={{background:"#cc0000",border:"none",borderRadius:10,padding:"10px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:"bold",...GS}}>Delete</button>
             </div>
           </div>
@@ -898,8 +941,8 @@ function Tip({text}) {
   
   return (
     <span style={{position:"relative",display:"inline-block",marginLeft:6}}>
-      <button onClick={()=>setShow(p=>!p)} style={{background:"#1e3a5f",border:"1px solid #2a4080",borderRadius:"50%",width:18,height:18,color:"#6b8cce",cursor:"pointer",fontSize:10,padding:0,lineHeight:"18px",textAlign:"center",...GS}}>?</button>
-      {show&&<div style={{position:"absolute",left:24,top:-4,background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:10,padding:"10px 12px",fontSize:12,color:"#e8e4d9",width:220,zIndex:200,lineHeight:1.6,boxShadow:"0 8px 24px #00000066",...GS}}>
+      <button onClick={()=>setShow(p=>!p)} style={{background:"#1e3a5f",border:"1px solid #1e3a5f",borderRadius:"50%",width:18,height:18,color:"#6b8cce",cursor:"pointer",fontSize:10,padding:0,lineHeight:"18px",textAlign:"center",...GS}}>?</button>
+      {show&&<div style={{position:"absolute",left:24,top:-4,background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"10px 12px",fontSize:12,color:"#e8e4d9",width:220,zIndex:200,lineHeight:1.6,boxShadow:"0 8px 24px #00000066",...GS}}>
         {text}
         <button onClick={()=>setShow(false)} style={{display:"block",marginTop:8,background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>Got it ✓</button>
       </div>}
@@ -911,7 +954,7 @@ function Tip({text}) {
 function BeginnerCard({tip,title,children}) {
   return <>{children}</>;
   return (
-    <div style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #1e3a5f",borderRadius:14,padding:"18px 16px",marginBottom:14}}>
+    <div style={{background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:13,color:"#22d3ee",fontWeight:"bold",...GS}}>{title}</div>
         {tip&&<Tip text={tip}/>}
@@ -1535,7 +1578,7 @@ function IncomePanel({label,color,inc,setInc,monthlyNet,invMonthly}) {
     {val:"commission",label:"Commission",sub:"Variable — enter monthly average"},
   ];
 
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
     <div style={{marginBottom:14}}>
@@ -1555,14 +1598,14 @@ function IncomePanel({label,color,inc,setInc,monthlyNet,invMonthly}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
             <Label>Gross Annual Salary</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <span style={{color:"#6b8cce",marginRight:4}}>$</span>
               <input type="number" value={inc.grossSalary||""} onChange={e=>setInc("grossSalary")(e.target.value)} placeholder="75,000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
             </div>
           </div>
           <div>
             <Label>Hourly Rate (if applicable)</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <span style={{color:"#6b8cce",marginRight:4}}>$</span>
               <input type="number" value={inc.hourlyRate||""} onChange={e=>setInc("hourlyRate")(e.target.value)} placeholder="35.00" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
               <span style={{color:"#6b8cce",fontSize:11}}>/hr</span>
@@ -1737,7 +1780,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
   return (
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80",...GS}}>Step {prog+1} of {APPT_STEPS.length}</div>}/>
-      <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#cc0000,#4ade80)",transition:"width 0.4s"}}/></div>
+      <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#cc0000,#4ade80)",transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>
       <div style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
         {APPT_STEPS.filter(s=>s!=="Start"&&s!=="Income"&&s!=="Score").map(s=>(
           <button key={s} onClick={()=>setStep(s)}
@@ -1745,7 +1788,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
             style={{background:"none",border:"none",borderBottom:step===s?"2px solid #cc0000":"2px solid transparent",color:step===s?"#cc0000":"#8fadd4",padding:"8px 11px",fontSize:10,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap",...GS}}>{s}</button>
         ))}
       </div>
-      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}} ref={contentRef} id="appt-content">
+      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}} ref={contentRef} id="appt-content">
 
         {step==="Start"&&(
           <div>
@@ -1767,14 +1810,14 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
                 <Label>{d.isJoint?"Person 1 Name":"Your Name"}</Label><TxtInput value={d.person1Name} onChange={v=>setD(p=>({...p,person1Name:v}))} placeholder="e.g. Austin"/>
                 <div style={{height:12}}/>
                 <Label>{d.isJoint?"Person 1 Age":"Your Age"}</Label>
-                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",marginBottom:d.isJoint?12:0}}>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",marginBottom:d.isJoint?12:0}}>
                   <input type="number" value={d.age1} onChange={e=>setD(p=>({...p,age1:e.target.value}))} placeholder="e.g. 28" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>yrs</span>
                 </div>
                 {d.isJoint&&<>
                   <Label>Person 2 Name</Label><TxtInput value={d.person2Name} onChange={v=>setD(p=>({...p,person2Name:v}))} placeholder="e.g. Camille"/>
                   <div style={{height:12}}/>
                   <Label>Person 2 Age</Label>
-                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
                     <input type="number" value={d.age2} onChange={e=>setD(p=>({...p,age2:e.target.value}))} placeholder="e.g. 27" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>yrs</span>
                   </div>
                 </>}
@@ -1823,12 +1866,12 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               <SecTitle>Bank Accounts</SecTitle>
               {d.bankAccounts.map((acct,i)=>(
                 <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginBottom:10,alignItems:"center"}}>
-                  <input value={acct.name} onChange={e=>setBankAccount(i,"name")(e.target.value)} placeholder="Account name" style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"9px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
-                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"9px 10px"}}>
+                  <input value={acct.name} onChange={e=>setBankAccount(i,"name")(e.target.value)} placeholder="Account name" style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"9px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"9px 10px"}}>
                     <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
                     <input type="number" value={acct.amount} onChange={e=>setBankAccount(i,"amount")(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:14,width:"100%",...GS}}/>
                   </div>
-                  <button onClick={()=>removeBankAccount(i)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>
+                  <button onClick={()=>removeBankAccount(i)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px",minWidth:44,minHeight:44}}>×</button>
                 </div>
               ))}
               <button onClick={addBankAccount} style={{width:"100%",background:"none",border:"1px dashed #4ade8044",color:"#6b8cce",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,...GS}}>+ Add Account</button>
@@ -1843,20 +1886,20 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               {d.savingsAccounts.map((acct,i)=>(
                 <div key={i} style={{marginBottom:14,background:"#0d1b3e",borderRadius:10,padding:"12px"}}>
                   <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
-                    <input value={acct.name} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,name:e.target.value}:a)}))} placeholder="Account name" style={{background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
-                    <button onClick={()=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.filter((_,idx)=>idx!==i)}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>
+                    <input value={acct.name} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,name:e.target.value}:a)}))} placeholder="Account name" style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+                    <button onClick={()=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.filter((_,idx)=>idx!==i)}))} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px",minWidth:44,minHeight:44}}>×</button>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                     <div>
                       <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>SAVED</div>
-                      <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+                      <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
                         <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
                         <input type="number" value={acct.saved} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,saved:e.target.value}:a)}))} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:14,width:"100%",...GS}}/>
                       </div>
                     </div>
                     <div>
                       <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>GOAL</div>
-                      <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+                      <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
                         <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
                         <input type="number" value={acct.goal} onChange={e=>setD(p=>({...p,savingsAccounts:p.savingsAccounts.map((a,idx)=>idx===i?{...a,goal:e.target.value}:a)}))} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
                       </div>
@@ -1898,9 +1941,9 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
                   {totalInv>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:10}}><div style={{width:p+"%",height:"100%",background:color,borderRadius:4}}/></div>}
                   {rows.map((row,i)=>(
                     <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,alignItems:"center",marginBottom:8}}>
-                      <input value={row.name} onChange={e=>setRow(i,"name")(e.target.value)} placeholder="Account name" style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"9px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
-                      <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"9px 10px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={row.amount} onChange={e=>setRow(i,"amount")(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color,fontSize:14,width:"100%",...GS}}/></div>
-                      <button onClick={()=>removeRow(i)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>
+                      <input value={row.name} onChange={e=>setRow(i,"name")(e.target.value)} placeholder="Account name" style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"9px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+                      <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"9px 10px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={row.amount} onChange={e=>setRow(i,"amount")(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color,fontSize:14,width:"100%",...GS}}/></div>
+                      <button onClick={()=>removeRow(i)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>
                     </div>
                   ))}
                   <button onClick={addRow} style={{width:"100%",background:"none",border:`1px dashed ${color}44`,color:"#6b8cce",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,...GS}}>+ Add {label} Account</button>
@@ -1923,7 +1966,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               <Label>Annual Interest Rate (%)</Label><PctInput value={d.mortgage.rate} onChange={set("mortgage","rate")} placeholder="e.g. 5.25"/>
               <div style={{height:12}}/>
               <Label>Amortization Remaining (years)</Label>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
                 <input type="number" value={d.mortgage.amortYears} onChange={e=>set("mortgage","amortYears")(e.target.value)} placeholder="e.g. 22" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>yrs</span>
               </div>
               {Number(d.mortgage.balance)>0&&Number(d.mortgage.value)>0&&(()=>{
@@ -1943,10 +1986,10 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               {d.otherDebts.map((debt,i)=>(
                 <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"14px",marginBottom:12}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-                    <select value={debt.type||"Student Loan"} onChange={e=>setOD(i,"type")(e.target.value)} style={{background:"#1a2235",border:"1px solid #2a4080",borderRadius:6,color:"#e8e4d9",fontSize:13,padding:"6px 10px",...GS,flex:1,marginRight:8}}>
+                    <select value={debt.type||"Student Loan"} onChange={e=>setOD(i,"type")(e.target.value)} style={{background:"#1a2235",border:"1px solid #1e3a5f",borderRadius:6,color:"#e8e4d9",fontSize:13,padding:"6px 10px",...GS,flex:1,marginRight:8}}>
                       {["Student Loan","Car Loan","Personal Loan","Medical Debt","Family Loan","Other"].map(t=><option key={t}>{t}</option>)}
                     </select>
-                    <button onClick={()=>setD(p=>({...p,otherDebts:p.otherDebts.filter((_,idx)=>idx!==i)}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>
+                    <button onClick={()=>setD(p=>({...p,otherDebts:p.otherDebts.filter((_,idx)=>idx!==i)}))} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>
                   </div>
                   <Label>Lender / Description</Label><TxtInput value={debt.name||""} onChange={v=>setOD(i,"name")(v)} placeholder="e.g. NSLSC, Toyota Financial"/>
                   <div style={{height:10}}/>
@@ -1973,7 +2016,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
                 <Card key={i} style={{border:`1px solid ${payInFull?"#4ade8033":"#f8717133"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold"}}>{cc.name||`Card ${i+1}`}</div>
-                    <button onClick={()=>setD(p=>({...p,creditCards:p.creditCards.filter((_,idx)=>idx!==i)}))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>
+                    <button onClick={()=>setD(p=>({...p,creditCards:p.creditCards.filter((_,idx)=>idx!==i)}))} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,minWidth:44,minHeight:44}}>×</button>
                   </div>
                   <Label>Card Name</Label><TxtInput value={cc.name} onChange={v=>setCC(i,"name")(v)} placeholder="Visa, Mastercard..."/>
                   <div style={{height:10}}/><Label>Total Balance</Label><NumInput value={cc.totalBalance} onChange={setCC(i,"totalBalance")}/>
@@ -2006,7 +2049,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
                 </Card>
               );
             })}
-            <button onClick={()=>setD(p=>({...p,creditCards:[...p.creditCards,{name:"",totalBalance:"",due:"",pending:"",payInFull:true}]}))} style={{width:"100%",background:"transparent",border:"1px solid #2a4080",borderRadius:10,color:"#8fadd4",padding:"12px",fontSize:13,cursor:"pointer",marginBottom:12,...GS}}>+ Add Card</button>
+            <button onClick={()=>setD(p=>({...p,creditCards:[...p.creditCards,{name:"",totalBalance:"",due:"",pending:"",payInFull:true}]}))} style={{width:"100%",background:"transparent",border:"1px solid #1e3a5f",borderRadius:10,color:"#8fadd4",padding:"12px",fontSize:13,cursor:"pointer",marginBottom:12,...GS}}>+ Add Card</button>
             <NextBtn onClick={()=>setStep("Line of Credit")}>Next: Line of Credit →</NextBtn>
           </div>
         )}
@@ -2025,7 +2068,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
                       onChange={e=>setLoc(i,"name")(e.target.value)}
                       style={{background:"none",border:"none",borderBottom:"1px solid #2a4080",outline:"none",color:"#e8e4d9",fontSize:14,flex:1,paddingBottom:3,...GS}}
                     />
-                    {d.locs.length>1&&<button onClick={()=>removeLoc(i)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>}
+                    {d.locs.length>1&&<button onClick={()=>removeLoc(i)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>}
                   </div>
                   <Label>Outstanding Balance</Label><NumInput value={loc.balance} onChange={setLoc(i,"balance")}/>
                   <div style={{height:12}}/><Label>Credit Limit</Label><NumInput value={loc.limit} onChange={setLoc(i,"limit")}/>
@@ -2064,7 +2107,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
                   <div style={{fontSize:13,color:totalAlloc>income?"#f87171":"#4ade80",fontWeight:"bold"}}>{fmt(totalAlloc)} / {fmt(income)}</div>
                 </div>
                 <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
-                  <div style={{width:Math.min(100,(totalAlloc/income)*100)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6,transition:"width 0.3s"}}/>
+                  <div style={{width:Math.min(100,(totalAlloc/income)*100)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(135deg,#4ade80,#22d3ee)",borderRadius:6,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
                 </div>
               </div>}
             </Card>
@@ -2137,13 +2180,27 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               </Card>
               <Card>
                 <SecTitle>Score Breakdown</SecTitle>
-                {score.scores.map((s,i)=>(
-                  <div key={i} style={{marginBottom:14}}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}><div style={{fontSize:13,color:"#e8e4d9"}}>{s.label}</div><div style={{fontSize:13,color:s.score/s.max>0.7?"#4ade80":s.score/s.max>0.4?"#facc15":"#f87171",fontWeight:"bold"}}>{s.score}/{s.max}</div></div>
-                    <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden",marginBottom:4}}><div style={{width:(s.score/s.max*100)+"%",height:"100%",background:s.score/s.max>0.7?"#4ade80":s.score/s.max>0.4?"#facc15":"#f87171",borderRadius:4}}/></div>
-                    <div style={{fontSize:11,color:"#6b8cce"}}>{s.desc}</div>
-                  </div>
-                ))}
+                {(()=>{
+                  const TOOLTIPS={
+                    "Investment Rate":"Measures how much of your gross income goes toward investments. Target is 25%. Worth 30 points — the biggest factor in your score.",
+                    "Portfolio Size":"Compares your total invested assets to the median for your age group. Worth 25 points.",
+                    "Emergency Fund":"Tracks how many months of expenses you have saved in liquid accounts. Target is 3–6 months. Worth 20 points.",
+                    "Debt Management":"Measures your non-mortgage debt as a percentage of gross income. Lower is better. Worth 15 points.",
+                    "Budget Balance":"Checks whether your monthly income exceeds your expenses. A surplus earns full points. Worth 10 points.",
+                  };
+                  const nextGrade=score.total>=85?null:score.total>=75?"A+":score.total>=65?"A":score.total>=55?"B+":score.total>=45?"B":score.total>=35?"C+":"C";
+                  const ptsNeeded=nextGrade?({A:75,B:55,C:35,"A+":85,"B+":65,"C+":45}[nextGrade]||100)-score.total:0;
+                  return (
+                    <>
+                      {nextGrade&&(
+                        <div style={{background:"#0d1b3e",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#6b8cce",lineHeight:1.6}}>
+                          💡 You need <span style={{color:"#facc15",fontWeight:"bold",...GS}}>{ptsNeeded} more point{ptsNeeded>1?"s":""}</span> to reach <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{nextGrade}</span>. Focus on your lowest-scoring area below.
+                        </div>
+                      )}
+                      <ScoreBreakdownRows scores={score.scores} TOOLTIPS={TOOLTIPS}/>
+                    </>
+                  );
+                })()}
               </Card>
 
               {/* Financial Prescription */}
@@ -2158,7 +2215,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
               <PDFBtn title={`Financial Score - ${d.clientName||"Report"}`} contentId="score-content"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
                 <button onClick={()=>{saveScore(score);onCheckup();}} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>Save & Dashboard →</button>
-                <button onClick={onHome} style={{background:"none",border:"1px solid #2a4080",borderRadius:12,padding:"14px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← Home</button>
+                <button onClick={onHome} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"14px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← Home</button>
               </div>
 
               {/* Post-score personalized tools */}
@@ -2192,7 +2249,7 @@ function ScoreHistory({history,currentScore,onSave}) {
   return (
     <div>
       {/* Latest score hero */}
-      <Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${latest.gradeColor}44`,textAlign:"center",padding:"24px 16px"}}>
+      <Card style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${latest.gradeColor}44`,textAlign:"center",padding:"16px"}}>
         <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:8}}>LATEST SCORE</div>
         <div style={{fontSize:72,color:latest.gradeColor,fontWeight:"bold",lineHeight:1,...GS}}>{latest.grade}</div>
         <div style={{fontSize:28,color:"#e8e4d9",marginTop:4,...GS}}>{latest.score}<span style={{fontSize:14,color:"#6b8cce"}}>/100</span></div>
@@ -2205,6 +2262,15 @@ function ScoreHistory({history,currentScore,onSave}) {
             </span>
           </div>
         )}
+        {(()=>{
+          const nextGrade=latest.score>=85?null:latest.score>=75?"A+":latest.score>=65?"A":latest.score>=55?"B+":latest.score>=45?"B":latest.score>=35?"C+":"C";
+          const ptsNeeded=nextGrade?({A:75,B:55,C:35,"A+":85,"B+":65,"C+":45}[nextGrade]||100)-latest.score:0;
+          return nextGrade?(
+            <div style={{marginTop:10,fontSize:11,color:"#6b8cce"}}>
+              <span style={{color:"#facc15"}}>{ptsNeeded} pts</span> to reach <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{nextGrade}</span>
+            </div>
+          ):null;
+        })()}
       </Card>
 
       {/* Trend chart */}
@@ -2217,7 +2283,7 @@ function ScoreHistory({history,currentScore,onSave}) {
               <XAxis dataKey="date" stroke="#6b8cce" tick={{fontSize:9}} tickFormatter={d=>d.slice(5)}/>
               <YAxis stroke="#6b8cce" tick={{fontSize:9}} domain={[0,100]} width={28}/>
               <Tooltip
-                contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,fontSize:12}}
+                contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,fontSize:12}}
                 formatter={(v,n,p)=>[`${v}/100 (${p.payload.grade})`,""]}
                 labelFormatter={l=>`Month: ${l}`}
               />
@@ -2590,7 +2656,41 @@ function GoalsTab({data,totalInv,scoreHistory}) {
 }
 
 
+function ScoreBreakdownRows({scores,TOOLTIPS}) {
+  const [openTip,setOpenTip]=useState(null);
+  return (
+    <>
+      {scores.map((s,i)=>(
+        <div key={i} style={{marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5,alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{fontSize:13,color:"#e8e4d9"}}>{s.label}</div>
+              <button onClick={()=>setOpenTip(openTip===i?null:i)} aria-label="Info"
+                style={{background:"none",border:"1px solid #1e3a5f",borderRadius:"50%",width:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#6b8cce",fontSize:9,padding:0,flexShrink:0}}>i</button>
+            </div>
+            <div style={{fontSize:13,color:s.score/s.max>0.7?"#4ade80":s.score/s.max>0.4?"#facc15":"#f87171",fontWeight:"bold",...GS}}>{s.score}/{s.max}</div>
+          </div>
+          {openTip===i&&<div style={{background:"#0d1b3e",borderRadius:8,padding:"8px 12px",marginBottom:6,fontSize:11,color:"#8fadd4",lineHeight:1.6,border:"1px solid #1e3a5f"}}>{TOOLTIPS[s.label]}</div>}
+          <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden",marginBottom:4}}>
+            <div style={{width:(s.score/s.max*100)+"%",height:"100%",background:s.score/s.max>0.7?"#4ade80":s.score/s.max>0.4?"#facc15":"#f87171",borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+          </div>
+          <div style={{fontSize:11,color:"#6b8cce"}}>{s.desc}</div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,theme,user,token}) {
+  // ── Debounced score ──────────────────────────────────────────────────────────
+  const [debouncedD,setDebouncedD]=useState(d);
+  const debounceTimer=useRef(null);
+  useEffect(()=>{
+    if(debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current=setTimeout(()=>setDebouncedD(d),300);
+    return ()=>clearTimeout(debounceTimer.current);
+  },[d]);
+
   // ── Computed values ──────────────────────────────────────────────────────────
   const bankCash=d.bankAccounts.reduce((s,a)=>s+Number(a.amount||0),0);
   const savings=(d.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
@@ -2604,7 +2704,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
   const netWorth=totalAssets-totalLiab;
   const income=Number(d.budget.income||0);
   const totalAlloc=d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
-  const score=calcScore(d,totalInv);
+  const score=calcScore(debouncedD,totalInv);
   const surplus=income-totalAlloc;
   const grossMonthly=Number(d.income?.grossSalary||0)>0?Number(d.income.grossSalary)/12:income;
   const invMonthly=Number(d.budget.investmentMonthly||0);
@@ -2632,6 +2732,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
   const fooComplete=fooChecked.filter(Boolean).length;
 
   // ── Next Moves ───────────────────────────────────────────────────────────────
+  const [activeInvIndex,setActiveInvIndex]=useState(null);
   const [moves,setMoves]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("fh_next_moves")||"null")||[{text:"",done:false},{text:"",done:false},{text:"",done:false}];}
     catch{return [{text:"",done:false},{text:"",done:false},{text:"",done:false}];}
@@ -2674,14 +2775,14 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
 
       {/* ── Header ── */}
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#0a0f1e)",borderBottom:"1px solid #1e3a5f",padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
-        <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"7px 14px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+        <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,padding:"7px 14px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
           ← Home
         </button>
         <h1 style={{margin:0,fontSize:"clamp(16px,2.5vw,24px)",fontWeight:"bold",background:"linear-gradient(135deg,#fff 40%,#cc0000)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",color:"#fff",...GS}}>
           {name}'s Financial Dashboard
         </h1>
         <div style={{display:"flex",gap:12,alignItems:"center"}}>
-          <button onClick={onAppointment} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,padding:"7px 14px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>Edit Info</button>
+          <button onClick={onAppointment} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,padding:"7px 14px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>Edit Info</button>
           <button onClick={handlePDF} className="action-btn" style={{background:"none",border:"none",color:"#3a5080",cursor:"pointer",fontSize:12,...GS}}>↓ PDF</button>
         </div>
       </div>
@@ -2760,17 +2861,22 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
               <div style={{display:"flex",gap:20,alignItems:"center"}}>
                 <ResponsiveContainer width={140} height={140}>
                   <PieChart>
-                    <Pie data={invData.map(x=>({name:x.name,value:x.val}))} cx="50%" cy="50%" innerRadius={38} outerRadius={62} dataKey="value" strokeWidth={0}>
-                      {invData.map((x,i)=><Cell key={i} fill={x.color}/>)}
+                    <Pie data={invData.map(x=>({name:x.name,value:x.val}))} cx="50%" cy="50%" innerRadius={38} outerRadius={62} dataKey="value" strokeWidth={0}
+                      onMouseEnter={(_,i)=>setActiveInvIndex(i)} onMouseLeave={()=>setActiveInvIndex(null)}>
+                      {invData.map((x,i)=><Cell key={i} fill={x.color} opacity={activeInvIndex===null||activeInvIndex===i?1:0.4}/>)}
                     </Pie>
-                    <Tooltip formatter={v=>fmtShort(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,fontSize:11}}/>
+                    <Tooltip formatter={v=>fmtShort(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,fontSize:11}}/>
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{flex:1}}>
                   <div style={{fontSize:11,color:"#6b8cce",marginBottom:8}}>Total: <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(totalInv)}</span></div>
                   {invData.map((x,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:"50%",background:x.color}}/><span style={{fontSize:12,color:"#e8e4d9"}}>{x.name}</span></div>
+                    <div key={i} onMouseEnter={()=>setActiveInvIndex(i)} onMouseLeave={()=>setActiveInvIndex(null)}
+                      style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,opacity:activeInvIndex===null||activeInvIndex===i?1:0.4,transition:"opacity 0.15s",cursor:"default"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <div style={{width:activeInvIndex===i?10:8,height:activeInvIndex===i?10:8,borderRadius:"50%",background:x.color,transition:"all 0.15s"}}/>
+                        <span style={{fontSize:12,color:"#e8e4d9",fontWeight:activeInvIndex===i?"bold":"normal"}}>{x.name}</span>
+                      </div>
                       <div style={{textAlign:"right"}}>
                         <span style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmtShort(x.val)}</span>
                         <span style={{fontSize:10,color:"#6b8cce",marginLeft:6}}>{totalInv>0?((x.val/totalInv)*100).toFixed(1):0}%</span>
@@ -2802,7 +2908,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
             </div>
             <div style={{fontSize:11,color:"#6b8cce",marginBottom:6}}>Allocated vs Income</div>
             <div style={{background:"#0d1b3e",borderRadius:6,height:10,overflow:"hidden",marginBottom:6}}>
-              <div className="progress-bar" style={{width:Math.min(100,income>0?(totalAlloc/income)*100:0)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+              <div className="progress-bar" style={{width:Math.min(100,income>0?(totalAlloc/income)*100:0)+"%",height:"100%",background:totalAlloc>income?"#f87171":"linear-gradient(135deg,#4ade80,#22d3ee)",borderRadius:6}}/>
             </div>
             {d.budget.categories.filter(c=>Number(c.amount||0)>0).slice(0,5).map((cat,i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #1e3a5f22"}}>
@@ -2830,7 +2936,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
               <div style={{fontSize:11,color:"#4ade80",fontWeight:"bold",...GS}}>{Math.round(fooComplete/FOO_LABELS.length*100)}%</div>
             </div>
             <div style={{background:"#0d1b3e",borderRadius:6,height:6,overflow:"hidden",marginBottom:16}}>
-              <div className="progress-bar" style={{width:(fooComplete/FOO_LABELS.length*100)+"%",height:"100%",background:"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+              <div className="progress-bar" style={{width:(fooComplete/FOO_LABELS.length*100)+"%",height:"100%",background:"linear-gradient(135deg,#4ade80,#22d3ee)",borderRadius:6}}/>
             </div>
             {FOO_LABELS.map((s,i)=>(
               <button key={i} onClick={()=>toggleFoo(i)} style={{width:"100%",background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:i<FOO_LABELS.length-1?"1px solid #1e3a5f":"none",textAlign:"left"}}>
@@ -2888,7 +2994,7 @@ function NetWorthProjection({totalInv,income,totalAlloc,netWorth}) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
         <div>
           <div style={{fontSize:9,color:"#6b8cce",letterSpacing:1,marginBottom:4}}>MONTHLY INVEST</div>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
             <span style={{color:"#6b8cce",marginRight:3,fontSize:12}}>$</span>
             <input type="number" value={monthlyInvest} onChange={e=>setMonthlyInvest(e.target.value)} placeholder="500"
               style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:14,width:"100%",...GS}}/>
@@ -2896,7 +3002,7 @@ function NetWorthProjection({totalInv,income,totalAlloc,netWorth}) {
         </div>
         <div>
           <div style={{fontSize:9,color:"#6b8cce",letterSpacing:1,marginBottom:4}}>STARTING NET WORTH</div>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
             <span style={{color:"#6b8cce",marginRight:3,fontSize:12}}>$</span>
             <input type="number" value={startingNW} onChange={e=>setStartingNW(e.target.value)} placeholder="0"
               style={{background:"none",border:"none",outline:"none",color:"#60a5fa",fontSize:14,width:"100%",...GS}}/>
@@ -2904,7 +3010,7 @@ function NetWorthProjection({totalInv,income,totalAlloc,netWorth}) {
         </div>
         <div>
           <div style={{fontSize:9,color:"#6b8cce",letterSpacing:1,marginBottom:4}}>RETURN RATE</div>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
             <input type="number" value={returnRate} onChange={e=>setReturnRate(e.target.value)} placeholder="7"
               style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
             <span style={{color:"#6b8cce",fontSize:12}}>%</span>
@@ -2926,7 +3032,7 @@ function NetWorthProjection({totalInv,income,totalAlloc,netWorth}) {
           <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
           <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:10,...GS}}/>
           <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-          <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+          <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
           <Line type="monotone" dataKey="conservative" stroke="#60a5fa" strokeWidth={2} dot={false} name="4% conservative"/>
           <Line type="monotone" dataKey="moderate" stroke="#4ade80" strokeWidth={2} dot={false} name={`${returnRate}% moderate`}/>
           <Line type="monotone" dataKey="aggressive" stroke="#facc15" strokeWidth={2} dot={false} name="10% aggressive"/>
@@ -3056,7 +3162,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
               <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
               <XAxis dataKey="month" stroke="#6b8cce" tick={{fontSize:9,...GS}}/>
               <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-              <Tooltip formatter={v=>[fmt(v),"Balance"]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
+              <Tooltip formatter={v=>[fmt(v),"Balance"]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
               <Line type="monotone" dataKey="balance" stroke="#f87171" strokeWidth={2} dot={false}/>
             </LineChart>
           </ResponsiveContainer>
@@ -3078,13 +3184,13 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
           <div key={i} style={{background:"#0d1b3e",borderRadius:10,padding:"12px",marginBottom:10}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
               <input value={debt.name} onChange={e=>updateDebt(i,"name",e.target.value)} placeholder="Debt name (e.g. Car Loan)"
-                style={{background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+                style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
               <button onClick={()=>removeDebt(i)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>x</button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
               <div>
                 <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>BALANCE</div>
-                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 8px"}}>
+                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"7px 8px"}}>
                   <span style={{color:"#6b8cce",marginRight:3,fontSize:12}}>$</span>
                   <input type="number" value={debt.balance||""} onChange={e=>updateDebt(i,"balance",e.target.value)} placeholder="0"
                     style={{background:"none",border:"none",outline:"none",color:"#f87171",fontSize:13,width:"100%",...GS}}/>
@@ -3092,7 +3198,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
               </div>
               <div>
                 <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>RATE %</div>
-                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 8px"}}>
+                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"7px 8px"}}>
                   <input type="number" value={debt.rate||""} onChange={e=>updateDebt(i,"rate",e.target.value)} placeholder="5"
                     style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:13,width:"100%",...GS}}/>
                   <span style={{color:"#6b8cce",fontSize:11}}>%</span>
@@ -3100,7 +3206,7 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
               </div>
               <div>
                 <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>MIN PMT</div>
-                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #2a4080",borderRadius:8,padding:"7px 8px"}}>
+                <div style={{display:"flex",alignItems:"center",background:"#111827",border:"1px solid #1e3a5f",borderRadius:8,padding:"7px 8px"}}>
                   <span style={{color:"#6b8cce",marginRight:3,fontSize:12}}>$</span>
                   <input type="number" value={debt.minPayment||""} onChange={e=>updateDebt(i,"minPayment",e.target.value)} placeholder="25"
                     style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:13,width:"100%",...GS}}/>
@@ -3295,14 +3401,14 @@ function BillCalendar() {
           <div style={{marginBottom:10}}>
             <Label>Description</Label>
             <input value={newDesc} onChange={e=>setNewDesc(e.target.value)} placeholder="e.g. Payday, Rent, Mastercard..."
-              style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+              style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
           </div>
 
           {/* Amount + Type */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
             <div>
               <Label>Amount</Label>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
                 <span style={{color:"#6b8cce",marginRight:4}}>$</span>
                 <input type="number" value={newAmt} onChange={e=>setNewAmt(e.target.value)} placeholder="0.00"
                   style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/>
@@ -3332,19 +3438,19 @@ function BillCalendar() {
             </div>
             {!isRecurring?(
               <input type="date" value={newDate} onChange={e=>setNewDate(e.target.value)}
-                style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
             ):(
               <div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}}>
                   <div>
                     <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>START DATE</div>
                     <input type="date" value={recurStart} onChange={e=>setRecurStart(e.target.value)}
-                      style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                      style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
                   </div>
                   <div>
                     <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>FREQUENCY</div>
                     <select value={recurFreq} onChange={e=>setRecurFreq(e.target.value)}
-                      style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",...GS}}>
+                      style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",...GS}}>
                       {["monthly","biweekly","weekly","daily"].map(f=>(
                         <option key={f} value={f}>{FREQ_LABELS[f]}</option>
                       ))}
@@ -3361,7 +3467,7 @@ function BillCalendar() {
               Add to Ledger
             </button>
             <button onClick={()=>{setShowAdd(false);setNewDesc("");setNewAmt("");setIsRecurring(false);}}
-              style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
+              style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:13,...GS}}>
               Cancel
             </button>
           </div>
@@ -3469,7 +3575,7 @@ function BillCalendar() {
                   {e.type==="credit"?"+ ":"- "}{fmt(e.amount)} · {e.recurring?`${FREQ_LABELS[e.freq]} from ${e.date}`:e.date}
                 </div>
               </div>
-              <button onClick={()=>removeEntry(e.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px"}}>×</button>
+              <button onClick={()=>removeEntry(e.id)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,padding:"0 4px",minWidth:44,minHeight:44}}>×</button>
             </div>
           ))}
         </Card>
@@ -3516,13 +3622,13 @@ function IndividualTools({onHome,data,totalInv,user,token}) {
   return (
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
-      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
+      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}}>
         {["PLAN","ANALYZE","OPTIMIZE","MISCELLANEOUS"].map(group=>{
           const groupTools=TOOLS_LIST.filter(t=>t.group===group);
           return (
             <div key={group} style={{marginBottom:28}}>
               <div style={{fontSize:10,color:"#4a5a6a",letterSpacing:3,fontWeight:"bold",marginBottom:12,paddingBottom:8,borderBottom:"1px solid #1e3a5f"}}>{group}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <div className="tools-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                 {groupTools.map(t=>(
                   <button key={t.id} onClick={()=>setTool(t.id)}
                     className="action-btn"
@@ -3623,7 +3729,7 @@ function MoneyFlowMap({data}) {
     setTimeout(()=>w.print(),400);
   };
 
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",...GS};
 
   // Build flow map: which accounts receive from which sources
   const sourceFlows=state.sources.map(src=>{
@@ -3644,14 +3750,14 @@ function MoneyFlowMap({data}) {
         {state.sources.map(s=>(
           <div key={s.id} style={{display:"grid",gridTemplateColumns:"1fr 100px 120px auto",gap:8,marginBottom:8,alignItems:"center"}}>
             <input value={s.name} onChange={e=>updateSource(s.id,"name",e.target.value)} placeholder="e.g. Paycheque" style={inp}/>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
               <span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span>
               <input type="number" value={s.amount} onChange={e=>updateSource(s.id,"amount",e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:13,width:"100%",...GS}}/>
             </div>
             <select value={s.frequency} onChange={e=>updateSource(s.id,"frequency",e.target.value)} style={{...inp,color:"#8fadd4"}}>
               {["weekly","bi-weekly","semi-monthly","monthly"].map(f=><option key={f} value={f}>{f}</option>)}
             </select>
-            <button onClick={()=>removeSource(s.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>
+            <button onClick={()=>removeSource(s.id)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>
           </div>
         ))}
       </Card>
@@ -3665,7 +3771,7 @@ function MoneyFlowMap({data}) {
           <div key={a.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
             <input value={a.name} onChange={e=>updateAccount(a.id,"name",e.target.value)} placeholder="Account name" style={inp}/>
             <input value={a.purpose} onChange={e=>updateAccount(a.id,"purpose",e.target.value)} placeholder="Purpose / used for..." style={inp}/>
-            <button onClick={()=>removeAccount(a.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>
+            <button onClick={()=>removeAccount(a.id)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>
           </div>
         ))}
       </Card>
@@ -3687,12 +3793,12 @@ function MoneyFlowMap({data}) {
               <select value={f.to} onChange={e=>updateFlow(f.id,"to",e.target.value)} style={{...inp,color:"#8fadd4"}}>
                 {state.accounts.map(a=><option key={a.id} value={a.id}>{a.name||"Account"}</option>)}
               </select>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
                 <span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span>
                 <input type="number" value={f.amount} onChange={e=>updateFlow(f.id,"amount",e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:13,width:"100%",...GS}}/>
               </div>
               <input value={f.label} onChange={e=>updateFlow(f.id,"label",e.target.value)} placeholder="e.g. Auto-transfer" style={inp}/>
-              <button onClick={()=>removeFlow(f.id)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>
+              <button onClick={()=>removeFlow(f.id)} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>
             </div>
           );
         })}
@@ -3823,13 +3929,13 @@ function SnapshotBar({user,token,toolId,getInputs}) {
     <Card style={{marginBottom:14}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div style={{fontSize:12,color:"#8fadd4",fontWeight:"bold",...GS}}>💾 Saved Scenarios</div>
-        <button onClick={()=>setOpen(p=>!p)} style={{background:"none",border:"1px solid #2a4080",borderRadius:6,padding:"4px 10px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{open?"Hide":"Show"}</button>
+        <button onClick={()=>setOpen(p=>!p)} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:6,padding:"4px 10px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{open?"Hide":"Show"}</button>
       </div>
       {open&&(
         <div style={{marginTop:12}}>
           <div style={{display:"flex",gap:8,marginBottom:10}}>
             <input value={name} onChange={e=>setName(e.target.value)} placeholder="Name this scenario..."
-              style={{flex:1,background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:12,outline:"none",...GS}}/>
+              style={{flex:1,background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:12,outline:"none",...GS}}/>
             <button onClick={save} disabled={saving||!name.trim()} style={{background:"#0d2a1a",border:"1px solid #4ade80",borderRadius:8,padding:"8px 12px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
               {saving?"...":"Save"}
             </button>
@@ -3941,7 +4047,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
             <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
             <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:9,...GS}} interval={4}/>
             <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-            <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
             <Line type="monotone" dataKey="homeEquity" stroke="#4ade80" strokeWidth={2} dot={false} name="🏠 Home Equity"/>
             <Line type="monotone" dataKey="rentInvested" stroke="#a78bfa" strokeWidth={2} dot={false} name="🏢 Rent + Invest"/>
             <Line type="monotone" dataKey="homeValue" stroke="#fb923c" strokeWidth={1} strokeDasharray="4 4" dot={false} name="Home Value"/>
@@ -3966,7 +4072,7 @@ function SuperInDepthCharts({hp,dp,totalMortgage,mpWithCMHC,r,appreciation,inves
             <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
             <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:10,...GS}}/>
             <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-            <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+            <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
             <Bar dataKey="homeValue" name="Home Value" fill="#fb923c" radius={[4,4,0,0]}/>
             <Bar dataKey="mortgageBal" name="Mortgage Balance" fill="#f87171" radius={[4,4,0,0]}/>
           </BarChart>
@@ -4205,7 +4311,7 @@ function RentVsBuy({user,token,toolId}) {
         {/* Down payment — toggle $ or % */}
         <div style={{marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-            <div style={{display:"flex",background:"#0d1b3e",borderRadius:8,overflow:"hidden",border:"1px solid #2a4080"}}>
+            <div style={{display:"flex",background:"#0d1b3e",borderRadius:8,overflow:"hidden",border:"1px solid #1e3a5f"}}>
               {[{val:"pct",label:"%"},{val:"dollar",label:"$"}].map(m=>(
                 <button key={m.val} onClick={()=>setDownMode(m.val)} style={{background:downMode===m.val?"#1a4080":"transparent",border:"none",color:downMode===m.val?"#4ade80":"#6b8cce",padding:"4px 12px",cursor:"pointer",fontSize:12,...GS}}>{m.label}</button>
               ))}
@@ -4300,7 +4406,7 @@ function RentVsBuy({user,token,toolId}) {
       {hp>0&&Number(rent)>0&&dp>0&&(
         <div>
           {/* Verdict */}
-          <Card style={{background:base.buyWins?"linear-gradient(135deg,#0d2a1a,#0d1b3e)":"linear-gradient(135deg,#1a0d2a,#0d1b3e)",border:`1px solid ${base.buyWins?"#4ade80":"#a78bfa"}44`,textAlign:"center",padding:"24px 16px"}}>
+          <Card style={{background:base.buyWins?"linear-gradient(135deg,#0d2a1a,#0d1b3e)":"linear-gradient(135deg,#1a0d2a,#0d1b3e)",border:`1px solid ${base.buyWins?"#4ade80":"#a78bfa"}44`,textAlign:"center",padding:"16px"}}>
             <div style={{fontSize:11,color:"#6b8cce",letterSpacing:3,marginBottom:8}}>BASE CASE — {years} YEARS · {appreciation}% appreciation · {investReturn}% investment return</div>
             <div style={{fontSize:32,fontWeight:"bold",color:base.buyWins?"#4ade80":"#a78bfa",marginBottom:8,...GS}}>{base.buyWins?"🏠 Buying Wins":"🏢 Renting Wins"}</div>
             <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.8}}>
@@ -4512,6 +4618,7 @@ function MortgageQualifier({data}) {
   const [tdsLimit,setTdsLimit]=useState("44");
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [showBreakdown,setShowBreakdown]=useState(false);
+  const [copied,setCopied]=useState(false);
 
   // ── Calculations ───────────────────────────────────────────────────────────
   // Qualifying income
@@ -4521,12 +4628,12 @@ function MortgageQualifier({data}) {
   const grossMonthly=grossAnnual/12;
 
   // Stress test rate
-  const cr=Number(contractRate||5.25);
-  const bm=Number(benchmark||5.25);
+  const cr=Math.min(50,Math.max(0,Number(contractRate||5.25)));
+  const bm=Math.min(50,Math.max(0,Number(benchmark||5.25)));
   const stressRate=Math.max(cr+2, bm);
   const rStress=stressRate/100/12;
   const rActual=cr/100/12;
-  const n=Number(amort||25)*12;
+  const n=Math.min(35,Math.max(1,Number(amort||25)))*12;
 
   // Property tax monthly
   const propTaxMonthly=taxMode==="annual"
@@ -4581,9 +4688,9 @@ function MortgageQualifier({data}) {
   const cmhcRate=dpPct>=20?0:dpPct>=15?0.028:dpPct>=10?0.031:0.04;
   const cmhc=dpPct<20&&dp>0?maxMortgage*cmhcRate:0;
 
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
   const dollarInput=(val,set,placeholder,color="#e8e4d9")=>(
-    <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+    <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
       <span style={{color:"#6b8cce",marginRight:4,fontSize:13}}>$</span>
       <input type="number" value={val} onChange={e=>set(e.target.value)} placeholder={placeholder}
         style={{background:"none",border:"none",outline:"none",color,fontSize:14,width:"100%",...GS}}/>
@@ -4592,6 +4699,12 @@ function MortgageQualifier({data}) {
 
   return (
     <div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+        <button onClick={()=>{setIncome1(String(Math.round(prefillGross))||"");setIncome2(String(Math.round(prefillGross2))||"");setRentalIncome("");setBonusIncome("");setDownPayment("");setContractRate("5.25");setBenchmark("5.25");setAmort("25");setPropTaxAnnual("");setMpacValue("");setMpacRate("0.6");setHeatCost("200");setCondoFee("0");setCarLoan("");setStudentLoan("");setLocDebt(String(Math.round(prefillLOC))||"");setCcBalance(String(Math.round(prefillCC/0.03))||"");setOtherDebt(String(Math.round(prefillOther))||"");setGdsLimit("39");setTdsLimit("44");}}
+          className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"5px 12px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+          ↺ Reset
+        </button>
+      </div>
       {/* ── Income ── */}
       <Card>
         <SecTitle>Income</SecTitle>
@@ -4629,14 +4742,14 @@ function MortgageQualifier({data}) {
           <div><Label>Down Payment</Label>{dollarInput(downPayment,setDownPayment,"50,000","#60a5fa")}</div>
           <div>
             <Label>Contract Rate (%)</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <input type="number" value={contractRate} onChange={e=>setContractRate(e.target.value)} placeholder="5.25" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
               <span style={{color:"#6b8cce",fontSize:12}}>%</span>
             </div>
           </div>
           <div>
             <Label>Amortization</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <input type="number" value={amort} onChange={e=>setAmort(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/>
               <span style={{color:"#6b8cce",fontSize:12}}>yrs</span>
             </div>
@@ -4684,7 +4797,7 @@ function MortgageQualifier({data}) {
               </div>
               <div>
                 <div style={{fontSize:10,color:"#6b8cce",marginBottom:4}}>MILL RATE (%)</div>
-                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
                   <input type="number" value={mpacRate} onChange={e=>setMpacRate(e.target.value)} placeholder="0.6" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:14,width:"100%",...GS}}/>
                   <span style={{color:"#6b8cce",fontSize:12}}>%</span>
                 </div>
@@ -4771,9 +4884,17 @@ function MortgageQualifier({data}) {
         <>
           {/* Headline */}
           <div style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",borderRadius:16,padding:"20px 24px",marginBottom:12}}>
-            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>MAXIMUM PURCHASE PRICE</div>
-            <div style={{fontSize:44,color:"#4ade80",fontWeight:"bold",...GS,lineHeight:1}}>{fmtShort(maxPurchase)}</div>
-            <div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>{fmt(maxPurchase)} · Limited by <span style={{color:limitedBy==="GDS"?"#4ade80":"#60a5fa",fontWeight:"bold"}}>{limitedBy} ({limitedBy==="GDS"?gdsLimit:tdsLimit}%)</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>MAXIMUM PURCHASE PRICE</div>
+                <div style={{fontSize:44,color:"#4ade80",fontWeight:"bold",...GS,lineHeight:1}}>{fmtShort(maxPurchase)}</div>
+                <div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>{fmt(maxPurchase)} · Limited by <span style={{color:limitedBy==="GDS"?"#4ade80":"#60a5fa",fontWeight:"bold"}}>{limitedBy} ({limitedBy==="GDS"?gdsLimit:tdsLimit}%)</span></div>
+              </div>
+              <button onClick={()=>copyToClipboard(`Max Purchase: ${fmt(maxPurchase)}\nMax Mortgage: ${fmt(maxMortgage)}\nMonthly Payment: ${fmt(actualPayment)}/mo at ${cr}%`,setCopied)}
+                className="action-btn" style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"6px 12px",color:copied?"#4ade80":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+                {copied?"✓ Copied":"⎘ Copy"}
+              </button>
+            </div>
           </div>
 
           {/* Key numbers */}
@@ -4811,7 +4932,7 @@ function MortgageQualifier({data}) {
                   </div>
                 </div>
                 <div style={{background:"#0d1b3e",borderRadius:5,height:10,overflow:"hidden",marginBottom:4}}>
-                  <div style={{width:Math.min(100,(ratio.val/ratio.limit)*100)+"%",height:"100%",background:ratio.val>ratio.limit?"#f87171":ratio.color,borderRadius:5,transition:"width 0.5s ease"}}/>
+                  <div style={{width:Math.min(100,(ratio.val/ratio.limit)*100)+"%",height:"100%",background:ratio.val>ratio.limit?"#f87171":ratio.color,borderRadius:5,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
                 </div>
                 <div style={{fontSize:10,color:"#6b8cce"}}>{ratio.desc}</div>
               </div>
@@ -4986,6 +5107,12 @@ function CanadianTaxEstimator({data}) {
 
   return (
     <div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
+        <button onClick={()=>{setSalary(String(Math.round(prefillSalary))||"");setSalary2(String(Math.round(prefillSalary2))||"");setProvince("ON");setRrspContrib("");}}
+          className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"5px 12px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+          ↺ Reset
+        </button>
+      </div>
       <Card>
         <SecTitle>{isJoint?`${name1}'s Income`:"Your Income"}</SecTitle>
         <div style={{marginBottom:12}}>
@@ -4999,13 +5126,13 @@ function CanadianTaxEstimator({data}) {
         <div style={{marginBottom:12}}>
           <Label>Province</Label>
           <select value={province} onChange={e=>setProvince(e.target.value)}
-            style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",...GS}}>
+            style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",...GS}}>
             {PROVINCES.map(p=><option key={p.val} value={p.val}>{p.label}</option>)}
           </select>
         </div>
         <div>
           <Label>RRSP Contribution (optional)</Label>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
             <span style={{color:"#6b8cce",marginRight:4}}>$</span>
             <input type="number" value={rrspContrib} onChange={e=>setRrspContrib(e.target.value)} placeholder="0"
               style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:15,width:"100%",...GS}}/>
@@ -5045,7 +5172,7 @@ function CanadianTaxEstimator({data}) {
         <>
           {/* Combined summary for joint */}
           {isJoint&&p2&&p2.gross>0&&(
-            <Card style={{background:"linear-gradient(135deg,#0d1a2e,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"20px 16px"}}>
+            <Card style={{background:"linear-gradient(135deg,#0d1a2e,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"16px"}}>
               <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>COMBINED HOUSEHOLD TAKE-HOME</div>
               <div style={{fontSize:36,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(p1.netMonthly+p2.netMonthly)}<span style={{fontSize:14,color:"#6b8cce"}}>/mo</span></div>
               <div style={{fontSize:12,color:"#8fadd4",marginTop:4}}>{fmt(p1.netAnnual+p2.netAnnual)}/year combined</div>
@@ -5063,7 +5190,7 @@ function CanadianTaxEstimator({data}) {
           )}
 
           {/* Person 1 summary card */}
-          <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"24px 16px"}}>
+          <Card style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8044",textAlign:"center",padding:"16px"}}>
             <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:4}}>{isJoint?`${name1.toUpperCase()} — `:""}ESTIMATED TAKE-HOME PAY</div>
             <div style={{fontSize:42,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(netMonthly)}<span style={{fontSize:16,color:"#6b8cce"}}>/mo</span></div>
             <div style={{fontSize:14,color:"#8fadd4",marginTop:4}}>{fmt(netAnnual)} per year</div>
@@ -5428,7 +5555,7 @@ function FirstHomeBuyer({data}) {
   return (
     <div>
       {/* Overall progress */}
-      <Card style={{background:"linear-gradient(135deg,#0d1b2e,#111827)",border:"1px solid #facc1544",textAlign:"center",padding:"20px 16px"}}>
+      <Card style={{background:"linear-gradient(135deg,#0d1b2e,#111827)",border:"1px solid #facc1544",textAlign:"center",padding:"16px"}}>
         <div style={{fontSize:11,color:"#6b8cce",letterSpacing:2,marginBottom:8}}>YOUR HOME BUYING PROGRESS</div>
         <div style={{fontSize:40,color:"#facc15",fontWeight:"bold",...GS}}>{overallPct}<span style={{fontSize:18,color:"#6b8cce"}}>%</span></div>
         <div style={{fontSize:12,color:"#8fadd4",marginTop:4}}>{totalChecked} of {totalSteps} steps complete</div>
@@ -5456,7 +5583,7 @@ function FirstHomeBuyer({data}) {
               </div>
             </div>
             <div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}>
-              <div style={{width:phasePct+"%",height:"100%",background:phase.color,borderRadius:4,transition:"width 0.4s"}}/>
+              <div style={{width:phasePct+"%",height:"100%",background:phase.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
             </div>
             {phase.steps.map((step,si)=>{
               const done=checks[step.id]||step.auto||false;
@@ -5800,12 +5927,23 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
   const allCats = [...new Set([...budgetCats,...categories])].filter(Boolean);
 
+  const [fileError,setFileError]=useState("");
+
   const handleFiles = (files) => {
+    setFileError("");
+    const validFiles=Array.from(files).filter(f=>f.name.toLowerCase().endsWith(".csv")||f.type==="text/csv");
+    const invalidFiles=Array.from(files).filter(f=>!f.name.toLowerCase().endsWith(".csv")&&f.type!=="text/csv");
+    if(invalidFiles.length>0){
+      setFileError(`Please upload CSV files only. "${invalidFiles[0].name}" is not a .csv file.`);
+      if(validFiles.length===0) return;
+    }
     const allTxns = [];
-    let remaining = files.length;
-    Array.from(files).forEach(file=>{
+    let remaining = validFiles.length;
+    if(remaining===0) return;
+    validFiles.forEach(file=>{
       const reader = new FileReader();
       reader.onload = (e) => {
+        setTimeout(()=>{
         const text = e.target.result;
         const {headers,rows} = parseCSV(text);
         const fmt = detectFormat(headers);
@@ -5814,9 +5952,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
         allTxns.push(...txns);
         remaining--;
         if(remaining===0){
-          // Deduplicate and assign IDs
           const finalTxns = allTxns.map((t,i)=>({...t,id:i}));
-          // Apply persistent rules — auto-classify known merchants
           const withRules = finalTxns.map(t=>{
             const matched=lookupRule(t.desc);
             return matched ? {...t,category:matched,autoClassified:true} : t;
@@ -5828,6 +5964,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
           setCurrentIdx(0);
           setPhase("classify");
         }
+        },0);
       };
       reader.readAsText(file);
     });
@@ -5893,13 +6030,13 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
+            <button onClick={onBack} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>Statement Importer</div>
           </div>
           <button onClick={onHome} style={{background:"none",border:"none",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
         </div>
       </div>
-      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}}>
+      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}}>
 
         {/* Step 1: Budget */}
         <Card>
@@ -5917,20 +6054,20 @@ function StatementImporter({onBack,onHome,budgetData}) {
                 <div style={{width:8,height:8,borderRadius:"50%",background:CAT_COLORS[i%CAT_COLORS.length],flexShrink:0}}/>
                 <span style={{fontSize:13,color:"#e8e4d9"}}>{cat}</span>
               </div>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}>
                 <span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span>
                 <input type="number" value={customBudget[cat]||""} onChange={e=>setCustomBudget(p=>({...p,[cat]:e.target.value}))}
                   placeholder="0" style={{background:"none",border:"none",outline:"none",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:14,width:"100%",...GS}}/>
               </div>
               <button onClick={()=>{setBudgetCats(p=>p.filter(c=>c!==cat));setCategories(p=>p.filter(c=>c!==cat));}}
-                style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>
+                aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,minWidth:44,minHeight:44}}>×</button>
             </div>
           ))}
           <div style={{display:"flex",gap:8,marginTop:8}}>
             <input value={newCat} onChange={e=>setNewCat(e.target.value)} placeholder="Add category..."
-              style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,flex:1,outline:"none",...GS}}/>
+              style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,flex:1,outline:"none",...GS}}/>
             <button onClick={()=>{if(newCat.trim()){setBudgetCats(p=>[...p,newCat.trim()]);setNewCat("");}}}
-              style={{background:"#1a4080",border:"1px solid #2a4080",borderRadius:8,padding:"8px 14px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>+ Add</button>
+              style={{background:"#1a4080",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 14px",color:"#4ade80",cursor:"pointer",fontSize:13,...GS}}>+ Add</button>
           </div>
         </Card>
 
@@ -5956,15 +6093,20 @@ function StatementImporter({onBack,onHome,budgetData}) {
           <div style={{fontSize:12,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
             You can upload multiple files at once (e.g. Visa + chequing). Go to your bank's website → Statements → Download → CSV format.
           </div>
-          <label style={{display:"block",background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"2px dashed #2a4080",borderRadius:12,padding:"28px",textAlign:"center",cursor:"pointer",transition:"border-color 0.2s"}}
-            onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#22d3ee";}}
-            onDragLeave={e=>{e.currentTarget.style.borderColor="#2a4080";}}
+          <label style={{display:"block",background:"linear-gradient(135deg,#0d1b3e,#111827)",border:"2px dashed #1e3a5f",borderRadius:12,padding:"28px",textAlign:"center",cursor:"pointer",transition:"border-color 0.2s"}}
+            onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#4ade80";}}
+            onDragLeave={e=>{e.currentTarget.style.borderColor="#1e3a5f";}}
             onDrop={e=>{e.preventDefault();handleFiles(e.dataTransfer.files);}}>
             <div style={{fontSize:32,marginBottom:10}}>📂</div>
-            <div style={{fontSize:14,color:"#22d3ee",fontWeight:"bold",marginBottom:6}}>Drop CSV files here</div>
+            <div style={{fontSize:14,color:"#4ade80",fontWeight:"bold",marginBottom:6}}>Drop CSV files here</div>
             <div style={{fontSize:12,color:"#6b8cce"}}>or click to browse</div>
             <input type="file" accept=".csv" multiple onChange={e=>handleFiles(e.target.files)} style={{display:"none"}}/>
           </label>
+          {fileError&&(
+            <div style={{marginTop:10,background:"#1a0505",border:"1px solid #f8717144",borderRadius:8,padding:"10px 12px",fontSize:12,color:"#f87171",lineHeight:1.6}}>
+              ⚠️ {fileError}
+            </div>
+          )}
         </Card>
       </div>
     </div>
@@ -5976,7 +6118,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPhase("setup")} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
+            <button onClick={()=>setPhase("setup")} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Classify Transactions</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -5997,7 +6139,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
         </div>
         {/* Progress bar */}
         <div style={{marginTop:10,background:"#1e3a5f",borderRadius:4,height:5,overflow:"hidden"}}>
-          <div style={{width:progress+"%",height:"100%",background:"linear-gradient(90deg,#22d3ee,#4ade80)",borderRadius:4,transition:"width 0.3s"}}/>
+          <div style={{width:progress+"%",height:"100%",background:"linear-gradient(90deg,#22d3ee,#4ade80)",borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
           <div style={{fontSize:9,color:"#6b8cce"}}>{classified.length} of {monthTxns.length} classified</div>
@@ -6047,7 +6189,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
         {/* Manage rules button */}
         <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
-          <button onClick={()=>setShowRules(p=>!p)} style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"5px 12px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
+          <button onClick={()=>setShowRules(p=>!p)} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"5px 12px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
             ⚙️ Saved Rules ({Object.keys(rules).length})
           </button>
         </div>
@@ -6123,7 +6265,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
                   ⚡ Remember & Next
                 </button>
                 <button onClick={()=>setCurrentIdx(p=>p+1)}
-                  style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+                  style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
                   Next →
                 </button>
               </div>
@@ -6131,10 +6273,10 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
             {/* Action buttons */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <button onClick={()=>ignoreTransaction()} style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+              <button onClick={()=>ignoreTransaction()} style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
                 Skip / Ignore
               </button>
-              <button onClick={undoLast} style={{background:"#111827",border:"1px solid #2a4080",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
+              <button onClick={undoLast} style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:10,padding:"11px",color:"#8fadd4",cursor:"pointer",fontSize:12,...GS}}>
                 ↩ Undo Last
               </button>
             </div>
@@ -6160,13 +6302,13 @@ function StatementImporter({onBack,onHome,budgetData}) {
                 <div style={{marginBottom:10}}>
                   <Label>Description</Label>
                   <input value={manualDesc} onChange={e=>setManualDesc(e.target.value)} placeholder="e.g. Coffee, Farmer's Market, Cash ATM..."
-                    style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                    style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
                 </div>
                 {/* Amount + Date */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                   <div>
                     <Label>Amount</Label>
-                    <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+                    <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
                       <span style={{color:"#6b8cce",marginRight:4}}>$</span>
                       <input type="number" value={manualAmount} onChange={e=>setManualAmount(e.target.value)} placeholder="0.00"
                         style={{background:"none",border:"none",outline:"none",color:manualType==="debit"?"#f87171":"#4ade80",fontSize:15,width:"100%",...GS}}/>
@@ -6175,7 +6317,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
                   <div>
                     <Label>Date</Label>
                     <input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)}
-                      style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
+                      style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/>
                   </div>
                 </div>
                 {/* Category (optional) */}
@@ -6225,10 +6367,10 @@ function StatementImporter({onBack,onHome,budgetData}) {
                     <button key={t.val} onClick={()=>setManualType(t.val)} style={{background:manualType===t.val?(t.val==="debit"?"#1a0d0d":"#0d2a1a"):"#0d1b3e",border:`1px solid ${manualType===t.val?(t.val==="debit"?"#f87171":"#4ade80"):"#2a4080"}`,borderRadius:8,padding:"9px",cursor:"pointer",color:t.val==="debit"?"#f87171":"#4ade80",fontSize:12,...GS}}>{t.label}</button>
                   ))}
                 </div>
-                <div style={{marginBottom:10}}><Label>Description</Label><input value={manualDesc} onChange={e=>setManualDesc(e.target.value)} placeholder="e.g. Cash at market..." style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/></div>
+                <div style={{marginBottom:10}}><Label>Description</Label><input value={manualDesc} onChange={e=>setManualDesc(e.target.value)} placeholder="e.g. Cash at market..." style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/></div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                  <div><Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={manualAmount} onChange={e=>setManualAmount(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:manualType==="debit"?"#f87171":"#4ade80",fontSize:15,width:"100%",...GS}}/></div></div>
-                  <div><Label>Date</Label><input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/></div>
+                  <div><Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={manualAmount} onChange={e=>setManualAmount(e.target.value)} placeholder="0.00" style={{background:"none",border:"none",outline:"none",color:manualType==="debit"?"#f87171":"#4ade80",fontSize:15,width:"100%",...GS}}/></div></div>
+                  <div><Label>Date</Label><input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)} style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:13,width:"100%",outline:"none",boxSizing:"border-box",...GS}}/></div>
                 </div>
                 <div style={{marginBottom:12}}><Label>Category</Label><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{allCats.slice(0,8).map((cat,i)=><button key={cat} onClick={()=>setManualCat(manualCat===cat?"":cat)} style={{background:manualCat===cat?CAT_COLORS[i%CAT_COLORS.length]+"33":"#0d1b3e",border:`1px solid ${manualCat===cat?CAT_COLORS[i%CAT_COLORS.length]:CAT_COLORS[i%CAT_COLORS.length]+"44"}`,borderRadius:16,padding:"5px 12px",cursor:"pointer",color:CAT_COLORS[i%CAT_COLORS.length],fontSize:11,...GS}}>{cat}</button>)}</div></div>
                 <button onClick={addManualTransaction} style={{width:"100%",background:"linear-gradient(135deg,#1a1a0d,#2a2a0d)",border:"1px solid #facc15",borderRadius:8,color:"#facc15",padding:"12px",fontSize:13,cursor:"pointer",...GS}}>Add to Statement</button>
@@ -6250,7 +6392,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setPhase("classify")} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
+            <button onClick={()=>setPhase("classify")} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center"}}>&larr;</button>
             <div style={{fontSize:16,fontWeight:"bold",color:"#fff",...GS}}>Spending Summary</div>
           </div>
           <div style={{fontSize:12,color:"#6b8cce",...GS}}>{monthLabel(selectedMonth)}</div>
@@ -6284,7 +6426,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
               {sumTab==="summary"&&(
                 <>
                   {/* Hero */}
-                  <Card style={{textAlign:"center",padding:"20px 16px",background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717144"}}>
+                  <Card style={{textAlign:"center",padding:"16px",background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717144"}}>
                     <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>TOTAL SPENT — {monthLabel(selectedMonth).toUpperCase()}</div>
                     <div style={{fontSize:42,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalSpent)}</div>
                     {income>0&&<div style={{fontSize:12,color:"#6b8cce",marginTop:4}}>{fmt(income-totalSpent)} remaining from {fmt(income)} income</div>}
@@ -6298,7 +6440,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
                         <Pie data={donutData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value" strokeWidth={0}>
                           {donutData.map((_,i)=><Cell key={i} fill={CAT_COLORS[i%CAT_COLORS.length]}/>)}
                         </Pie>
-                        <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:12}} itemStyle={{color:"#e8e4d9"}}/>
+                        <Tooltip formatter={v=>fmt(v)} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:12}} itemStyle={{color:"#e8e4d9"}}/>
                       </PieChart>
                     </ResponsiveContainer>
                   </Card>}
@@ -6343,7 +6485,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
                           <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
                           <XAxis dataKey="month" stroke="#6b8cce" tick={{fontSize:9,...GS}}/>
                           <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-                          <Tooltip formatter={(v,n)=>[fmt(v),n==="spent"?"Spent":"Income"]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
+                          <Tooltip formatter={(v,n)=>[fmt(v),n==="spent"?"Spent":"Income"]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
                           <Bar dataKey="spent" fill="#f87171" name="spent" radius={[4,4,0,0]}/>
                           <Bar dataKey="earned" fill="#4ade80" name="earned" radius={[4,4,0,0]}/>
                         </BarChart>
@@ -6365,7 +6507,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
                                 <XAxis dataKey="month" stroke="#6b8cce" tick={{fontSize:9,...GS}}/>
                                 <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-                                <Tooltip formatter={v=>[fmt(v)]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
+                                <Tooltip formatter={v=>[fmt(v)]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
                                 {allCatNames.map((cat,i)=><Line key={cat} type="monotone" dataKey={cat} stroke={CAT_COLORS[i%CAT_COLORS.length]} strokeWidth={2} dot={false} name={cat}/>)}
                               </LineChart>
                             </ResponsiveContainer>
@@ -6416,7 +6558,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
         </Card>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-          <button onClick={()=>setPhase("setup")} style={{background:"#111827",border:"1px solid #2a4080",borderRadius:12,padding:"13px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← New Import</button>
+          <button onClick={()=>setPhase("setup")} style={{background:"#111827",border:"1px solid #1e3a5f",borderRadius:12,padding:"13px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← New Import</button>
           <button onClick={()=>setPhase("classify")} style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid #22d3ee",borderRadius:12,padding:"13px",color:"#22d3ee",fontSize:13,cursor:"pointer",...GS}}>Edit ↩</button>
         </div>
         <button onClick={()=>{setPhase("classify");setShowManual(true);}} style={{width:"100%",background:"none",border:"1px dashed #facc1544",borderRadius:12,padding:"13px",color:"#facc15",cursor:"pointer",fontSize:13,marginBottom:20,...GS}}>
@@ -6433,14 +6575,16 @@ function ToolWrapper({title,onBack,onHome,contentId,children}) {
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={onBack} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
+            <button onClick={onBack} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:10,color:"#6b8cce",cursor:"pointer",fontSize:18,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>&larr;</button>
             <div style={{fontSize:18,fontWeight:"bold",color:"#fff",...GS}}>{title}</div>
           </div>
-          <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #2a4080",borderRadius:8,padding:"6px 12px",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
+          <button onClick={onHome} className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"6px 12px",color:"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>Home</button>
         </div>
       </div>
-      <div style={{padding:"20px 16px",maxWidth:520,margin:"0 auto"}} id={contentId}>
-        {children}
+      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}} id={contentId}>
+        <ErrorBoundary>
+          {children}
+        </ErrorBoundary>
         <PDFBtn title={title} contentId={contentId}/>
       </div>
     </div>
@@ -6534,7 +6678,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
   );
 
   return (
-    <div style={{paddingBottom:80}}>
+    <div style={{paddingBottom:100}}>
       {/* Snapshot bar */}
       <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({income,cats})}/>
 
@@ -6555,7 +6699,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       {/* Income */}
       <Card>
         <SecTitle>{period==="monthly"?"Monthly":"Annual"} Income</SecTitle>
-        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
           <span style={{color:"#6b8cce",marginRight:6,fontSize:14}}>$</span>
           <input type="number" value={income} onChange={e=>setIncome(e.target.value)} placeholder={period==="monthly"?"5000":"60000"} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
           {period==="annual"&&Number(income||0)>0&&<span style={{color:"#6b8cce",fontSize:11,marginLeft:6,whiteSpace:"nowrap"}}>{fmt(Number(income)/12)}/mo</span>}
@@ -6566,7 +6710,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
             <div style={{fontSize:13,color:total>inc?"#f87171":"#4ade80",fontWeight:"bold",...GS}}>{fmt(total)} / {fmt(inc)}</div>
           </div>
           <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
-            <div style={{width:Math.min(100,(total/inc)*100)+"%",height:"100%",background:total>inc?"#f87171":"linear-gradient(90deg,#4ade80,#22d3ee)",borderRadius:6}}/>
+            <div style={{width:Math.min(100,(total/inc)*100)+"%",height:"100%",background:total>inc?"#f87171":"linear-gradient(135deg,#4ade80,#22d3ee)",borderRadius:6}}/>
           </div>
           {remaining>0&&<div style={{fontSize:11,color:"#4ade80",marginTop:6}}>{fmt(remaining)} unallocated</div>}
         </div>}
@@ -6621,7 +6765,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
               </div>
             </div>
             {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}>
-              <div style={{width:pct+"%",height:"100%",background:bucket.color,borderRadius:4,transition:"width 0.3s"}}/>
+              <div style={{width:pct+"%",height:"100%",background:bucket.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
             </div>}
             {bucketCats.map((cat,i)=>{
               const globalIdx=cats.indexOf(cat);
@@ -6661,7 +6805,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
               <Pie data={collapsedDonut} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" strokeWidth={0}>
                 {collapsedDonut.map((d,i)=><Cell key={i} fill={d._color||CAT_COLORS[i%CAT_COLORS.length]}/>)}
               </Pie>
-              <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
+              <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
             </PieChart>
           </ResponsiveContainer>
           {/* Legend — grouped buckets in sticky bar style */}
@@ -6686,7 +6830,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       )}
 
       {/* Sticky totals bar */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#0d1b3e,#111827)",borderTop:"1px solid #1e3a5f",padding:"10px 16px",zIndex:200}}>
+      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#0d1b3e,#111827)",borderTop:"1px solid #1e3a5f",padding:"10px 16px 10px",paddingBottom:"max(10px,env(safe-area-inset-bottom))",zIndex:200}}>
         <div style={{maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,alignItems:"center"}}>
             {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subs 🔄",val:totalSub,color:"#a78bfa"},{label:"Variable 📊",val:totalEst,color:"#facc15"},{label:remaining>=0?"Left Over":"Over Budget",val:Math.abs(remaining),color:remaining>=0?"#4ade80":"#f87171"}].map(x=>(
@@ -6777,7 +6921,7 @@ function StandaloneNetWorth({prefill=null}) {
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" strokeWidth={0}>
                   {pieData.map((d,i)=><Cell key={i} fill={d.color}/>)}
                 </Pie>
-                <Tooltip formatter={v=>[fmt(v)]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
+                <Tooltip formatter={v=>[fmt(v)]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
               </PieChart>
             </ResponsiveContainer>
           )}
@@ -6811,7 +6955,7 @@ function StandaloneNetWorth({prefill=null}) {
                   <Pie data={allocationData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} dataKey="value" strokeWidth={0}>
                     {allocationData.map((d,i)=><Cell key={i} fill={d.color}/>)}
                   </Pie>
-                  <Tooltip formatter={v=>[fmt(v)]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
+                  <Tooltip formatter={v=>[fmt(v)]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
                 </PieChart>
               </ResponsiveContainer>
               {allocationData.map((d,i)=>(
@@ -6835,15 +6979,15 @@ function StandaloneNetWorth({prefill=null}) {
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><SecTitle>{sec.title}</SecTitle><div style={{fontSize:16,color:sec.color,fontWeight:"bold",...GS}}>{fmt(sec.total)}</div></div>
               {sec.items.map((x,i)=>(
                 <div key={i} style={{display:"grid",gridTemplateColumns:sec.types?"1fr 80px 1fr auto":"1fr 1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
-                  <input value={x.name} onChange={e=>sec.setItems(p=>p.map((v,idx)=>idx===i?{...v,name:e.target.value}:v))} placeholder="Name" style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
-                  {sec.types&&<select value={x.type||"other"} onChange={e=>sec.setItems(p=>p.map((v,idx)=>idx===i?{...v,type:e.target.value}:v))} style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 6px",color:"#6b8cce",fontSize:11,outline:"none"}}>
+                  <input value={x.name} onChange={e=>sec.setItems(p=>p.map((v,idx)=>idx===i?{...v,name:e.target.value}:v))} placeholder="Name" style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",color:"#e8e4d9",fontSize:13,outline:"none",...GS}}/>
+                  {sec.types&&<select value={x.type||"other"} onChange={e=>sec.setItems(p=>p.map((v,idx)=>idx===i?{...v,type:e.target.value}:v))} style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 6px",color:"#6b8cce",fontSize:11,outline:"none"}}>
                     <option value="cash">Cash</option>
                     <option value="investment">Investment</option>
                     <option value="real_estate">Real Estate</option>
                     <option value="other">Other</option>
                   </select>}
-                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}><span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span><input type="number" value={x.amount} onChange={e=>sec.setItems(p=>p.map((v,idx)=>idx===i?{...v,amount:e.target.value}:v))} placeholder="0" style={{background:"none",border:"none",outline:"none",color:sec.color,fontSize:14,width:"100%",...GS}}/></div>
-                  <button onClick={()=>sec.setItems(p=>p.filter((_,idx)=>idx!==i))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18}}>×</button>
+                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}><span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span><input type="number" value={x.amount} onChange={e=>sec.setItems(p=>p.map((v,idx)=>idx===i?{...v,amount:e.target.value}:v))} placeholder="0" style={{background:"none",border:"none",outline:"none",color:sec.color,fontSize:14,width:"100%",...GS}}/></div>
+                  <button onClick={()=>sec.setItems(p=>p.filter((_,idx)=>idx!==i))} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:18,minWidth:44,minHeight:44}}>×</button>
                 </div>
               ))}
               <button onClick={()=>sec.setItems(p=>[...p,{name:"",amount:"",type:"other"}])} style={{width:"100%",background:"none",border:`1px dashed ${sec.color}44`,color:"#6b8cce",borderRadius:8,padding:"8px",cursor:"pointer",fontSize:12,...GS}}>+ Add {sec.title.slice(0,-1)}</button>
@@ -6908,7 +7052,7 @@ function SavingsGoalCalc({prefill=null}) {
           <div style={{fontSize:11,color:g?.color||"#facc15",letterSpacing:2}}>GOAL {selected+1} OF {goals.length}</div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             {COLORS.map(c=><div key={c} onClick={()=>setGoals(p=>p.map((x,i)=>i===selected?{...x,color:c}:x))} style={{width:14,height:14,borderRadius:"50%",background:c,cursor:"pointer",border:(g?.color||"#4ade80")===c?"2px solid #fff":"2px solid transparent"}}/>)}
-            {goals.length>1&&<button onClick={()=>{setGoals(p=>p.filter((_,i)=>i!==selected));setSelected(Math.max(0,selected-1));}} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16}}>×</button>}
+            {goals.length>1&&<button onClick={()=>{setGoals(p=>p.filter((_,i)=>i!==selected));setSelected(Math.max(0,selected-1));}} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,minWidth:44,minHeight:44}}>×</button>}
           </div>
         </div>
         <Label>Goal Name</Label><TxtInput value={g?.name||""} onChange={v=>setGoals(p=>p.map((x,i)=>i===selected?{...x,name:v}:x))} placeholder="e.g. Emergency Fund, Down Payment"/>
@@ -6918,7 +7062,7 @@ function SavingsGoalCalc({prefill=null}) {
           <div><Label>Already Saved</Label><NumInput value={g?.saved||""} onChange={v=>setGoals(p=>p.map((x,i)=>i===selected?{...x,saved:v}:x))}/></div>
         </div>
         <Label>Months to Goal</Label>
-        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",marginBottom:perMonth>0?14:0}}>
+        <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",marginBottom:perMonth>0?14:0}}>
           <input type="number" value={g?.months||""} onChange={e=>setGoals(p=>p.map((x,i)=>i===selected?{...x,months:e.target.value}:x))} placeholder="e.g. 24" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:16,width:"100%",...GS}}/>
           <span style={{color:"#6b8cce",fontSize:12}}>months</span>
         </div>
@@ -7018,13 +7162,13 @@ function LOCSimulator({rate:defaultRate}) {
   const InputArea=()=>(
     <Card>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        {presets.map(p=><button key={p.label} onClick={()=>{setAmount(p.amount);setMonths(p.months);setPurpose(p.label);}} className="action-btn" style={{background:amount===p.amount&&months===p.months?"#1a4080":"#0d1b3e",border:"1px solid #2a4080",borderRadius:20,color:"#8fadd4",padding:"6px 14px",fontSize:12,cursor:"pointer",...GS}}>{p.label}</button>)}
+        {presets.map(p=><button key={p.label} onClick={()=>{setAmount(p.amount);setMonths(p.months);setPurpose(p.label);}} className="action-btn" style={{background:amount===p.amount&&months===p.months?"#1a4080":"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:20,color:"#8fadd4",padding:"6px 14px",fontSize:12,cursor:"pointer",...GS}}>{p.label}</button>)}
       </div>
       <Label>Purpose</Label>
-      <input value={purpose} onChange={e=>setPurpose(e.target.value)} placeholder="e.g. Car, Renovation..." style={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",marginBottom:10,...GS}}/>
+      <input value={purpose} onChange={e=>setPurpose(e.target.value)} placeholder="e.g. Car, Renovation..." style={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",marginBottom:10,...GS}}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-        <div><Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="5000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/></div></div>
-        <div><Label>Months</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}><input type="number" value={months} onChange={e=>setMonths(e.target.value)} placeholder="12" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>mo</span></div></div>
+        <div><Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}><span style={{color:"#6b8cce",marginRight:4}}>$</span><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="5000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/></div></div>
+        <div><Label>Months</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}><input type="number" value={months} onChange={e=>setMonths(e.target.value)} placeholder="12" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:12}}>mo</span></div></div>
       </div>
       <Label>Annual Rate (%)</Label><PctInput value={rate} onChange={setRate} placeholder="7.20"/>
     </Card>
@@ -7076,7 +7220,7 @@ function LOCSimulator({rate:defaultRate}) {
               <SecTitle>Extra Monthly Payment</SecTitle>
               <div style={{fontSize:12,color:"#6b8cce",marginBottom:10}}>Your regular payment: <span style={{color:"#4ade80",...GS}}>{fmt(A.mp)}/mo</span></div>
               <Label>Extra payment per month</Label>
-              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
                 <span style={{color:"#6b8cce",marginRight:4}}>$</span>
                 <input type="number" value={extraPay} onChange={e=>setExtraPay(e.target.value)} placeholder="100" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
               </div>
@@ -7110,16 +7254,16 @@ function LOCSimulator({rate:defaultRate}) {
             {/* Scenario A */}
             <Card>
               <div style={{fontSize:11,color:"#4ade80",letterSpacing:2,marginBottom:10}}>SCENARIO A</div>
-              <Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",marginBottom:8}}><span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="10000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/></div>
-              <Label>Months</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",marginBottom:8}}><input type="number" value={months} onChange={e=>setMonths(e.target.value)} placeholder="24" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>mo</span></div>
-              <Label>Rate (%)</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}><input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="7" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>%</span></div>
+              <Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",marginBottom:8}}><span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span><input type="number" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="10000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/></div>
+              <Label>Months</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",marginBottom:8}}><input type="number" value={months} onChange={e=>setMonths(e.target.value)} placeholder="24" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>mo</span></div>
+              <Label>Rate (%)</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}><input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="7" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>%</span></div>
             </Card>
             {/* Scenario B */}
             <Card>
               <div style={{fontSize:11,color:"#60a5fa",letterSpacing:2,marginBottom:10}}>SCENARIO B</div>
-              <Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",marginBottom:8}}><span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span><input type="number" value={amount2} onChange={e=>setAmount2(e.target.value)} placeholder="10000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/></div>
-              <Label>Months</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px",marginBottom:8}}><input type="number" value={months2} onChange={e=>setMonths2(e.target.value)} placeholder="36" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>mo</span></div>
-              <Label>Rate (%)</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"8px 10px"}}><input type="number" value={rate2} onChange={e=>setRate2(e.target.value)} placeholder="5" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>%</span></div>
+              <Label>Amount</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",marginBottom:8}}><span style={{color:"#6b8cce",marginRight:4,fontSize:12}}>$</span><input type="number" value={amount2} onChange={e=>setAmount2(e.target.value)} placeholder="10000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/></div>
+              <Label>Months</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px",marginBottom:8}}><input type="number" value={months2} onChange={e=>setMonths2(e.target.value)} placeholder="36" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>mo</span></div>
+              <Label>Rate (%)</Label><div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 10px"}}><input type="number" value={rate2} onChange={e=>setRate2(e.target.value)} placeholder="5" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/><span style={{color:"#6b8cce",fontSize:11}}>%</span></div>
             </Card>
           </div>
           {(A.mp>0||B.mp>0)&&(
@@ -7213,7 +7357,7 @@ function CompoundInterestCalc({prefill=null}) {
     {label:"Aggressive",rate:"11",desc:"Small-cap / emerging"},
   ];
 
-  const inp={background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,outline:"none",width:"100%",boxSizing:"border-box",...GS};
+  const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",color:"#e8e4d9",fontSize:15,outline:"none",width:"100%",boxSizing:"border-box",...GS};
 
   return (
     <div>
@@ -7234,14 +7378,14 @@ function CompoundInterestCalc({prefill=null}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
           <div>
             <Label>Starting Amount</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <span style={{color:"#6b8cce",marginRight:6,fontSize:14}}>$</span>
               <input type="number" value={principal} onChange={e=>setPrincipal(e.target.value)} placeholder="0" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
             </div>
           </div>
           <div>
             <Label>Contribution Amount</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
               <span style={{color:"#6b8cce",marginRight:6,fontSize:14}}>$</span>
               <input type="number" value={monthly} onChange={e=>setMonthly(e.target.value)} placeholder="500" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:15,width:"100%",...GS}}/>
             </div>
@@ -7257,14 +7401,14 @@ function CompoundInterestCalc({prefill=null}) {
           </div>
           <div>
             <Label>Annual Return Rate (%)</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <input type="number" value={rate} onChange={e=>setRate(e.target.value)} placeholder="7" style={{background:"none",border:"none",outline:"none",color:"#facc15",fontSize:15,width:"100%",...GS}}/>
               <span style={{color:"#6b8cce",fontSize:13}}>%</span>
             </div>
           </div>
           <div>
             <Label>Time Horizon (years)</Label>
-            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
               <input type="number" value={years} onChange={e=>setYears(e.target.value)} placeholder="25" style={{background:"none",border:"none",outline:"none",color:"#60a5fa",fontSize:15,width:"100%",...GS}}/>
               <span style={{color:"#6b8cce",fontSize:13}}>yrs</span>
             </div>
@@ -7328,7 +7472,7 @@ function CompoundInterestCalc({prefill=null}) {
               </div>
               <div style={{display:"flex",height:14,borderRadius:7,overflow:"hidden",background:"#0d1b3e"}}>
                 <div style={{width:finalValue>0?(totalContributions/finalValue*100)+"%":"50%",background:"#60a5fa",transition:"width 0.6s ease"}}/>
-                <div style={{flex:1,background:"linear-gradient(90deg,#4ade80,#22d3ee)"}}/>
+                <div style={{flex:1,background:"linear-gradient(135deg,#4ade80,#22d3ee)"}}/>
               </div>
             </div>
 
@@ -7338,7 +7482,7 @@ function CompoundInterestCalc({prefill=null}) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f"/>
                 <XAxis dataKey="year" stroke="#6b8cce" tick={{fontSize:10,...GS}}/>
                 <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
-                <Tooltip formatter={(v,n)=>[fmt(v),n==="value"?"Total Value":"Contributions"]} contentStyle={{background:"#0d1b3e",border:"1px solid #2a4080",borderRadius:8,...GS,fontSize:11}}/>
+                <Tooltip formatter={(v,n)=>[fmt(v),n==="value"?"Total Value":"Contributions"]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
                 <Bar dataKey="contributions" fill="#60a5fa" name="contributions" radius={[0,0,4,4]}/>
                 <Bar dataKey="value" fill="#4ade80" name="value" radius={[4,4,0,0]}/>
               </BarChart>
