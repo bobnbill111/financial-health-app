@@ -3587,25 +3587,529 @@ function BillCalendar() {
 // ─── TOOLS LIST & INDIVIDUAL TOOLS ───────────────────────────────────────────
 const TOOLS_LIST = [
   // PLAN
-  {id:"budget",    label:"Budget Builder",      icon:"⚖️", sub:"Build and visualize your monthly budget",    group:"PLAN"},
-  {id:"networth",  label:"Net Worth",            icon:"💰", sub:"Assets, liabilities & allocation",           group:"PLAN"},
-  {id:"savings",   label:"Savings Goal",         icon:"🎯", sub:"How much to save per month",                 group:"PLAN"},
+  {id:"budget",      label:"Budget Builder",      icon:"⚖️", sub:"Build and visualize your monthly budget",    group:"PLAN"},
+  {id:"networth",    label:"Net Worth",            icon:"💰", sub:"Assets, liabilities & allocation",           group:"PLAN"},
+  {id:"retirement",  label:"Retirement Number",   icon:"🎯", sub:"How much you need to retire",               group:"PLAN"},
+  {id:"savings",     label:"Savings Goal",         icon:"🏦", sub:"How much to save per month",                group:"PLAN"},
   // ANALYZE
-  {id:"tax",       label:"Tax Estimator",        icon:"🇨🇦", sub:"Estimate Canadian take-home pay",            group:"ANALYZE"},
-  {id:"housing",   label:"Housing Analysis",     icon:"🏠", sub:"Rent vs. Buy, Mortgage & Home Guide",        group:"ANALYZE"},
-  {id:"compound",  label:"Compound Interest",    icon:"📈", sub:"See how your money grows over time",         group:"ANALYZE"},
+  {id:"tax",         label:"Tax Estimator",        icon:"🇨🇦", sub:"Estimate Canadian take-home pay",           group:"ANALYZE"},
+  {id:"housing",     label:"Housing Analysis",     icon:"🏠", sub:"Rent vs. Buy, Mortgage & Home Guide",       group:"ANALYZE"},
+  {id:"compound",    label:"Compound Interest",    icon:"📈", sub:"See how your money grows over time",        group:"ANALYZE"},
   // OPTIMIZE
-  {id:"debtopt",   label:"Debt Optimizer",       icon:"🔗", sub:"Fastest path to debt-free",                 group:"OPTIMIZE"},
-  {id:"loc",       label:"Loan Simulator",       icon:"🔢", sub:"Payments and interest on any loan",          group:"OPTIMIZE"},
-  {id:"cashflow",  label:"Cash Flow",            icon:"💸", sub:"90-day rolling cash flow ledger",            group:"OPTIMIZE"},
+  {id:"debtopt",     label:"Debt Optimizer",       icon:"🔗", sub:"Fastest path to debt-free",                group:"OPTIMIZE"},
+  {id:"loc",         label:"Loan Simulator",       icon:"🔢", sub:"Payments and interest on any loan",         group:"OPTIMIZE"},
+  {id:"cashflow",    label:"Cash Flow",            icon:"💸", sub:"90-day rolling cash flow ledger",           group:"OPTIMIZE"},
   // MISCELLANEOUS
-  {id:"statement", label:"Statement Importer",   icon:"📂", sub:"Upload & categorize bank statements",        group:"MISCELLANEOUS"},
-  {id:"moneyflow", label:"Money Flow Map",       icon:"🔀", sub:"Map where every dollar goes",               group:"MISCELLANEOUS"},
-  {id:"benchmarks",label:"Where You Stand",      icon:"📊", sub:"Compare to Canadian averages",              group:"MISCELLANEOUS"},
+  {id:"statement",   label:"Statement Importer",   icon:"📂", sub:"Upload & categorize bank statements",       group:"MISCELLANEOUS"},
+  {id:"moneyflow",   label:"Money Flow Map",       icon:"🔀", sub:"Map where every dollar goes",              group:"MISCELLANEOUS"},
+  {id:"benchmarks",  label:"Where You Stand",      icon:"📊", sub:"Compare to Canadian averages",             group:"MISCELLANEOUS"},
 ];
+
+// ─── RETIREMENT NUMBER ────────────────────────────────────────────────────────
+function RetirementNumber({prefill=null,totalInv=0}) {
+  const prefillAge=Number(prefill?.age1||0)||"";
+  const prefillMonthlyNet=Number(prefill?.budget?.income||0)||0;
+  const prefillSaved=totalInv+(prefill?.bankAccounts||[]).reduce((s,a)=>s+Number(a.amount||0),0)
+    +(prefill?.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+
+  // ── Inputs ──
+  const [currentAgeInput,setCurrentAgeInput]=useState(String(prefillAge));
+  const [monthlyNeeds,setMonthlyNeeds]=useState(String(Math.round(prefillMonthlyNet*0.8))||"");
+  const [retireAge,setRetireAge]=useState("65");
+  const [planToAge,setPlanToAge]=useState("90");
+  const [withdrawalRate,setWithdrawalRate]=useState("4");
+  const [inflation,setInflation]=useState("2");
+  const [currentSaved,setCurrentSaved]=useState(String(Math.round(prefillSaved))||"");
+  const [monthlySaving,setMonthlySaving]=useState("");
+  const [expectedReturn,setExpectedReturn]=useState("6");
+
+  const currentAge=Math.max(18,Math.min(80,Number(currentAgeInput||30)));
+
+  // CPP / OAS
+  const [includeCPP,setIncludeCPP]=useState(true);
+  const [includeOAS,setIncludeOAS]=useState(true);
+  const [cppAmount,setCppAmount]=useState("1000");
+  const [oasStartAge,setOasStartAge]=useState("65");
+
+  // Soft retirement
+  const [softRetire,setSoftRetire]=useState(false);
+  const [softAge,setSoftAge]=useState("55");
+  const [softIncome,setSoftIncome]=useState("");
+
+  // UI
+  const [tab,setTab]=useState("inputs");
+
+  // ── Core calculations ──
+  const mn=Math.max(0,Number(monthlyNeeds||0));
+  const ra=Math.max(currentAge+1,Number(retireAge||65));
+  const pta=Math.max(ra+1,Number(planToAge||90));
+  const wr=Math.max(0.5,Math.min(10,Number(withdrawalRate||4)))/100;
+  const inf=Math.max(0,Number(inflation||2))/100;
+  const ret=Math.max(0,Number(expectedReturn||6))/100;
+  const yearsToRetire=Math.max(0,ra-currentAge);
+  const yearsInRetirement=pta-ra;
+
+  // Inflation-adjust monthly needs to retirement date
+  const inflatedMonthlyNeeds=mn*Math.pow(1+inf,yearsToRetire);
+  const annualNeeds=inflatedMonthlyNeeds*12;
+
+  // CPP / OAS monthly at retirement (today's dollars, then inflate)
+  const cpp=includeCPP?Number(cppAmount||0)*Math.pow(1+inf,yearsToRetire):0;
+  const oasBase=698; // 2025 max monthly OAS
+  const oasMult=Number(oasStartAge||65)>=70?1.36:1;
+  const oas=includeOAS?(oasBase*oasMult)*Math.pow(1+inf,yearsToRetire):0;
+  const govMonthly=cpp+oas;
+  const govAnnual=govMonthly*12;
+
+  // Soft retirement bridge income (inflation adjusted)
+  const sa=softRetire?Math.max(currentAge+1,Math.min(ra-1,Number(softAge||55))):ra;
+  const softMonthly=softRetire?Number(softIncome||0)*Math.pow(1+inf,sa-currentAge):0;
+  const softYears=softRetire?ra-sa:0;
+
+  // Gap that portfolio must cover in retirement
+  const portfolioAnnualNeeded=Math.max(0,annualNeeds-govAnnual);
+
+  // Retirement number = portfolio drawdown needed / withdrawal rate
+  const retirementNumber=wr>0?portfolioAnnualNeeded/wr:0;
+
+  // Soft retirement effect: how much less you need because of bridge income
+  const softBridgeAnnual=softMonthly*12;
+  // Reduced annual needs during soft retirement (inflation-adjusted at soft age)
+  const softPhaseAnnualNeeds=mn*Math.pow(1+inf,sa-currentAge)*12;
+  const softGap=Math.max(0,softPhaseAnnualNeeds-softBridgeAnnual);
+  // PV at soft age of the soft gap (simplified: just show cumulative bridge income)
+  const totalBridgeIncome=softBridgeAnnual*softYears;
+
+  // Adjusted retirement number: soft income reduces required accumulation
+  // Because you draw less from portfolio during soft years, it keeps growing
+  // Simplified: retirement number minus FV of bridge income savings
+  const bridgeSavingsAtRetirement=totalBridgeIncome*Math.pow(1+ret/12,softYears*12);
+  const adjustedRetirementNumber=Math.max(0,retirementNumber-bridgeSavingsAtRetirement);
+  const softSavings=retirementNumber-adjustedRetirementNumber;
+
+  // How much current savings grows by retirement
+  const cs=Number(currentSaved||0);
+  const ms=Number(monthlySaving||0);
+  const monthlyReturn=ret/12;
+  const monthsToRetire=yearsToRetire*12;
+  const fvSaved=cs*Math.pow(1+monthlyReturn,monthsToRetire);
+  const fvContribs=ms>0&&monthlyReturn>0
+    ?ms*(Math.pow(1+monthlyReturn,monthsToRetire)-1)/monthlyReturn
+    :ms*monthsToRetire;
+  const projectedAtRetirement=fvSaved+fvContribs;
+  const target=softRetire?adjustedRetirementNumber:retirementNumber;
+  const gap=Math.max(0,target-projectedAtRetirement);
+  const surplus=projectedAtRetirement-target;
+  const onTrack=projectedAtRetirement>=target;
+
+  // Monthly saving needed to close gap
+  const monthlyNeededToClose=gap>0&&monthlyReturn>0&&monthsToRetire>0
+    ?gap*monthlyReturn/(Math.pow(1+monthlyReturn,monthsToRetire)-1):0;
+
+  // Projection chart data
+  const chartData=[];
+  for(let age=currentAge;age<=pta;age++){
+    const yr=age-currentAge;
+    if(age<=ra){
+      const fvs=cs*Math.pow(1+monthlyReturn,yr*12);
+      const fvc=ms>0&&monthlyReturn>0?ms*(Math.pow(1+monthlyReturn,yr*12)-1)/monthlyReturn:ms*yr*12;
+      chartData.push({age,balance:Math.round(fvs+fvc),phase:"accumulation"});
+    } else {
+      const prevBal=chartData[chartData.length-1]?.balance||projectedAtRetirement;
+      const annualWithdrawal=portfolioAnnualNeeded;
+      const newBal=Math.max(0,prevBal*(1+(ret-inf))-annualWithdrawal);
+      chartData.push({age,balance:Math.round(newBal),phase:"retirement"});
+    }
+  }
+  const depletes=chartData.find(d=>d.balance<=0&&d.phase==="retirement");
+
+  const TABS=[{id:"inputs",label:"Inputs"},{id:"results",label:"Results"},{id:"projection",label:"Projection"}];
+
+  return (
+    <div style={{paddingBottom:100}}>
+      <div style={{display:"flex",gap:4,marginBottom:16,background:"#0d1b3e",borderRadius:10,padding:4}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} className={`glow-btn${tab===t.id?" active-tab":""}`}
+            style={{flex:1,background:tab===t.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"8px",color:tab===t.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab==="inputs"&&(
+        <div>
+          {/* Retirement needs */}
+          <Card>
+            <SecTitle>Your Retirement Needs</SecTitle>
+            <Label>Monthly Net Income Needed in Retirement</Label>
+            <NumInput value={monthlyNeeds} onChange={setMonthlyNeeds} placeholder="4,000"/>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:4,marginBottom:14}}>In today's dollars — we'll adjust for inflation</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div>
+                <Label>Current Age</Label>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:`1px solid ${prefillAge?"#4ade8033":"#1e3a5f"}`,borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" inputMode="decimal" autoComplete="off" value={currentAgeInput} onChange={e=>setCurrentAgeInput(e.target.value)} placeholder="30"
+                    style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>yrs</span>
+                </div>
+                <div style={{fontSize:9,color:prefillAge?"#4ade80":"#6b8cce",marginTop:3}}>
+                  {prefillAge?"Pre-filled from appointment":"Enter your age"}
+                </div>
+              </div>
+              <div>
+                <Label>Target Retire Age</Label>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" inputMode="decimal" autoComplete="off" value={retireAge} onChange={e=>setRetireAge(e.target.value)} placeholder="65" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>yrs</span>
+                </div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div>
+                <Label>Plan to Age</Label>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" inputMode="decimal" autoComplete="off" value={planToAge} onChange={e=>setPlanToAge(e.target.value)} placeholder="90" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>yrs</span>
+                </div>
+              </div>
+              <div>
+                <Label>Years in Retirement</Label>
+                <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#facc15",...GS}}>{yearsInRetirement} years</div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Assumptions */}
+          <Card>
+            <SecTitle>Assumptions</SecTitle>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div>
+                <Label>Withdrawal Rate</Label>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" inputMode="decimal" autoComplete="off" value={withdrawalRate} onChange={e=>setWithdrawalRate(e.target.value)} placeholder="4" style={{background:"none",border:"none",outline:"none",color:"#4ade80",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>%</span>
+                </div>
+                <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>4% rule standard · lower = more conservative</div>
+              </div>
+              <div>
+                <Label>Inflation Rate</Label>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" inputMode="decimal" autoComplete="off" value={inflation} onChange={e=>setInflation(e.target.value)} placeholder="2" style={{background:"none",border:"none",outline:"none",color:"#fb923c",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>%</span>
+                </div>
+              </div>
+              <div>
+                <Label>Expected Return</Label>
+                <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+                  <input type="number" inputMode="decimal" autoComplete="off" value={expectedReturn} onChange={e=>setExpectedReturn(e.target.value)} placeholder="6" style={{background:"none",border:"none",outline:"none",color:"#60a5fa",fontSize:14,width:"100%",...GS}}/>
+                  <span style={{color:"#6b8cce",fontSize:11}}>%</span>
+                </div>
+                <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Pre-retirement portfolio growth</div>
+              </div>
+              <div>
+                <Label>Real Return (approx)</Label>
+                <div style={{background:"#0d1b3e",borderRadius:8,padding:"10px 12px",fontSize:14,color:"#a78bfa",...GS}}>{Math.max(0,ret*100-inf*100).toFixed(1)}%</div>
+                <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Return minus inflation</div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Government benefits */}
+          <Card>
+            <SecTitle>Government Benefits</SecTitle>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+              <button onClick={()=>setIncludeCPP(p=>!p)} className="action-btn"
+                style={{background:includeCPP?"#0d2a1a":"#111827",border:`1px solid ${includeCPP?"#4ade8066":"#1e3a5f"}`,borderRadius:10,padding:"12px",cursor:"pointer",textAlign:"center"}}>
+                <div style={{fontSize:11,color:includeCPP?"#4ade80":"#6b8cce",fontWeight:"bold",marginBottom:2,...GS}}>CPP</div>
+                <div style={{fontSize:9,color:"#6b8cce"}}>{includeCPP?"Included":"Excluded"}</div>
+              </button>
+              <button onClick={()=>setIncludeOAS(p=>!p)} className="action-btn"
+                style={{background:includeOAS?"#0d2a1a":"#111827",border:`1px solid ${includeOAS?"#4ade8066":"#1e3a5f"}`,borderRadius:10,padding:"12px",cursor:"pointer",textAlign:"center"}}>
+                <div style={{fontSize:11,color:includeOAS?"#4ade80":"#6b8cce",fontWeight:"bold",marginBottom:2,...GS}}>OAS</div>
+                <div style={{fontSize:9,color:"#6b8cce"}}>{includeOAS?"Included":"Excluded"}</div>
+              </button>
+            </div>
+            {includeCPP&&(
+              <div style={{marginBottom:12}}>
+                <Label>Your Estimated CPP (monthly)</Label>
+                <NumInput value={cppAmount} onChange={setCppAmount} placeholder="1,000"/>
+                <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Check My Service Canada for your actual estimate · 2025 max is $1,433/mo</div>
+              </div>
+            )}
+            {includeOAS&&(
+              <div>
+                <Label>OAS Start Age</Label>
+                <div style={{display:"flex",gap:8}}>
+                  {["65","66","67","68","69","70"].map(a=>(
+                    <button key={a} onClick={()=>setOasStartAge(a)} className="action-btn"
+                      style={{flex:1,background:oasStartAge===a?"#1a4030":"#0d1b3e",border:`1px solid ${oasStartAge===a?"#4ade8066":"#1e3a5f"}`,borderRadius:8,padding:"8px 4px",cursor:"pointer",color:oasStartAge===a?"#4ade80":"#6b8cce",fontSize:11,...GS}}>
+                      {a}
+                    </button>
+                  ))}
+                </div>
+                <div style={{fontSize:9,color:"#6b8cce",marginTop:4}}>
+                  Deferring to 70 increases OAS by 36% · your OAS: {fmt(oasBase*oasMult)}/mo (2025 dollars)
+                </div>
+              </div>
+            )}
+            {!includeCPP&&!includeOAS&&(
+              <div style={{fontSize:11,color:"#f87171",lineHeight:1.6}}>Both CPP and OAS excluded — your portfolio must cover 100% of needs.</div>
+            )}
+          </Card>
+
+          {/* Soft retirement */}
+          <Card>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:softRetire?14:0}}>
+              <div>
+                <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>Soft Retirement</div>
+                <div style={{fontSize:10,color:"#6b8cce",marginTop:2}}>Retire early with part-time income as a bridge</div>
+              </div>
+              <button onClick={()=>setSoftRetire(p=>!p)} className="action-btn"
+                style={{background:softRetire?"#1a4030":"#111827",border:`1px solid ${softRetire?"#4ade8066":"#1e3a5f"}`,borderRadius:20,padding:"6px 16px",cursor:"pointer",color:softRetire?"#4ade80":"#6b8cce",fontSize:12,...GS}}>
+                {softRetire?"On":"Off"}
+              </button>
+            </div>
+            {softRetire&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <Label>Soft Retire Age</Label>
+                  <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+                    <input type="number" inputMode="decimal" autoComplete="off" value={softAge} onChange={e=>setSoftAge(e.target.value)} placeholder="55" style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:14,width:"100%",...GS}}/>
+                    <span style={{color:"#6b8cce",fontSize:11}}>yrs</span>
+                  </div>
+                </div>
+                <div>
+                  <Label>Part-time Income (monthly)</Label>
+                  <NumInput value={softIncome} onChange={setSoftIncome} placeholder="2,000"/>
+                </div>
+                {softYears>0&&(
+                  <div style={{gridColumn:"1/-1",background:"#0d1b3e",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#6b8cce",lineHeight:1.7}}>
+                    Bridge window: <span style={{color:"#a78bfa",...GS}}>age {sa} → {ra}</span> ({softYears} years) · earning <span style={{color:"#a78bfa",...GS}}>{fmt(softMonthly)}/mo</span> in retirement dollars
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+
+          {/* Current progress */}
+          <Card>
+            <SecTitle>Current Progress</SecTitle>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div>
+                <Label>Already Saved / Invested</Label>
+                <NumInput value={currentSaved} onChange={setCurrentSaved} placeholder="50,000"/>
+              </div>
+              <div>
+                <Label>Monthly Saving Rate</Label>
+                <NumInput value={monthlySaving} onChange={setMonthlySaving} placeholder="500"/>
+              </div>
+            </div>
+            {cs>0&&<div style={{marginTop:10,fontSize:11,color:"#6b8cce"}}>Projected at retirement (at {expectedReturn}%): <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(projectedAtRetirement)}</span></div>}
+          </Card>
+
+          <button onClick={()=>setTab("results")} className="action-btn"
+            style={{width:"100%",background:"linear-gradient(135deg,#1a4080,#0d2a5e)",border:"1px solid #2a4080",borderRadius:10,color:"#4ade80",padding:"14px",fontSize:14,cursor:"pointer",letterSpacing:1,...GS}}>
+            Calculate My Retirement Number →
+          </button>
+        </div>
+      )}
+
+      {tab==="results"&&mn>0&&(
+        <div>
+          {/* Headline number */}
+          <div style={{background:`linear-gradient(135deg,${onTrack?"#0d2a1a":"#1a0a0a"},#0d1b3e)`,border:`1px solid ${onTrack?"#4ade8044":"#f8717144"}`,borderRadius:16,padding:"24px",marginBottom:14,textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>YOUR RETIREMENT NUMBER</div>
+            <div style={{fontSize:48,color:"#4ade80",fontWeight:"bold",...GS,lineHeight:1}}>{fmtShort(target)}</div>
+            <div style={{fontSize:12,color:"#6b8cce",marginTop:6}}>{fmt(target)} needed by age {ra}</div>
+            {softRetire&&softSavings>0&&(
+              <div style={{marginTop:8,fontSize:11,color:"#a78bfa"}}>
+                Soft retirement reduces your number by <span style={{fontWeight:"bold",...GS}}>{fmtShort(softSavings)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Income stack */}
+          <Card>
+            <SecTitle>Monthly Income at Retirement</SecTitle>
+            <div style={{fontSize:11,color:"#6b8cce",marginBottom:14}}>In {ra}-age dollars (inflation-adjusted)</div>
+            {[
+              includeCPP&&{label:"CPP",val:cpp,color:"#4ade80",icon:"🇨🇦"},
+              includeOAS&&{label:`OAS (starting ${oasStartAge})`,val:oas,color:"#22d3ee",icon:"🍁"},
+              {label:"Portfolio Drawdown",val:portfolioAnnualNeeded/12,color:"#a78bfa",icon:"📈"},
+            ].filter(Boolean).map((row,i)=>(
+              <div key={i} style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:13,color:"#e8e4d9"}}>{row.icon} {row.label}</span>
+                  <span style={{fontSize:14,color:row.color,fontWeight:"bold",...GS}}>{fmt(row.val)}/mo</span>
+                </div>
+                <div style={{background:"#0d1b3e",borderRadius:4,height:8,overflow:"hidden"}}>
+                  <div style={{width:inflatedMonthlyNeeds>0?(row.val/inflatedMonthlyNeeds*100)+"%":"0%",height:"100%",background:row.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+                </div>
+              </div>
+            ))}
+            <div style={{borderTop:"1px solid #1e3a5f",paddingTop:12,marginTop:4,display:"flex",justifyContent:"space-between"}}>
+              <span style={{fontSize:13,color:"#6b8cce"}}>Total monthly income</span>
+              <span style={{fontSize:15,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(inflatedMonthlyNeeds)}/mo</span>
+            </div>
+          </Card>
+
+          {/* Progress toward target */}
+          {cs>0&&(
+            <Card>
+              <SecTitle>Progress Toward Target</SecTitle>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>PROJECTED AT {ra}</div>
+                  <div style={{fontSize:18,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(projectedAtRetirement)}</div>
+                </div>
+                <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>{onTrack?"SURPLUS":"GAP"}</div>
+                  <div style={{fontSize:18,color:onTrack?"#4ade80":"#f87171",fontWeight:"bold",...GS}}>{fmtShort(Math.abs(onTrack?surplus:gap))}</div>
+                </div>
+              </div>
+              <div style={{background:"#0d1b3e",borderRadius:6,height:12,overflow:"hidden",marginBottom:8}}>
+                <div style={{width:Math.min(100,(projectedAtRetirement/target)*100)+"%",height:"100%",background:onTrack?"#4ade80":"linear-gradient(135deg,#f87171,#fb923c)",borderRadius:6,transition:"width 0.6s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#6b8cce"}}>
+                <span>{onTrack?"✓ On track!":((projectedAtRetirement/target)*100).toFixed(0)+"% of the way there"}</span>
+                <span>Target: {fmtShort(target)}</span>
+              </div>
+              {!onTrack&&monthlyNeededToClose>0&&(
+                <div style={{marginTop:12,background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717133",borderRadius:10,padding:"12px"}}>
+                  <div style={{fontSize:11,color:"#6b8cce",marginBottom:4}}>To close the gap you need an additional</div>
+                  <div style={{fontSize:22,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(monthlyNeededToClose)}<span style={{fontSize:12,color:"#6b8cce"}}>/mo</span></div>
+                  <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>on top of your current {fmt(ms)}/mo savings</div>
+                </div>
+              )}
+              {onTrack&&(
+                <div style={{marginTop:12,background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade8033",borderRadius:10,padding:"12px"}}>
+                  <div style={{fontSize:11,color:"#4ade80"}}>You are on track. At your current savings rate you'll retire with a surplus of <span style={{fontWeight:"bold",...GS}}>{fmtShort(surplus)}</span>.</div>
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Step-by-step math */}
+          <Card>
+            <SecTitle>How We Got Here</SecTitle>
+            <div style={{fontSize:11,lineHeight:2.2}}>
+              {[
+                ["Monthly needs today",fmt(mn),"in today's dollars"],
+                ["Inflation adjustment",`×${Math.pow(1+inf,yearsToRetire).toFixed(2)}`,`${inflation}% over ${yearsToRetire} yrs`],
+                ["Inflation-adjusted monthly needs",fmt(inflatedMonthlyNeeds),"at retirement"],
+                ["Annual needs",fmt(annualNeeds),"×12"],
+                includeCPP&&["− CPP","-"+fmt(cpp*12)+"/yr","monthly: "+fmt(cpp)],
+                includeOAS&&["− OAS","-"+fmt(oas*12)+"/yr","monthly: "+fmt(oas)+", starting age "+oasStartAge],
+                ["= Annual portfolio drawdown needed",fmt(portfolioAnnualNeeded),""],
+                ["÷ Withdrawal rate",withdrawalRate+"%","4% rule: 1/0.04 = 25×"],
+                ["= Retirement number",fmtShort(retirementNumber),"before soft retirement"],
+                softRetire&&softSavings>0&&["− Soft retirement benefit","-"+fmtShort(softSavings),"bridge income reduces required accumulation"],
+                ["= Your target",fmtShort(target),""],
+              ].filter(Boolean).map((row,i)=>row&&(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,padding:"1px 0",borderTop:row[0].startsWith("=")||row[0].startsWith("Your")?"1px solid #1e3a5f":"none",marginTop:row[0].startsWith("=")?"4px":"0"}}>
+                  <div><span style={{color:"#8fadd4"}}>{row[0]}</span>{row[2]&&<span style={{color:"#4a5a6a",marginLeft:6,fontSize:9}}>{row[2]}</span>}</div>
+                  <span style={{color:"#e8e4d9",fontWeight:row[0].startsWith("=")||row[0].startsWith("Your")?"bold":"normal",...GS,textAlign:"right"}}>{row[1]}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {depletes&&(
+            <div style={{background:"#1a0a0a",border:"1px solid #f8717144",borderRadius:10,padding:"12px 14px",fontSize:12,color:"#f87171",lineHeight:1.7}}>
+              ⚠️ At a {withdrawalRate}% withdrawal rate, your portfolio may be depleted around age <strong>{depletes.age}</strong>. Consider a lower withdrawal rate or reducing monthly needs.
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==="results"&&mn===0&&(
+        <div style={{textAlign:"center",padding:"40px 20px",color:"#6b8cce"}}>
+          <div style={{fontSize:32,marginBottom:12}}>🎯</div>
+          <div style={{fontSize:14,marginBottom:8}}>Enter your monthly needs in the Inputs tab first</div>
+          <button onClick={()=>setTab("inputs")} className="action-btn" style={{background:"#1a2235",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 20px",color:"#e8e4d9",cursor:"pointer",fontSize:13,...GS}}>← Go to Inputs</button>
+        </div>
+      )}
+
+      {tab==="projection"&&(
+        <div>
+          <Card>
+            <SecTitle>Portfolio Projection</SecTitle>
+            <div style={{fontSize:11,color:"#6b8cce",marginBottom:14}}>Accumulation phase (green) → Drawdown phase (red)</div>
+            {chartData.length>0?(
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData} margin={{top:5,right:10,left:0,bottom:5}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f44"/>
+                  <XAxis dataKey="age" stroke="#6b8cce" tick={{fontSize:9,...GS}} label={{value:"Age",position:"insideBottomRight",offset:-5,fill:"#6b8cce",fontSize:9}}/>
+                  <YAxis stroke="#6b8cce" tick={{fontSize:9,...GS}} tickFormatter={v=>fmtShort(v)}/>
+                  <Tooltip formatter={v=>[fmtShort(v),"Portfolio"]} labelFormatter={l=>`Age ${l}`} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}}/>
+                  <Bar dataKey="balance" radius={[2,2,0,0]}>
+                    {chartData.map((d,i)=>(
+                      <Cell key={i} fill={d.phase==="accumulation"?"#4ade80":"#f87171"} fillOpacity={0.85}/>
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ):<div style={{color:"#6b8cce",textAlign:"center",padding:"40px"}}>Enter your details in Inputs to see the projection</div>}
+          </Card>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+            {[
+              {label:"Years to Retire",val:yearsToRetire,color:"#4ade80",unit:"yrs"},
+              {label:"Years in Retirement",val:yearsInRetirement,color:"#facc15",unit:"yrs"},
+              {label:"Portfolio at Retirement",val:fmtShort(projectedAtRetirement),color:"#60a5fa",unit:""},
+            ].map((x,i)=>(
+              <div key={i} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:12,padding:"12px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#6b8cce",marginBottom:4,letterSpacing:1}}>{x.label.toUpperCase()}</div>
+                <div style={{fontSize:16,color:x.color,fontWeight:"bold",...GS}}>{x.val}{x.unit}</div>
+              </div>
+            ))}
+          </div>
+
+          {softRetire&&softYears>0&&(
+            <Card>
+              <SecTitle>Soft Retirement Window</SecTitle>
+              <div style={{display:"flex",gap:12,alignItems:"center",background:"#0d1b3e",borderRadius:10,padding:"14px"}}>
+                <div style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>START</div>
+                  <div style={{fontSize:22,color:"#a78bfa",fontWeight:"bold",...GS}}>Age {sa}</div>
+                </div>
+                <div style={{flex:2,textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>PART-TIME INCOME</div>
+                  <div style={{fontSize:18,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(softMonthly)}/mo</div>
+                  <div style={{fontSize:10,color:"#6b8cce"}}>{softYears} years · {fmt(totalBridgeIncome)} total</div>
+                </div>
+                <div style={{flex:1,textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#6b8cce",marginBottom:3}}>FULL RETIRE</div>
+                  <div style={{fontSize:22,color:"#4ade80",fontWeight:"bold",...GS}}>Age {ra}</div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <SecTitle>Nominal vs Real Value</SecTitle>
+            <div style={{fontSize:11,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>
+              Your retirement number in today's dollars (real) vs future dollars (nominal).
+            </div>
+            {[
+              {label:"Nominal (future dollars)",val:target,color:"#4ade80"},
+              {label:"Real (today's dollars)",val:target/Math.pow(1+inf,yearsToRetire),color:"#facc15"},
+            ].map((x,i)=>(
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #1e3a5f"}}>
+                <span style={{fontSize:12,color:"#8fadd4"}}>{x.label}</span>
+                <span style={{fontSize:14,color:x.color,fontWeight:"bold",...GS}}>{fmtShort(x.val)}</span>
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function IndividualTools({onHome,data,totalInv,user,token}) {
   const [tool,setTool]=useState(null);
+  if(tool==="retirement") return <ToolWrapper title="Retirement Number" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-retirement"><RetirementNumber prefill={data} totalInv={totalInv}/></ToolWrapper>;
   if(tool==="budget") return <ToolWrapper title="Budget Builder" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-budget"><StandaloneBudget prefill={data?.budget} user={user} token={token} toolId="budget"/></ToolWrapper>;
   if(tool==="statement") return <StatementImporter onBack={()=>setTool(null)} onHome={onHome} budgetData={data.budget}/>;
   if(tool==="housing") return <ToolWrapper title="Housing Analysis" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-housing"><HousingAnalysis data={data} user={user} token={token}/></ToolWrapper>;
