@@ -103,18 +103,6 @@ const GLOBAL_CSS = `
     from { opacity:0; }
     to   { opacity:1; }
   }
-  @keyframes slideInRight {
-    from { opacity:0; transform:translateX(40px); }
-    to   { opacity:1; transform:translateX(0); }
-  }
-  @keyframes slideInLeft {
-    from { opacity:0; transform:translateX(-40px); }
-    to   { opacity:1; transform:translateX(0); }
-  }
-  @keyframes slideOutLeft {
-    from { opacity:1; transform:translateX(0); }
-    to   { opacity:0; transform:translateX(-40px); }
-  }
   @keyframes scaleBounce {
     0%   { opacity:0; transform:scale(0.3); }
     60%  { transform:scale(1.15); }
@@ -141,9 +129,6 @@ const GLOBAL_CSS = `
     from { opacity:0; transform:translateY(8px); }
     to   { opacity:1; transform:translateY(0); }
   }
-
-  /* ── Page transitions ── */
-  .page-enter { animation: fadeInUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
 
   /* ── Step cross-fade ── */
   .step-enter { animation: stepCrossFade 0.2s ease both; }
@@ -432,7 +417,7 @@ const EMPTY = {
 };
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
-const Card = ({children,style={}}) => <div className="card-stagger" style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14,...style}}>{children}</div>;
+const Card = ({children,style={}}) => <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14,...style}}>{children}</div>;
 const Label = ({children}) => <div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",marginBottom:6,...GS}}>{children}</div>;
 const SecTitle = ({children,style={}}) => <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",marginBottom:12,...GS,...style}}>{children}</div>;
 const NumInput = ({value,onChange,placeholder="0.00"}) => (
@@ -665,7 +650,7 @@ function AuthScreen({onAuth,onGuest}) {
   const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"13px 14px",color:"#e8e4d9",fontSize:15,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
       <style>{GLOBAL_CSS}</style>
       {/* Background grid */}
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
@@ -898,7 +883,7 @@ export default function App() {
   const latestScore=scoreHistory.length>0?scoreHistory[scoreHistory.length-1]:null;
 
   if(!authChecked) return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
       <div style={{textAlign:"center"}}>
         <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16}} className="spinner-pulse">
           <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
@@ -943,7 +928,7 @@ function OnboardingScreen({displayName,userEmail,onStart,onSkip}) {
   const fade={opacity:vis?1:0,transform:vis?"translateY(0)":"translateY(20px)",transition:"opacity 0.6s ease 0.1s,transform 0.6s ease 0.1s"};
   const name=displayName||userEmail?.split("@")[0]||"there";
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px",...GS}}>
       <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(#1e3a5f18 1px,transparent 1px),linear-gradient(90deg,#1e3a5f18 1px,transparent 1px)",backgroundSize:"60px 60px",pointerEvents:"none"}}/>
       <div style={{position:"fixed",top:"40%",left:"50%",width:400,height:400,background:"radial-gradient(circle,#cc000022 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)"}}/>
       <div style={{...fade,position:"relative",width:"100%",maxWidth:440,textAlign:"center"}}>
@@ -1016,7 +1001,7 @@ function ProfilePage({user,token,onHome,onSignOut,data}) {
   const inp={background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:10,padding:"12px 14px",color:"#e8e4d9",fontSize:14,width:"100%",outline:"none",boxSizing:"border-box",...GS};
 
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -1942,7 +1927,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
   },[step]);
 
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80",...GS}}>Step {prog+1} of {APPT_STEPS.length}</div>}/>
       <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#cc0000,#4ade80)",transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>
 
@@ -2949,7 +2934,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
   );
 
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
 
       {/* ── Header ── */}
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#0a0f1e)",borderBottom:"1px solid #1e3a5f",padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}}>
@@ -4315,7 +4300,7 @@ function IndividualTools({onHome,data,totalInv,user,token}) {
   if(tool==="compound") return <ToolWrapper title="Compound Interest Calculator" onBack={()=>setTool(null)} onHome={onHome} contentId="tool-compound"><CompoundInterestCalc prefill={data}/></ToolWrapper>;
 
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Individual Tools" subtitle="FinHealth" onHome={onHome}/>
       <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}}>
         {["PLAN","ANALYZE","OPTIMIZE","MISCELLANEOUS"].map(group=>{
@@ -6866,7 +6851,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
   // ── PHASE: SETUP ──
   if(phase==="setup") return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -6954,7 +6939,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
   // ── PHASE: CLASSIFY ──
   if(phase==="classify") return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -7228,7 +7213,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
   // ── PHASE: SUMMARY ──
   const income = Number(budgetIncome||0);
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -7411,7 +7396,7 @@ function StatementImporter({onBack,onHome,budgetData}) {
 
 function ToolWrapper({title,onBack,onHome,contentId,children}) {
   return (
-    <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
+    <div style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2f5a)",borderBottom:"1px solid #2a4080",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
