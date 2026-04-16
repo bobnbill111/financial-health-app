@@ -77,6 +77,9 @@ const fmt = (n) => { const v=Number(n||0); return isNaN(v) ? "$0.00" : "$" + v.t
 const fmtShort = (n) => { const v=Number(n||0); if(isNaN(v)) return "$0"; if(v>=1e6) return "$"+(v/1e6).toFixed(1)+"M"; if(v>=1000) return "$"+(v/1000).toFixed(1)+"K"; return fmt(v); };
 const CAT_COLORS = ["#4ade80","#60a5fa","#facc15","#f87171","#a78bfa","#34d399","#fb923c","#e879f9","#94a3b8","#22d3ee"];
 const GS = { fontFamily:"Georgia,serif" };
+// Item 12: Strip commas/$ from pasted formatted numbers in onChange handlers
+const parseNum=(v)=>String(v).replace(/[$,\s]/g,"");
+
 const copyToClipboard = (text, setCopied) => {
   navigator.clipboard.writeText(text).then(()=>{
     setCopied(true);
@@ -100,16 +103,81 @@ const GLOBAL_CSS = `
     from { opacity:0; }
     to   { opacity:1; }
   }
-
-  /* ── Page fade-in ── */
-  .page-enter {
-    animation: fadeIn 0.22s ease both;
+  @keyframes slideInRight {
+    from { opacity:0; transform:translateX(40px); }
+    to   { opacity:1; transform:translateX(0); }
   }
+  @keyframes slideInLeft {
+    from { opacity:0; transform:translateX(-40px); }
+    to   { opacity:1; transform:translateX(0); }
+  }
+  @keyframes slideOutLeft {
+    from { opacity:1; transform:translateX(0); }
+    to   { opacity:0; transform:translateX(-40px); }
+  }
+  @keyframes scaleBounce {
+    0%   { opacity:0; transform:scale(0.3); }
+    60%  { transform:scale(1.15); }
+    80%  { transform:scale(0.95); }
+    100% { opacity:1; transform:scale(1); }
+  }
+  @keyframes countUp {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  @keyframes toastIn {
+    from { opacity:0; transform:translateY(16px) scale(0.95); }
+    to   { opacity:1; transform:translateY(0) scale(1); }
+  }
+  @keyframes toastOut {
+    from { opacity:1; transform:translateY(0) scale(1); }
+    to   { opacity:0; transform:translateY(-8px) scale(0.95); }
+  }
+  @keyframes spinnerPulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%     { opacity:0.5; transform:scale(0.85); }
+  }
+  @keyframes stepCrossFade {
+    from { opacity:0; transform:translateY(8px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+
+  /* ── Page transitions ── */
+  .page-enter { animation: fadeIn 0.22s ease both; }
+  .page-slide-in { animation: slideInRight 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+  .page-slide-back { animation: slideInLeft 0.28s cubic-bezier(0.22,1,0.36,1) both; }
+
+  /* ── Step cross-fade ── */
+  .step-enter { animation: stepCrossFade 0.2s ease both; }
+
+  /* ── Staggered card entrance ── */
+  .card-stagger { animation: fadeInUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+  .card-stagger:nth-child(1)  { animation-delay: 0ms; }
+  .card-stagger:nth-child(2)  { animation-delay: 50ms; }
+  .card-stagger:nth-child(3)  { animation-delay: 100ms; }
+  .card-stagger:nth-child(4)  { animation-delay: 150ms; }
+  .card-stagger:nth-child(5)  { animation-delay: 200ms; }
+  .card-stagger:nth-child(6)  { animation-delay: 250ms; }
+  .card-stagger:nth-child(7)  { animation-delay: 300ms; }
+  .card-stagger:nth-child(8)  { animation-delay: 350ms; }
+  .card-stagger:nth-child(9)  { animation-delay: 400ms; }
+  .card-stagger:nth-child(10) { animation-delay: 450ms; }
+
+  /* ── Score grade bounce ── */
+  .grade-bounce { animation: scaleBounce 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+
+  /* ── Animated number ── */
+  .num-update { animation: countUp 0.3s ease both; }
+
+  /* ── Toast notification ── */
+  .toast-enter { animation: toastIn 0.25s cubic-bezier(0.22,1,0.36,1) both; }
+  .toast-exit  { animation: toastOut 0.2s ease both; }
+
+  /* ── Spinner pulse ── */
+  .spinner-pulse { animation: spinnerPulse 1.4s ease-in-out infinite; }
 
   /* ── Tile entrance ── */
-  .tile-enter {
-    animation: fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both;
-  }
+  .tile-enter { animation: fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both; }
 
   /* ── Nav / tab buttons — underline style, no box ── */
   .glow-btn {
@@ -135,36 +203,29 @@ const GLOBAL_CSS = `
     transform: translateY(-1px) !important;
     box-shadow: none !important;
   }
-  .glow-btn:hover:not(.active-tab)::after {
-    width: 80%;
-    left: 10%;
-  }
-  .glow-btn:active {
-    transform: scale(0.97) translateY(0px) !important;
-    transition: transform 0.08s ease !important;
-  }
-  .glow-btn.active-tab {
-    color: #cc0000 !important;
-  }
-  .glow-btn.active-tab::after {
-    width: 100%;
-    left: 0;
-  }
+  .glow-btn:hover:not(.active-tab)::after { width: 80%; left: 10%; }
+  .glow-btn:active { transform: scale(0.97) translateY(0px) !important; transition: transform 0.08s ease !important; }
+  .glow-btn.active-tab { color: #cc0000 !important; }
+  .glow-btn.active-tab::after { width: 100%; left: 0; }
 
-  /* ── Regular action buttons (non-tab) ── */
+  /* ── Regular action buttons ── */
   .action-btn {
     transition: filter 0.18s ease, transform 0.12s ease !important;
     outline: none !important;
   }
-  .action-btn:hover {
-    filter: brightness(1.15) !important;
-    transform: translateY(-1px) !important;
+  .action-btn:hover { filter: brightness(1.15) !important; transform: translateY(-1px) !important; }
+  .action-btn:active { transform: scale(0.97) !important; transition: transform 0.08s ease !important; filter: brightness(0.95) !important; }
+
+  /* ── Tool card hover depth (item 30) ── */
+  .tool-card {
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
   }
-  .action-btn:active {
-    transform: scale(0.97) !important;
-    transition: transform 0.08s ease !important;
-    filter: brightness(0.95) !important;
+  .tool-card:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4) !important;
+    border-color: #2a4080 !important;
   }
+  .tool-card:active { transform: translateY(-1px) scale(0.98) !important; }
 
   /* ── Input focus glow ── */
   input:focus, select:focus, textarea:focus {
@@ -176,47 +237,94 @@ const GLOBAL_CSS = `
   button:focus:not(:focus-visible) { outline: none !important; }
   button:focus-visible { outline: 2px solid #cc0000 !important; outline-offset: 2px !important; }
 
-  /* ── Progress bar smooth easing ── */
-  .progress-bar {
-    transition: width 0.5s cubic-bezier(0.4,0,0.2,1) !important;
+  /* ── Progress bars ── */
+  .progress-bar { transition: width 0.5s cubic-bezier(0.4,0,0.2,1) !important; }
+
+  /* ── Dashboard tile hover ── */
+  .tile-card { transition: transform 0.2s ease, box-shadow 0.2s ease; will-change: transform; box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
+  .tile-hoverable:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(204,0,0,0.2), 0 4px 24px rgba(0,0,0,0.3); }
+
+  /* ── Empty/disabled states ── */
+  .empty-state { opacity: 0.55; border-style: dashed !important; background: #0a0f1e !important; }
+  button:disabled, button[disabled] { opacity: 0.45 !important; cursor: not-allowed !important; filter: grayscale(0.3) !important; }
+  .tile-dragover { transform: scale(1.02); }
+
+  /* ── Sticky footer gradient fade (item 31) ── */
+  .sticky-footer-fade::before {
+    content: '';
+    position: absolute;
+    top: -28px;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: linear-gradient(to top, #0a0f1e, transparent);
+    pointer-events: none;
   }
 
-  /* ── Dashboard tile hover — pure CSS, no JS ── */
-  .tile-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    will-change: transform;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-  }
-  .tile-hoverable:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 32px rgba(204,0,0,0.2), 0 4px 24px rgba(0,0,0,0.3);
-  }
-  .empty-state {
-    opacity: 0.55;
-    border-style: dashed !important;
-    background: #0a0f1e !important;
-  }
-  button:disabled, button[disabled] {
-    opacity: 0.45 !important;
-    cursor: not-allowed !important;
-    filter: grayscale(0.3) !important;
-  }
-  .tile-dragover {
-    transform: scale(1.02);
+  /* ── Chart empty state (item 28) ── */
+  .chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 160px;
+    color: #2a4080;
+    font-size: 12px;
+    gap: 8px;
   }
 
-  /* ── Mobile tile tap state ── */
+  /* ── Tooltip ── */
+  .info-tooltip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 1px solid #2a4080;
+    color: #6b8cce;
+    font-size: 9px;
+    cursor: pointer;
+    font-style: italic;
+    font-family: serif;
+  }
+  .info-tooltip .tooltip-text {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a2235;
+    border: 1px solid #2a4080;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: #8fadd4;
+    white-space: normal;
+    width: 200px;
+    line-height: 1.5;
+    z-index: 1000;
+    pointer-events: none;
+    font-style: normal;
+    font-family: Georgia, serif;
+  }
+  .info-tooltip:hover .tooltip-text,
+  .info-tooltip:focus .tooltip-text { display: block; }
+
+  /* ── Appointment stepper dots (item 23) ── */
+  .stepper-dots { display: none; }
+  @media (max-width: 480px) {
+    .appt-tabs { display: none !important; }
+    .stepper-dots { display: flex !important; }
+  }
+
+  /* ── Mobile grid ── */
   @media (max-width: 380px) {
-    .tools-grid {
-      grid-template-columns: 1fr 1fr !important;
-    }
+    .tools-grid { grid-template-columns: 1fr 1fr !important; }
+    .tool-label { font-size: 10px !important; }
   }
   @media (hover: none) {
-    .tile-card:active {
-      transform: scale(0.98) !important;
-      box-shadow: 0 4px 20px #cc000033 !important;
-      transition: transform 0.1s ease, box-shadow 0.1s ease !important;
-    }
+    .tile-card:active { transform: scale(0.98) !important; box-shadow: 0 4px 20px #cc000033 !important; transition: transform 0.1s ease, box-shadow 0.1s ease !important; }
   }
 `;
 
@@ -229,6 +337,53 @@ const GLOBAL_CSS = `
     document.head.appendChild(el);
   }
 })();
+
+// ─── SHARED MICRO-COMPONENTS ──────────────────────────────────────────────────
+// Item 20: Hover tooltip for inline explanations
+const InfoTip=({text})=>(
+  <span className="info-tooltip" tabIndex={0}>
+    i
+    <span className="tooltip-text">{text}</span>
+  </span>
+);
+
+// Item 4: Animated number — re-triggers animation key on value change
+function AnimatedNumber({value,format=v=>v,style={}}) {
+  const [key,setKey]=useState(0);
+  const [displayed,setDisplayed]=useState(value);
+  useEffect(()=>{setKey(k=>k+1);setDisplayed(value);},[value]);
+  return <span key={key} className="num-update" style={style}>{format(displayed)}</span>;
+}
+
+// Item 15: Toast notification system
+function Toast({message,type="success",onDone}) {
+  const [exiting,setExiting]=useState(false);
+  useEffect(()=>{
+    const t1=setTimeout(()=>setExiting(true),2200);
+    const t2=setTimeout(()=>onDone&&onDone(),2500);
+    return ()=>{clearTimeout(t1);clearTimeout(t2);};
+  },[]);
+  const colors={success:"#4ade80",error:"#f87171",info:"#60a5fa"};
+  return (
+    <div className={exiting?"toast-exit":"toast-enter"} style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:9999,background:"linear-gradient(135deg,#1a2235,#111827)",border:`1px solid ${colors[type]}44`,borderRadius:12,padding:"10px 20px",color:colors[type],fontSize:13,fontWeight:"bold",whiteSpace:"nowrap",boxShadow:`0 8px 32px ${colors[type]}22`,pointerEvents:"none",...GS}}>
+      {type==="success"?"✓ ":type==="error"?"✕ ":""}{message}
+    </div>
+  );
+}
+function useToast() {
+  const [toasts,setToasts]=useState([]);
+  const showToast=(message,type="success")=>{
+    const id=Date.now();
+    setToasts(p=>[...p,{id,message,type}]);
+  };
+  const removeToast=(id)=>setToasts(p=>p.filter(t=>t.id!==id));
+  const ToastContainer=()=>(
+    <>
+      {toasts.map(t=><Toast key={t.id} message={t.message} type={t.type} onDone={()=>removeToast(t.id)}/>)}
+    </>
+  );
+  return {showToast,ToastContainer};
+}
 
 // ─── DEFAULT STATE ─────────────────────────────────────────────────────────────
 const EMPTY = {
@@ -279,7 +434,7 @@ const EMPTY = {
 };
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────────
-const Card = ({children,style={}}) => <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14,...style}}>{children}</div>;
+const Card = ({children,style={}}) => <div className="card-stagger" style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px",marginBottom:14,...style}}>{children}</div>;
 const Label = ({children}) => <div style={{fontSize:10,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase",marginBottom:6,...GS}}>{children}</div>;
 const SecTitle = ({children,style={}}) => <div style={{fontSize:10,letterSpacing:3,color:"#6b8cce",textTransform:"uppercase",marginBottom:12,...GS,...style}}>{children}</div>;
 const NumInput = ({value,onChange,placeholder="0.00"}) => (
@@ -336,7 +491,11 @@ class ErrorBoundary extends React.Component {
 
 // ─── PDF GENERATOR ────────────────────────────────────────────────────────────
 function PDFBtn({title,contentId}) {
+  const [preparing,setPreparing]=useState(false);
   const handlePrint = () => {
+    setPreparing(true);
+    setTimeout(()=>{
+    setPreparing(false);
     const el = document.getElementById(contentId);
     if(!el) return;
     const w = window.open("","_blank");
@@ -347,10 +506,11 @@ function PDFBtn({title,contentId}) {
     </style></head><body>${el.innerHTML}</body></html>`);
     w.document.close();
     setTimeout(()=>w.print(),400);
+    },300);
   };
   return (
-    <button onClick={handlePrint} className="action-btn" style={{background:"none",border:"none",color:"#3a5080",cursor:"pointer",fontSize:12,padding:"4px 0",letterSpacing:0.5,...GS}}>
-      ↓ PDF
+    <button onClick={handlePrint} disabled={preparing} className="action-btn" style={{background:"none",border:"none",color:"#3a5080",cursor:"pointer",fontSize:12,padding:"4px 0",letterSpacing:0.5,...GS}}>
+      {preparing?"Preparing...":"↓ PDF"}
     </button>
   );
 }
@@ -648,9 +808,13 @@ export default function App() {
   const [authChecked,setAuthChecked]=useState(false);
   const [isGuest,setIsGuest]=useState(false);
   const [page,setPage]=useState("home");
+  const [pageDir,setPageDir]=useState("forward"); // "forward"|"back"
   const [dark,setDark]=useState(true);
   const [saving,setSaving]=useState(false);
-  const [isNewUser,setIsNewUser]=useState(false);
+  const {showToast,ToastContainer}=useToast();
+
+  const navigateTo=(p)=>{setPageDir("forward");setPage(p);};
+  const navigateBack=(p)=>{setPageDir("back");setPage(p);};
 
   const [data,setData]=useState(EMPTY);
   const [scoreHistory,setScoreHistory]=useState([]);
@@ -683,7 +847,9 @@ export default function App() {
     if(!user||!token) return;
     const t=setTimeout(()=>{
       setSaving(true);
-      supa.saveData(user.id,token,data,scoreHistory).finally(()=>setSaving(false));
+      supa.saveData(user.id,token,data,scoreHistory)
+        .then(()=>showToast("Saved","success"))
+        .finally(()=>setSaving(false));
     },1500);
     return ()=>clearTimeout(t);
   },[data,scoreHistory]);
@@ -736,7 +902,7 @@ export default function App() {
   if(!authChecked) return (
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",display:"flex",alignItems:"center",justifyContent:"center",...GS}}>
       <div style={{textAlign:"center"}}>
-        <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16}}>
+        <svg width="48" height="48" viewBox="0 0 160 160" style={{marginBottom:16}} className="spinner-pulse">
           <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
           <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
         </svg>
@@ -753,21 +919,23 @@ export default function App() {
     </div>
   );
 
+  const pageClass=pageDir==="forward"?"page-slide-in":"page-slide-back";
+
   return (
     <>
+      <ToastContainer/>
       {signOutBtn}
-      {/* Guest mode banner */}
       {isGuest&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#1a0a00,#0d1b3e)",borderTop:"1px solid #cc000044",padding:"10px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",zIndex:1000}}>
           <div style={{fontSize:12,color:"#facc15"}}>⚠️ Guest mode — your data won't be saved between sessions</div>
           <button onClick={()=>setIsGuest(false)} style={{background:"linear-gradient(135deg,#cc0000,#8b0000)",border:"none",borderRadius:8,padding:"6px 16px",color:"#fff",cursor:"pointer",fontSize:12,...GS}}>Sign Up Free</button>
         </div>
       )}
-      {page==="home"&&<Homepage onAppointment={()=>setPage("appointment")} onCheckup={()=>setPage("checkup")} onTools={()=>setPage("tools")} onProfile={()=>setPage("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
-      {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>setPage("home")} onCheckup={()=>setPage("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme}/>}
-      {page==="checkup"&&<Checkup data={data} onHome={()=>setPage("home")} onAppointment={()=>setPage("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token}/>}
-      {page==="tools"&&<IndividualTools onHome={()=>setPage("home")} data={data} totalInv={totalInv} theme={theme} user={user} token={token}/>}
-      {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>setPage("home")} onSignOut={handleSignOut} data={data}/>}
+      {page==="home"&&<Homepage onAppointment={()=>navigateTo("appointment")} onCheckup={()=>navigateTo("checkup")} onTools={()=>navigateTo("tools")} onProfile={()=>navigateTo("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
+      {page==="appointment"&&<div className={pageClass}><Appointment data={data} setData={setData} onHome={()=>navigateBack("home")} onCheckup={()=>navigateTo("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} showToast={showToast}/></div>}
+      {page==="checkup"&&<div className={pageClass}><Checkup data={data} onHome={()=>navigateBack("home")} onAppointment={()=>navigateBack("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token}/></div>}
+      {page==="tools"&&<div className={pageClass}><IndividualTools onHome={()=>navigateBack("home")} data={data} totalInv={totalInv} theme={theme} user={user} token={token}/></div>}
+      {page==="profile"&&<div className={pageClass}><ProfilePage user={user} token={token} onHome={()=>navigateBack("home")} onSignOut={handleSignOut} data={data}/></div>}
     </>
   );
 }
@@ -1744,7 +1912,7 @@ function IncomePanel({label,color,inc,setInc,monthlyNet,invMonthly}) {
 // ─── APPOINTMENT ──────────────────────────────────────────────────────────────
 const APPT_STEPS=["Start","Income","Accounts","Investments","Mortgage","Debt","Credit Cards","Line of Credit","Budget","Score"];
 
-function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,theme}) {
+function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,theme,showToast}) {
   const [step,setStep]=useState("Start");
   const set=(g,f)=>v=>setD(p=>({...p,[g]:{...p[g],[f]:v}}));
   const setIncome=f=>v=>setD(p=>({...p,income:{...p.income,[f]:v}}));
@@ -1781,15 +1949,25 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
     <div className="page-enter" style={{minHeight:"100vh",background:"#0a0f1e",color:"#e8e4d9",...GS}}>
       <NavBar title="Initial Appointment" subtitle="FinHealth" onHome={onHome} right={<div style={{fontSize:12,color:"#4ade80",...GS}}>Step {prog+1} of {APPT_STEPS.length}</div>}/>
       <div style={{height:3,background:"#1e3a5f"}}><div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#cc0000,#4ade80)",transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>
-      <div style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
+
+      {/* Tab bar — hidden on small screens */}
+      <div className="appt-tabs" style={{overflowX:"auto",display:"flex",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
         {APPT_STEPS.filter(s=>s!=="Start"&&s!=="Income"&&s!=="Score").map(s=>(
           <button key={s} onClick={()=>setStep(s)}
             className={`glow-btn${step===s?" active-tab":""}`}
             style={{background:"none",border:"none",borderBottom:step===s?"2px solid #cc0000":"2px solid transparent",color:step===s?"#cc0000":"#8fadd4",padding:"8px 11px",fontSize:10,letterSpacing:1,cursor:"pointer",whiteSpace:"nowrap",...GS}}>{s}</button>
         ))}
       </div>
-      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}} ref={contentRef} id="appt-content">
 
+      {/* Stepper dots — shown on small screens */}
+      <div className="stepper-dots" style={{justifyContent:"center",gap:6,padding:"10px 16px",background:"#0d1b3e",borderBottom:"1px solid #1e3a5f"}}>
+        {APPT_STEPS.map((s,i)=>(
+          <button key={s} onClick={()=>setStep(s)} style={{width:i===prog?20:8,height:8,borderRadius:4,background:i===prog?"#cc0000":i<prog?"#4ade8088":"#1e3a5f",border:"none",cursor:"pointer",padding:0,transition:"all 0.2s"}}/>
+        ))}
+      </div>
+
+      <div style={{padding:"16px",maxWidth:520,margin:"0 auto"}} ref={contentRef} id="appt-content">
+        <div key={step} className="step-enter">
         {step==="Start"&&(
           <div>
             <div style={{textAlign:"center",padding:"24px 0 16px"}}><div style={{fontSize:38,marginBottom:10}}>📋</div><h2 style={{fontSize:24,color:"#fff",margin:"0 0 8px",fontWeight:"normal"}}>Initial Appointment</h2><p style={{fontSize:13,color:"#8fadd4",lineHeight:1.8,margin:"0 0 20px"}}>We'll walk through your finances step by step. Takes about 10 minutes.</p></div>
@@ -2174,9 +2352,9 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
             <div id="score-content">
               <Card style={{textAlign:"center",padding:"28px 16px",background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:`1px solid ${score.gradeColor}44`}}>
                 <div style={{fontSize:11,color:"#6b8cce",letterSpacing:3,marginBottom:12}}>FINANCIAL HEALTH SCORE</div>
-                <div style={{fontSize:80,color:score.gradeColor,fontWeight:"bold",lineHeight:1,marginBottom:8,textShadow:`0 0 24px ${score.gradeColor}88`}}>{score.grade}</div>
-                <div style={{fontSize:32,color:"#e8e4d9",marginBottom:6}}>{score.total}<span style={{fontSize:16,color:"#6b8cce"}}>/100</span></div>
-                <div style={{fontSize:12,color:"#6b8cce"}}>Ontario benchmarks · {score.band} age group · {new Date().toLocaleDateString("en-CA")}</div>
+                <div style={{fontSize:80,color:score.gradeColor,fontWeight:"bold",lineHeight:1,marginBottom:8,textShadow:`0 0 24px ${score.gradeColor}88`}} className="grade-bounce">{score.grade}</div>
+                <div style={{fontSize:32,color:"#e8e4d9",marginBottom:6}}><AnimatedNumber value={score.total}/><span style={{fontSize:16,color:"#6b8cce"}}>/100</span></div>
+                <div style={{fontSize:12,color:"#6b8cce",display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>Ontario benchmarks · {score.band} age group <InfoTip text="Your score is benchmarked against Canadians in their same decade. Ranges and targets adjust automatically."/> · {new Date().toLocaleDateString("en-CA")}</div>
               </Card>
               <Card>
                 <SecTitle>Score Breakdown</SecTitle>
@@ -2214,7 +2392,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
 
               <PDFBtn title={`Financial Score - ${d.clientName||"Report"}`} contentId="score-content"/>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-                <button onClick={()=>{saveScore(score);onCheckup();}} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>Save & Dashboard →</button>
+                <button onClick={()=>{saveScore(score);showToast&&showToast("Appointment complete! 🎉","success");onCheckup();}} style={{background:"linear-gradient(135deg,#0d2a1a,#0d1b3e)",border:"1px solid #4ade80",borderRadius:12,padding:"14px",color:"#4ade80",fontSize:13,cursor:"pointer",...GS}}>Save & Dashboard →</button>
                 <button onClick={onHome} style={{background:"none",border:"1px solid #1e3a5f",borderRadius:12,padding:"14px",color:"#8fadd4",fontSize:13,cursor:"pointer",...GS}}>← Home</button>
               </div>
 
@@ -2225,6 +2403,7 @@ function Appointment({data:d,setData:setD,onHome,onCheckup,saveScore,totalInv,th
             <div style={{textAlign:"center",padding:"40px 0"}}><div style={{fontSize:40,marginBottom:16}}>⚠️</div><p style={{color:"#8fadd4"}}>Please enter your age in the Start section to generate a score.</p><NextBtn onClick={()=>setStep("Start")}>Go to Start</NextBtn></div>
           )
         )}
+        </div>{/* end step-enter */}
       </div>
     </div>
   );
@@ -2274,7 +2453,7 @@ function ScoreHistory({history,currentScore,onSave}) {
       </Card>
 
       {/* Trend chart */}
-      {sorted.length>1&&(
+      {sorted.length>1?(
         <Card>
           <SecTitle>Score Trend</SecTitle>
           <ResponsiveContainer width="100%" height={180}>
@@ -2291,6 +2470,8 @@ function ScoreHistory({history,currentScore,onSave}) {
             </LineChart>
           </ResponsiveContainer>
         </Card>
+      ):(
+        <Card><div className="chart-empty"><span style={{fontSize:28}}>📈</span><span>Save your score monthly to see your trend</span></div></Card>
       )}
 
       {/* History table */}
@@ -2705,6 +2886,7 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
   const income=Number(d.budget.income||0);
   const totalAlloc=d.budget.categories.reduce((s,c)=>s+Number(c.amount||0),0);
   const score=calcScore(debouncedD,totalInv);
+  const hasAppointmentData=!!(d.clientName||income>0||totalInv>0);
   const surplus=income-totalAlloc;
   const grossMonthly=Number(d.income?.grossSalary||0)>0?Number(d.income.grossSalary)/12:income;
   const invMonthly=Number(d.budget.investmentMonthly||0);
@@ -2789,12 +2971,22 @@ function Checkup({data:d,onHome,onAppointment,totalInv,scoreHistory,saveScore,th
 
       <div id="dashboard-content" style={{padding:"24px 28px",maxWidth:1400,margin:"0 auto"}}>
 
-        {/* ── Row 1: Stat cards ── */}
+        {/* Item 7: Start Here prompt when no appointment data */}
+        {!hasAppointmentData&&(
+          <div style={{background:"linear-gradient(135deg,#0d1b3e,#1a2235)",border:"1px solid #cc000044",borderRadius:16,padding:"28px 24px",marginBottom:20,textAlign:"center"}}>
+            <div style={{fontSize:36,marginBottom:12}}>📋</div>
+            <div style={{fontSize:18,color:"#e8e4d9",fontWeight:"bold",marginBottom:8,...GS}}>Start Your Financial Picture</div>
+            <div style={{fontSize:13,color:"#8fadd4",lineHeight:1.8,marginBottom:20,maxWidth:420,margin:"0 auto 20px"}}>Complete the Check-Up Appointment to unlock your full dashboard — net worth, score, portfolio breakdown and more.</div>
+            <button onClick={onAppointment} className="action-btn" style={{background:"linear-gradient(135deg,#cc0000,#8b0000)",border:"none",borderRadius:12,padding:"14px 32px",color:"#fff",fontSize:15,cursor:"pointer",fontWeight:"bold",...GS}}>
+              Start Appointment →
+            </button>
+          </div>
+        )}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:20}}>
           {/* Net Worth */}
           <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 24px",textAlign:"center"}}>
             <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>NET WORTH</div>
-            <div style={{fontSize:36,color:netWorth>=0?"#4ade80":"#f87171",fontWeight:"bold",...GS,lineHeight:1}}>{fmtShort(netWorth)}</div>
+            <div style={{fontSize:36,color:netWorth>=0?"#4ade80":"#f87171",fontWeight:"bold",...GS,lineHeight:1}}><AnimatedNumber value={netWorth} format={fmtShort}/></div>
             <div style={{fontSize:11,color:"#6b8cce",marginTop:4}}>{fmt(netWorth)}</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
               <div style={{background:"#0d1b3e",borderRadius:8,padding:"8px"}}><div style={{fontSize:9,color:"#6b8cce",marginBottom:2}}>ASSETS</div><div style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>{fmtShort(totalAssets)}</div></div>
@@ -3175,9 +3367,11 @@ function DebtOptimizer({creditCards,otherDebts,locs}) {
           <button onClick={addDebt} className="action-btn" style={{background:"#0d2a1a",border:"1px solid #4ade8066",borderRadius:8,padding:"5px 12px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>+ Add Debt</button>
         </div>
         {debts.length===0&&(
-          <div style={{textAlign:"center",padding:"20px",color:"#6b8cce",fontSize:12,lineHeight:1.8}}>
-            No debts loaded — click <strong style={{color:"#4ade80"}}>+ Add Debt</strong> to enter manually.
-            <div style={{fontSize:10,marginTop:4}}>Credit cards set to pay-in-full are excluded.</div>
+          <div style={{textAlign:"center",padding:"24px 16px"}}>
+            <div style={{fontSize:32,marginBottom:10}}>🔗</div>
+            <div style={{fontSize:14,color:"#e8e4d9",fontWeight:"bold",marginBottom:6,...GS}}>No debts loaded</div>
+            <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.8,marginBottom:4}}>Click <strong style={{color:"#4ade80"}}>+ Add Debt</strong> to enter manually</div>
+            <div style={{fontSize:10,color:"#4a5a6a"}}>Credit cards set to pay-in-full are excluded</div>
           </div>
         )}
         {debts.map((debt,i)=>(
@@ -3861,7 +4055,7 @@ function RetirementNumber({prefill=null,totalInv=0}) {
           <Card>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:softRetire?14:0}}>
               <div>
-                <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>Soft Retirement</div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>Soft Retirement</div><InfoTip text="Retire early at reduced hours with part-time income bridging the gap until full retirement age. Reduces your required portfolio size significantly."/></div>
                 <div style={{fontSize:10,color:"#6b8cce",marginTop:2}}>Retire early with part-time income as a bridge</div>
               </div>
               <button onClick={()=>setSoftRetire(p=>!p)} className="action-btn"
@@ -4023,10 +4217,11 @@ function RetirementNumber({prefill=null,totalInv=0}) {
       )}
 
       {tab==="results"&&mn===0&&(
-        <div style={{textAlign:"center",padding:"40px 20px",color:"#6b8cce"}}>
-          <div style={{fontSize:32,marginBottom:12}}>🎯</div>
-          <div style={{fontSize:14,marginBottom:8}}>Enter your monthly needs in the Inputs tab first</div>
-          <button onClick={()=>setTab("inputs")} className="action-btn" style={{background:"#1a2235",border:"1px solid #1e3a5f",borderRadius:8,padding:"8px 20px",color:"#e8e4d9",cursor:"pointer",fontSize:13,...GS}}>← Go to Inputs</button>
+        <div style={{textAlign:"center",padding:"40px 20px"}}>
+          <div style={{fontSize:40,marginBottom:14}}>🎯</div>
+          <div style={{fontSize:16,color:"#e8e4d9",fontWeight:"bold",marginBottom:8,...GS}}>No results yet</div>
+          <div style={{fontSize:13,color:"#6b8cce",lineHeight:1.7,marginBottom:20}}>Fill in your monthly retirement needs and assumptions in the Inputs tab to calculate your number.</div>
+          <button onClick={()=>setTab("inputs")} className="action-btn" style={{background:"linear-gradient(135deg,#1a4080,#0d2a5e)",border:"1px solid #2a4080",borderRadius:10,padding:"12px 28px",color:"#4ade80",cursor:"pointer",fontSize:14,...GS}}>← Go to Inputs</button>
         </div>
       )}
 
@@ -4135,11 +4330,12 @@ function IndividualTools({onHome,data,totalInv,user,token}) {
               <div className="tools-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                 {groupTools.map(t=>(
                   <button key={t.id} onClick={()=>setTool(t.id)}
-                    className="action-btn"
+                    className="action-btn tool-card"
+                    title={t.label}
                     style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:14,padding:"16px 10px 14px",cursor:"pointer",textAlign:"center",color:"#e8e4d9",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:6,...GS}}>
                     <div style={{fontSize:28,lineHeight:1,marginBottom:2}}>{t.icon}</div>
-                    <div style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS}}>{t.label}</div>
-                    <div style={{fontSize:10,color:"#8fadd4",lineHeight:1.5}}>{t.sub}</div>
+                    <div className="tool-label" style={{fontSize:12,fontWeight:"bold",color:"#e8e4d9",lineHeight:1.3,...GS,width:"100%",overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.label}</div>
+                    <div style={{fontSize:10,color:"#8fadd4",lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.sub}</div>
                   </button>
                 ))}
               </div>
@@ -4349,7 +4545,7 @@ function MoneyFlowMap({data}) {
           {/* Arrows from sources to accounts */}
           {state.flows.filter(f=>state.sources.find(s=>s.id===f.from)).map(f=>(
             <div key={f.id} style={{textAlign:"center",marginBottom:6}}>
-              <div style={{fontSize:20,color:"#cc000088",lineHeight:1}}>↓</div>
+              <div style={{fontSize:20,color:"color-mix(in srgb, #cc0000 53%, transparent)",lineHeight:1}}>↓</div>
               <div style={{fontSize:11,color:"#6b8cce"}}>{f.label&&<span>{f.label}</span>} {f.amount&&<span style={{color:"#facc15",fontWeight:"bold",...GS}}>{fmt(Number(f.amount))}</span>}</div>
             </div>
           ))}
@@ -5123,6 +5319,17 @@ function MortgageQualifier({data}) {
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [showBreakdown,setShowBreakdown]=useState(false);
   const [copied,setCopied]=useState(false);
+  const [openSections,setOpenSections]=useState({income:true,mortgage:true,property:false,debts:false,params:false});
+  const toggleSection=(s)=>setOpenSections(p=>({...p,[s]:!p[s]}));
+  const SectionToggle=({id,title,children})=>(
+    <Card style={{padding:0,overflow:"hidden"}}>
+      <button onClick={()=>toggleSection(id)} style={{width:"100%",background:"none",border:"none",padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",color:"#e8e4d9",...GS}}>
+        <span style={{fontSize:11,letterSpacing:2,color:"#6b8cce",textTransform:"uppercase"}}>{title}</span>
+        <span style={{color:"#6b8cce",fontSize:14,transition:"transform 0.2s",transform:openSections[id]?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+      </button>
+      {openSections[id]&&<div style={{padding:"0 16px 16px"}}>{children}</div>}
+    </Card>
+  );
 
   // ── Calculations ───────────────────────────────────────────────────────────
   // Qualifying income
@@ -5210,8 +5417,7 @@ function MortgageQualifier({data}) {
         </button>
       </div>
       {/* ── Income ── */}
-      <Card>
-        <SecTitle>Income</SecTitle>
+      <SectionToggle id="income" title="Income">
         <div style={{fontSize:11,color:"#6b8cce",marginBottom:10}}>Enter <strong style={{color:"#e8e4d9"}}>gross annual</strong> income before taxes.</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div><Label>Applicant 1 Income</Label>{dollarInput(income1,setIncome1,"85,000","#4ade80")}</div>
@@ -5237,11 +5443,9 @@ function MortgageQualifier({data}) {
         {grossMonthly>0&&<div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
           Qualifying gross income: <span style={{color:"#4ade80",...GS}}>{fmt(grossMonthly)}/mo</span> ({fmt(grossAnnual)}/yr)
         </div>}
-      </Card>
+      </SectionToggle>
 
-      {/* ── Mortgage ── */}
-      <Card>
-        <SecTitle>Mortgage</SecTitle>
+      <SectionToggle id="mortgage" title="Mortgage">
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div><Label>Down Payment</Label>{dollarInput(downPayment,setDownPayment,"50,000","#60a5fa")}</div>
           <div>
@@ -5270,11 +5474,9 @@ function MortgageQualifier({data}) {
           Stress test rate: <span style={{color:"#f87171",...GS}}>{stressRate.toFixed(2)}%</span>
           <span style={{color:"#4a5a6a",marginLeft:6}}>(max of {cr}% + 2% = {(cr+2).toFixed(2)}% vs benchmark {bm}%)</span>
         </div>
-      </Card>
+      </SectionToggle>
 
-      {/* ── Property Costs ── */}
-      <Card>
-        <SecTitle>Property Costs</SecTitle>
+      <SectionToggle id="property" title="Property Costs">
         {/* Property tax toggle */}
         <div style={{marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -5328,10 +5530,9 @@ function MortgageQualifier({data}) {
           Non-mortgage housing costs: <span style={{color:"#e8e4d9",...GS}}>{fmt(otherHousing)}/mo</span>
           <span style={{color:"#4a5a6a",marginLeft:6}}>(tax {fmt(propTaxMonthly)} + heat {fmt(monthlyHeat)} + 50% condo {fmt(monthlyCondo)})</span>
         </div>}
-      </Card>
+      </SectionToggle>
 
-      {/* ── Monthly Debts ── */}
-      <Card>
+      <SectionToggle id="debts" title="Monthly Debt Obligations">
         <SecTitle>Monthly Debt Obligations</SecTitle>
         <div style={{fontSize:11,color:"#6b8cce",marginBottom:10}}>All existing debt payments that appear on your credit bureau.</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -5355,10 +5556,9 @@ function MortgageQualifier({data}) {
         {debtPayments>0&&<div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
           Total monthly debts: <span style={{color:"#f87171",...GS}}>{fmt(debtPayments)}/mo</span>
         </div>}
-      </Card>
+      </SectionToggle>
 
-      {/* ── Parameters ── */}
-      <Card>
+      <SectionToggle id="params" title="Qualifying Parameters">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <SecTitle style={{marginBottom:0}}>Qualifying Parameters</SecTitle>
           <div style={{fontSize:10,color:"#6b8cce"}}>OSFI defaults</div>
@@ -5381,7 +5581,7 @@ function MortgageQualifier({data}) {
             <div style={{fontSize:9,color:"#6b8cce",marginTop:3}}>Total Debt Service — default 44%</div>
           </div>
         </div>
-      </Card>
+      </SectionToggle>
 
       {/* ── Results ── */}
       {grossMonthly>0&&(
@@ -5542,6 +5742,7 @@ function CanadianTaxEstimator({data}) {
   const [salary2,setSalary2]=useState(String(Math.round(prefillSalary2))||"");
   const [province,setProvince]=useState("ON");
   const [rrspContrib,setRrspContrib]=useState("");
+  const [fhsaContrib,setFhsaContrib]=useState("");
 
   const PROVINCES=[
     {val:"ON",label:"Ontario"},
@@ -5589,30 +5790,36 @@ function CanadianTaxEstimator({data}) {
   };
 
   const fedBPA=16129; // 2025 BPA (max, for income under $177,882)
-  const calcPerson=(salaryStr,rrspStr)=>{
-    const g=Math.max(0,Number(salaryStr||0)-Math.min(Number(rrspStr||0),Number(salaryStr||0)*0.18));
-    const ft=Math.max(0,calcTax(g,fedBrackets)-fedBPA*0.145); // 14.5% credit on BPA
+  const fhsaMax=8000; // 2025 annual FHSA limit
+  const calcPerson=(salaryStr,rrspStr,fhsaStr="0")=>{
+    const rawSalary=Math.max(0,Number(salaryStr||0));
+    const rrspDed=Math.min(Number(rrspStr||0),rawSalary*0.18);
+    const fhsaDed=Math.min(Number(fhsaStr||0),fhsaMax);
+    const g=Math.max(0,rawSalary-rrspDed-fhsaDed);
+    const ft=Math.max(0,calcTax(g,fedBrackets)-fedBPA*0.145);
     const pt=calcTax(g,provBrackets[province]||provBrackets.ON);
-    const cpp=g>0?Math.min((Math.min(g,71300)-3500)*0.0595,4034):0; // 2025: YMPE $71,300, max $4,034
-    const ei=Math.min(g*0.01664,114750*0.01664); // 2025 EI rate 1.664%
+    const cpp=rawSalary>0?Math.min((Math.min(rawSalary,71300)-3500)*0.0595,4034):0;
+    const ei=Math.min(rawSalary*0.01664,114750*0.01664);
     const total=ft+pt+cpp+ei;
-    return {gross:g,fedTax:ft,provTax:pt,cpp,ei,total,netAnnual:Math.max(0,g-total),netMonthly:Math.max(0,g-total)/12,effectiveRate:g>0?(total/g)*100:0};
+    return {gross:g,rawSalary,fedTax:ft,provTax:pt,cpp,ei,total,netAnnual:Math.max(0,rawSalary-total),netMonthly:Math.max(0,rawSalary-total)/12,effectiveRate:rawSalary>0?(total/rawSalary)*100:0,rrspDed,fhsaDed};
   };
-  const p1=calcPerson(salary,rrspContrib);
-  const p2=isJoint?calcPerson(salary2,""):null;
-  const gross=p1.gross;
+  const p1=calcPerson(salary,rrspContrib,fhsaContrib);
+  const p2=isJoint?calcPerson(salary2,"",""):null;
+  const gross=p1.rawSalary;
   const netMonthly=p1.netMonthly;
   const netAnnual=p1.netAnnual;
   const effectiveRate=p1.effectiveRate;
-  const marginalFed=p1.gross>253414?33:p1.gross>177882?29:p1.gross>114750?26:p1.gross>57375?20.5:14.5;
+  const marginalFed=gross>253414?33:gross>177882?29:gross>114750?26:gross>57375?20.5:14.5;
   const fedTax=p1.fedTax, provTax=p1.provTax, cpp=p1.cpp, ei=p1.ei;
-  const rrsp=Math.min(Number(rrspContrib||0),gross*0.18);
+  const rrsp=p1.rrspDed;
+  const fhsa=p1.fhsaDed;
+  const totalDeductions=rrsp+fhsa;
   const provBracketData=provBrackets[province]||provBrackets.ON;
 
   return (
     <div>
       <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}>
-        <button onClick={()=>{setSalary(String(Math.round(prefillSalary))||"");setSalary2(String(Math.round(prefillSalary2))||"");setProvince("ON");setRrspContrib("");}}
+        <button onClick={()=>{setSalary(String(Math.round(prefillSalary))||"");setSalary2(String(Math.round(prefillSalary2))||"");setProvince("ON");setRrspContrib("");setFhsaContrib("");}}
           className="action-btn" style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"5px 12px",color:"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>
           ↺ Reset
         </button>
@@ -5620,7 +5827,10 @@ function CanadianTaxEstimator({data}) {
       <Card>
         <SecTitle>{isJoint?`${name1}'s Income`:"Your Income"}</SecTitle>
         <div style={{marginBottom:12}}>
-          <Label>Gross Annual Salary</Label>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+            <Label>Gross Annual Salary</Label>
+            <InfoTip text="Gross income is before any taxes or deductions. Net (take-home) is what lands in your bank account after CPP, EI, and income tax."/>
+          </div>
           <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #4ade8066",borderRadius:10,padding:"12px 14px"}}>
             <span style={{color:"#6b8cce",marginRight:6,fontSize:16}}>$</span>
             <input type="number" value={salary} onChange={e=>setSalary(e.target.value)} placeholder="80,000"
@@ -5634,15 +5844,31 @@ function CanadianTaxEstimator({data}) {
             {PROVINCES.map(p=><option key={p.val} value={p.val}>{p.label}</option>)}
           </select>
         </div>
-        <div>
-          <Label>RRSP Contribution (optional)</Label>
-          <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
-            <span style={{color:"#6b8cce",marginRight:4}}>$</span>
-            <input type="number" value={rrspContrib} onChange={e=>setRrspContrib(e.target.value)} placeholder="0"
-              style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:15,width:"100%",...GS}}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <Label>RRSP Contribution</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" inputMode="decimal" autoComplete="off" value={rrspContrib} onChange={e=>setRrspContrib(e.target.value)} placeholder="0"
+                style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:15,width:"100%",...GS}}/>
+            </div>
+            {rrsp>0&&<div style={{fontSize:10,color:"#a78bfa",marginTop:3}}>Deduction: {fmt(rrsp)}</div>}
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:2}}>Max 18% of prior yr income · $32,490</div>
           </div>
-          {rrsp>0&&<div style={{fontSize:10,color:"#a78bfa",marginTop:4}}>Reduces taxable income by {fmt(rrsp)}</div>}
+          <div>
+            <Label>FHSA Contribution</Label>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
+              <span style={{color:"#6b8cce",marginRight:4}}>$</span>
+              <input type="number" inputMode="decimal" autoComplete="off" value={fhsaContrib} onChange={e=>setFhsaContrib(e.target.value)} placeholder="0"
+                style={{background:"none",border:"none",outline:"none",color:"#22d3ee",fontSize:15,width:"100%",...GS}}/>
+            </div>
+            {fhsa>0&&<div style={{fontSize:10,color:"#22d3ee",marginTop:3}}>Deduction: {fmt(fhsa)}</div>}
+            <div style={{fontSize:9,color:"#6b8cce",marginTop:2}}>Annual max $8,000 · lifetime $40,000</div>
+          </div>
         </div>
+        {totalDeductions>0&&<div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#6b8cce"}}>
+          Total deductions: <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalDeductions)}</span> · taxable income reduced to <span style={{color:"#4ade80",...GS}}>{fmt(p1.gross)}</span>
+        </div>}
       </Card>
 
       {/* Person 2 — joint only */}
@@ -5711,6 +5937,7 @@ function CanadianTaxEstimator({data}) {
               {label:"CPP Contributions",val:-cpp,color:"#facc15"},
               {label:"EI Premiums",val:-ei,color:"#facc15"},
               ...(rrsp>0?[{label:"RRSP Deduction",val:-rrsp,color:"#a78bfa"}]:[]),
+              ...(fhsa>0?[{label:"FHSA Deduction",val:-fhsa,color:"#22d3ee"}]:[]),
               {label:"Net Annual Income",val:netAnnual,color:"#4ade80",bold:true,border:true},
               {label:"Net Monthly Income",val:netMonthly,color:"#4ade80",bold:true},
             ].map((row,i)=>(
@@ -5723,37 +5950,56 @@ function CanadianTaxEstimator({data}) {
             ))}
           </Card>
 
-          {/* RRSP Savings Slider */}
+          {/* RRSP + FHSA Savings Sliders */}
           {gross>0&&(
             <Card>
-              <SecTitle>RRSP Tax Savings</SecTitle>
-              <div style={{fontSize:11,color:"#6b8cce",marginBottom:12,lineHeight:1.6}}>
-                Drag to see how contributing to your RRSP reduces your tax bill in real time.
+              <SecTitle>Deduction Tax Savings</SecTitle>
+              <div style={{fontSize:11,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>
+                Drag to see how RRSP and FHSA contributions reduce your tax bill in real time.
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                <span style={{fontSize:12,color:"#a78bfa"}}>RRSP Contribution</span>
-                <span style={{fontSize:14,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(Math.min(Number(rrspContrib||0),gross*0.18))}</span>
+              <div style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontSize:12,color:"#a78bfa"}}>RRSP Contribution</span>
+                  <span style={{fontSize:13,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(rrsp)}</span>
+                </div>
+                <input type="range" min={0} max={Math.round(Math.min(gross*0.18,32490))} step={100}
+                  value={Number(rrspContrib||0)}
+                  onChange={e=>setRrspContrib(e.target.value)}
+                  style={{width:"100%",accentColor:"#a78bfa",marginBottom:4}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#4a5a6a"}}>
+                  <span>$0</span><span>Max: {fmt(Math.min(gross*0.18,32490))}</span>
+                </div>
               </div>
-              <input type="range" min={0} max={Math.round(Math.min(gross*0.18,32490))} step={100}
-                value={Number(rrspContrib||0)}
-                onChange={e=>setRrspContrib(e.target.value)}
-                style={{width:"100%",accentColor:"#a78bfa",marginBottom:8}}/>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#2a4080",marginBottom:14}}>
-                <span>$0</span><span>Max: {fmt(Math.min(gross*0.18,31560))}</span>
+              <div style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontSize:12,color:"#22d3ee"}}>FHSA Contribution</span>
+                  <span style={{fontSize:13,color:"#22d3ee",fontWeight:"bold",...GS}}>{fmt(fhsa)}</span>
+                </div>
+                <input type="range" min={0} max={8000} step={100}
+                  value={Number(fhsaContrib||0)}
+                  onChange={e=>setFhsaContrib(e.target.value)}
+                  style={{width:"100%",accentColor:"#22d3ee",marginBottom:4}}/>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#4a5a6a"}}>
+                  <span>$0</span><span>Max: {fmt(8000)}/yr</span>
+                </div>
               </div>
-              {Number(rrspContrib||0)>0&&(()=>{
-                const withRRSP=calcPerson(salary,rrspContrib);
-                const withoutRRSP=calcPerson(salary,"0");
-                const saved=withoutRRSP.total-withRRSP.total;
+              {totalDeductions>0&&(()=>{
+                const withDed=calcPerson(salary,rrspContrib,fhsaContrib);
+                const withoutDed=calcPerson(salary,"0","0");
+                const saved=withoutDed.total-withDed.total;
                 return (
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                    <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>TOTAL DEDUCTIONS</div>
+                      <div style={{fontSize:16,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalDeductions)}</div>
+                    </div>
                     <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
                       <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>TAX SAVED</div>
-                      <div style={{fontSize:20,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(saved)}</div>
+                      <div style={{fontSize:16,color:"#facc15",fontWeight:"bold",...GS}}>{fmt(saved)}</div>
                     </div>
                     <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px",textAlign:"center"}}>
                       <div style={{fontSize:9,color:"#6b8cce",marginBottom:4}}>NEW TAKE-HOME</div>
-                      <div style={{fontSize:20,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(withRRSP.netMonthly)}/mo</div>
+                      <div style={{fontSize:16,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(withDed.netMonthly)}/mo</div>
                     </div>
                   </div>
                 );
@@ -5796,159 +6042,253 @@ function CanadianTaxEstimator({data}) {
   );
 }
 function CanadianBenchmarks({score,data,totalInv,netWorth,income,totalAlloc}) {
-  const age=Number(data.age1||0);
-  if(!age||!income) return null;
-  const band=score.band||"30s";
-
-  // Canadian benchmark data by age group (2024 estimates)
-  // Sources: Stats Canada, FCAC, RBC Financial Independence Poll
-  const BENCHMARKS={
-    "20s":{
-      medianNetWorth:22000, medianInv:8000, medianSavingsRate:5,
-      medianEmergFund:1.2, medianDebtRatio:35,
-      top25NW:65000, top10NW:120000,
-    },
-    "30s":{
-      medianNetWorth:110000, medianInv:45000, medianSavingsRate:8,
-      medianEmergFund:2.1, medianDebtRatio:28,
-      top25NW:280000, top10NW:520000,
-    },
-    "40s":{
-      medianNetWorth:285000, medianInv:120000, medianSavingsRate:10,
-      medianEmergFund:2.8, medianDebtRatio:22,
-      top25NW:650000, top10NW:1200000,
-    },
-    "50s":{
-      medianNetWorth:520000, medianInv:250000, medianSavingsRate:12,
-      medianEmergFund:3.5, medianDebtRatio:15,
-      top25NW:1100000, top10NW:2200000,
-    },
-    "60s":{
-      medianNetWorth:750000, medianInv:380000, medianSavingsRate:14,
-      medianEmergFund:4.0, medianDebtRatio:8,
-      top25NW:1600000, top10NW:3000000,
-    },
-  };
-
-  const bm=BENCHMARKS[band]||BENCHMARKS["30s"];
-  const monthlyExp=totalAlloc;
-  const efund=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
-  const efundMonths=monthlyExp>0?efund/monthlyExp:0;
-  const grossMonthly=Number(data.income?.grossSalary||0)>0?Number(data.income.grossSalary)/12:income;
-  const invMonthly=Number(data.budget.investmentMonthly||0);
-  const savingsRate=grossMonthly>0?(invMonthly/grossMonthly)*100:0;
-  const totalDebt=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
+  const prefillAge=Number(data.age1||0);
+  const prefillNetWorth=netWorth;
+  const prefillInv=totalInv;
+  const prefillIncome=income;
+  const monthlyExpCalc=totalAlloc;
+  const efundCalc=(data.savingsAccounts||[]).reduce((s,a)=>s+Number(a.saved||0),0);
+  const grossMonthlyCalc=Number(data.income?.grossSalary||0)>0?Number(data.income.grossSalary)/12:income;
+  const invMonthlyCalc=Number(data.budget.investmentMonthly||0);
+  const totalDebtCalc=(data.otherDebts||[]).reduce((s,x)=>s+Number(x.balance||0),0)
     +(data.locs||[]).reduce((s,l)=>s+Number(l.balance||0),0)
     +(data.creditCards||[]).filter(c=>!c.payInFull).reduce((s,c)=>s+Number(c.totalBalance||0),0);
-  const annualIncome=income*12;
-  const debtRatio=annualIncome>0?(totalDebt/annualIncome)*100:0;
 
-  // Percentile calculator — simplified
-  const getPercentile=(val,median,top25,top10)=>{
-    if(val<=0) return {pct:0,standing:"Below median",color:"#f87171"};
-    if(val>=top10) return {pct:95,standing:"Top 10%",color:"#4ade80"};
-    if(val>=top25) return {pct:80,standing:"Top 25%",color:"#4ade80"};
-    if(val>=median) return {pct:60,standing:"Above median",color:"#facc15"};
-    if(val>=median*0.5) return {pct:35,standing:"Below median",color:"#fb923c"};
-    return {pct:15,standing:"Bottom 25%",color:"#f87171"};
+  // Editable overrides
+  const [ageInput,setAgeInput]=useState(String(prefillAge||""));
+  const [nwInput,setNwInput]=useState(String(Math.round(prefillNetWorth)));
+  const [invInput,setInvInput]=useState(String(Math.round(prefillInv)));
+  const [incomeInput,setIncomeInput]=useState(String(Math.round(prefillIncome)));
+  const [savingsRateInput,setSavingsRateInput]=useState(grossMonthlyCalc>0?String((invMonthlyCalc/grossMonthlyCalc*100).toFixed(1)):"");
+  const [efundMonthsInput,setEfundMonthsInput]=useState(monthlyExpCalc>0?String((efundCalc/monthlyExpCalc).toFixed(1)):"");
+  const [debtRatioInput,setDebtRatioInput]=useState(prefillIncome*12>0?String((totalDebtCalc/(prefillIncome*12)*100).toFixed(0)):"");
+  const [editing,setEditing]=useState(!prefillAge);
+
+  const age=Math.max(20,Math.min(69,Number(ageInput||30)));
+  const band=age>=60?"60s":age>=50?"50s":age>=40?"40s":age>=30?"30s":"20s";
+
+  const nw=Number(nwInput||0);
+  const inv=Number(invInput||0);
+  const ann=Number(incomeInput||0)*12;
+  const savingsRate=Number(savingsRateInput||0);
+  const efundMonths=Number(efundMonthsInput||0);
+  const debtRatio=Number(debtRatioInput||0);
+
+  const BENCHMARKS={
+    "20s":{medianNetWorth:22000,medianInv:8000,medianSavingsRate:5,medianEmergFund:1.2,medianDebtRatio:35,top25NW:65000,top10NW:120000},
+    "30s":{medianNetWorth:110000,medianInv:45000,medianSavingsRate:8,medianEmergFund:2.1,medianDebtRatio:28,top25NW:280000,top10NW:520000},
+    "40s":{medianNetWorth:285000,medianInv:120000,medianSavingsRate:10,medianEmergFund:2.8,medianDebtRatio:22,top25NW:650000,top10NW:1200000},
+    "50s":{medianNetWorth:520000,medianInv:250000,medianSavingsRate:12,medianEmergFund:3.5,medianDebtRatio:15,top25NW:1100000,top10NW:2200000},
+    "60s":{medianNetWorth:750000,medianInv:380000,medianSavingsRate:14,medianEmergFund:4.0,medianDebtRatio:8,top25NW:1600000,top10NW:3000000},
   };
+  const bm=BENCHMARKS[band];
 
-  const getDebtPercentile=(ratio,medianRatio)=>{
-    if(ratio===0) return {pct:95,standing:"Top 10% — debt free",color:"#4ade80"};
-    if(ratio<=medianRatio*0.4) return {pct:80,standing:"Top 25% — very low debt",color:"#4ade80"};
-    if(ratio<=medianRatio) return {pct:55,standing:"Below median — manageable",color:"#facc15"};
-    if(ratio<=medianRatio*1.5) return {pct:30,standing:"Above median — reduce debt",color:"#fb923c"};
+  const getPercentile=(val,median,top25,top10)=>{
+    if(val<=0) return {pct:5,standing:"Below median",color:"#f87171"};
+    if(val>=top10) return {pct:95,standing:"Top 10%",color:"#4ade80"};
+    if(val>=top25) return {pct:78,standing:"Top 25%",color:"#4ade80"};
+    if(val>=median) return {pct:58,standing:"Above median",color:"#facc15"};
+    if(val>=median*0.5) return {pct:33,standing:"Below median",color:"#fb923c"};
+    return {pct:12,standing:"Bottom 25%",color:"#f87171"};
+  };
+  const getDebtPct=(ratio,med)=>{
+    if(ratio===0) return {pct:95,standing:"Debt free",color:"#4ade80"};
+    if(ratio<=med*0.4) return {pct:78,standing:"Very low debt",color:"#4ade80"};
+    if(ratio<=med) return {pct:55,standing:"Below median",color:"#facc15"};
+    if(ratio<=med*1.5) return {pct:30,standing:"Above median",color:"#fb923c"};
     return {pct:10,standing:"High debt load",color:"#f87171"};
   };
-
-  const getSavingsPercentile=(rate,medianRate)=>{
-    if(rate>=25) return {pct:95,standing:"Top 5% — exceptional",color:"#4ade80"};
-    if(rate>=medianRate*2) return {pct:80,standing:"Top 25%",color:"#4ade80"};
-    if(rate>=medianRate) return {pct:55,standing:"Above median",color:"#facc15"};
-    if(rate>=medianRate*0.5) return {pct:35,standing:"Below median",color:"#fb923c"};
+  const getSavingsPct=(rate,med)=>{
+    if(rate>=25) return {pct:95,standing:"Exceptional",color:"#4ade80"};
+    if(rate>=med*2) return {pct:78,standing:"Top 25%",color:"#4ade80"};
+    if(rate>=med) return {pct:55,standing:"Above median",color:"#facc15"};
+    if(rate>=med*0.5) return {pct:33,standing:"Below median",color:"#fb923c"};
     return {pct:10,standing:"Bottom 25%",color:"#f87171"};
   };
 
+  const TIPS={
+    "Net Worth":{
+      "Top 10%":"You're in exceptional shape. Focus on asset protection and estate planning.",
+      "Top 25%":"Strong net worth. Consider diversifying into non-registered investments.",
+      "Above median":"On track. Keep reducing liabilities and growing investments consistently.",
+      "Below median":"Focus on reducing high-interest debt first, then build investments.",
+      "Bottom 25%":"Start with an emergency fund, then tackle any high-rate debt aggressively.",
+    },
+    "Investment Portfolio":{
+      "Top 10%":"Excellent portfolio. Review asset allocation and rebalance annually.",
+      "Top 25%":"Great progress. Consider maximizing FHSA and RRSP room.",
+      "Above median":"Good foundation. Increase monthly contributions by even $100/mo.",
+      "Below median":"Open a TFSA and set up automatic contributions — even $50/mo compounds.",
+      "Bottom 25%":"Start with your employer match if available — it's free money.",
+    },
+    "Savings Rate":{
+      "Exceptional":"Outstanding. You're on a fast track to financial independence.",
+      "Top 25%":"Well above average. Consider front-loading RRSP and TFSA early in the year.",
+      "Above median":"Above average. Try to increase by 1% per year until you reach 20%.",
+      "Below median":"Aim for 10% as a near-term goal. Automate it so it happens before spending.",
+      "Bottom 25%":"Start with 1-2% and increase each time you get a raise.",
+    },
+    "Emergency Fund":{
+      "Top 10%":"Well covered. Make sure this is in a HYSA earning interest.",
+      "Top 25%":"Solid coverage. Consider whether excess cash could be better invested.",
+      "Above median":"Good buffer. Aim for 6 months as your next milestone.",
+      "Below median":"Work toward 3 months of expenses as your next milestone.",
+      "Bottom 25%":"Prioritize $1,000 as a starter emergency fund before focusing on investing.",
+    },
+    "Debt-to-Income":{
+      "Debt free":"Excellent. Channel what would have been debt payments into investments.",
+      "Very low debt":"Very strong. Focus remaining debt on your lowest rate first.",
+      "Below median":"Manageable. Avalanche method (highest rate first) saves the most interest.",
+      "Above median":"Work to bring this below 20%. Avoid taking on new non-mortgage debt.",
+      "High debt load":"This is the top priority. Consider a debt consolidation if rates are high.",
+    },
+  };
+
+  const getTip=(label,standing)=>{
+    const labelTips=TIPS[label]||{};
+    for(const key of Object.keys(labelTips)){
+      if(standing.includes(key)||key.includes(standing.split(" ")[0])) return labelTips[key];
+    }
+    return Object.values(labelTips)[Math.floor(Object.keys(labelTips).length/2)]||"";
+  };
+
   const metrics=[
-    {
-      label:"Net Worth",
-      yours:fmtShort(netWorth),
-      median:fmtShort(bm.medianNetWorth),
-      ...getPercentile(netWorth,bm.medianNetWorth,bm.top25NW,bm.top10NW),
-      icon:"💎",
-    },
-    {
-      label:"Investment Portfolio",
-      yours:fmtShort(totalInv),
-      median:fmtShort(bm.medianInv),
-      ...getPercentile(totalInv,bm.medianInv,bm.medianInv*3,bm.medianInv*7),
-      icon:"📈",
-    },
-    {
-      label:"Savings Rate",
-      yours:savingsRate.toFixed(1)+"%",
-      median:bm.medianSavingsRate+"%",
-      ...getSavingsPercentile(savingsRate,bm.medianSavingsRate),
-      icon:"💰",
-    },
-    {
-      label:"Emergency Fund",
-      yours:efundMonths.toFixed(1)+" months",
-      median:bm.medianEmergFund+" months",
-      ...getPercentile(efundMonths,bm.medianEmergFund,bm.medianEmergFund*1.8,bm.medianEmergFund*2.5),
-      icon:"🛡️",
-    },
-    {
-      label:"Debt-to-Income Ratio",
-      yours:debtRatio.toFixed(0)+"%",
-      median:bm.medianDebtRatio+"%",
-      ...getDebtPercentile(debtRatio,bm.medianDebtRatio),
-      icon:"💳",
-      lowerIsBetter:true,
-    },
+    {label:"Net Worth",yours:fmtShort(nw),median:fmtShort(bm.medianNetWorth),top25:fmtShort(bm.top25NW),top10:fmtShort(bm.top10NW),
+      ...getPercentile(nw,bm.medianNetWorth,bm.top25NW,bm.top10NW),icon:"💎",
+      inputVal:nwInput,setInput:setNwInput,inputColor:"#4ade80",prefix:"$",tip:"Your total assets minus all liabilities"},
+    {label:"Investment Portfolio",yours:fmtShort(inv),median:fmtShort(bm.medianInv),top25:fmtShort(bm.medianInv*3),top10:fmtShort(bm.medianInv*7),
+      ...getPercentile(inv,bm.medianInv,bm.medianInv*3,bm.medianInv*7),icon:"📈",
+      inputVal:invInput,setInput:setInvInput,inputColor:"#60a5fa",prefix:"$",tip:"TFSA, RRSP, FHSA, non-reg investments"},
+    {label:"Savings Rate",yours:savingsRate.toFixed(1)+"%",median:bm.medianSavingsRate+"%",top25:(bm.medianSavingsRate*2)+"%",top10:"25%",
+      ...getSavingsPct(savingsRate,bm.medianSavingsRate),icon:"💰",
+      inputVal:savingsRateInput,setInput:setSavingsRateInput,inputColor:"#facc15",suffix:"%",tip:"Monthly investments ÷ gross monthly income"},
+    {label:"Emergency Fund",yours:efundMonths.toFixed(1)+" mo",median:bm.medianEmergFund+" mo",top25:(bm.medianEmergFund*1.8).toFixed(1)+" mo",top10:(bm.medianEmergFund*2.5).toFixed(1)+" mo",
+      ...getPercentile(efundMonths,bm.medianEmergFund,bm.medianEmergFund*1.8,bm.medianEmergFund*2.5),icon:"🛡️",
+      inputVal:efundMonthsInput,setInput:setEfundMonthsInput,inputColor:"#a78bfa",suffix:" mo",tip:"Months of expenses covered by liquid savings"},
+    {label:"Debt-to-Income",yours:debtRatio.toFixed(0)+"%",median:bm.medianDebtRatio+"%",top25:(bm.medianDebtRatio*0.4).toFixed(0)+"%",top10:"0%",
+      ...getDebtPct(debtRatio,bm.medianDebtRatio),icon:"💳",lowerIsBetter:true,
+      inputVal:debtRatioInput,setInput:setDebtRatioInput,inputColor:"#f87171",suffix:"%",tip:"Non-mortgage debt ÷ annual gross income"},
   ];
+
+  // Overall standing — average percentile
+  const avgPct=Math.round(metrics.reduce((s,m)=>s+(m.lowerIsBetter?100-m.pct:m.pct),0)/metrics.length);
+  const overallColor=avgPct>=75?"#4ade80":avgPct>=50?"#facc15":avgPct>=30?"#fb923c":"#f87171";
+  const overallLabel=avgPct>=80?"Strong":avgPct>=60?"Above Average":avgPct>=40?"Average":avgPct>=20?"Below Average":"Needs Work";
 
   return (
     <div>
-      <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 24px",marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <div style={{fontSize:18,color:"#e8e4d9",fontWeight:"bold",...GS}}>Where You Stand</div>
-          <div style={{fontSize:11,color:"#6b8cce",background:"#0d1b3e",borderRadius:20,padding:"4px 12px"}}>Canadians in their {band}</div>
+      {/* Header */}
+      <div style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 24px",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+          <div>
+            <div style={{fontSize:18,color:"#e8e4d9",fontWeight:"bold",...GS,marginBottom:4}}>Where You Stand</div>
+            <div style={{fontSize:11,color:"#6b8cce"}}>Canadians in their <span style={{color:"#facc15",fontWeight:"bold"}}>{band}</span> <InfoTip text="Your age group benchmark. Canadians are compared to peers in the same decade. Benchmarks shift automatically as you move between age groups."/></div>
+          </div>
+          <button onClick={()=>setEditing(p=>!p)} className="action-btn"
+            style={{background:editing?"#1a4030":"#111827",border:`1px solid ${editing?"#4ade8066":"#1e3a5f"}`,borderRadius:20,padding:"6px 14px",cursor:"pointer",color:editing?"#4ade80":"#6b8cce",fontSize:11,...GS}}>
+            {editing?"✓ Done":"✏️ Edit"}
+          </button>
         </div>
-        <div style={{fontSize:12,color:"#6b8cce",lineHeight:1.6}}>How your key metrics compare to the median Canadian in your age group. Based on Statistics Canada and FCAC data.</div>
+
+        {/* Overall score */}
+        <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:16,alignItems:"center"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:36,color:overallColor,fontWeight:"bold",...GS,lineHeight:1}}>{avgPct}</div>
+            <div style={{fontSize:9,color:"#6b8cce",letterSpacing:1}}>PERCENTILE</div>
+          </div>
+          <div>
+            <div style={{fontSize:14,color:overallColor,fontWeight:"bold",...GS,marginBottom:6}}>{overallLabel}</div>
+            <div style={{background:"#0d1b3e",borderRadius:6,height:8,overflow:"hidden"}}>
+              <div style={{width:avgPct+"%",height:"100%",background:`linear-gradient(135deg,#1e3a5f,${overallColor})`,borderRadius:6,transition:"width 0.6s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+            </div>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Overall vs Canadians in your age group</div>
+          </div>
+        </div>
       </div>
 
+      {/* Age input */}
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>Your Age</div>
+            <div style={{fontSize:10,color:"#6b8cce",marginTop:2}}>Determines which benchmark group to compare against</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:`1px solid ${prefillAge?"#4ade8033":"#1e3a5f"}`,borderRadius:8,padding:"8px 12px",width:80}}>
+              <input type="number" inputMode="decimal" autoComplete="off" value={ageInput} onChange={e=>setAgeInput(e.target.value)} placeholder="30"
+                style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:15,width:"100%",textAlign:"center",...GS}}/>
+            </div>
+            <div style={{fontSize:10,color:"#6b8cce"}}>→ <span style={{color:"#facc15",fontWeight:"bold"}}>{band}</span></div>
+          </div>
+        </div>
+        {!prefillAge&&<div style={{fontSize:10,color:"#facc15",marginTop:8}}>⚠️ No age in appointment — enter your age above to see accurate benchmarks</div>}
+      </Card>
+
+      {/* Metric cards */}
       {metrics.map((m,i)=>(
         <div key={i} style={{background:"linear-gradient(135deg,#111827,#1a2235)",border:"1px solid #1e3a5f",borderRadius:16,padding:"20px 24px",marginBottom:12}}>
-          <div style={{fontSize:10,color:"#6b8cce",letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Average {m.label}</div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16,paddingBottom:14,borderBottom:"1px solid #1e3a5f"}}>
-            <div>
-              <div style={{fontSize:28,color:"#e8e4d9",fontWeight:"bold",...GS,lineHeight:1}}>{m.median}</div>
-              <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Canadian average</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontSize:20}}>{m.icon}</span>
+              <div>
+                <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>{m.label}</div>
+                <div style={{fontSize:10,color:"#6b8cce",marginTop:1}}>{m.tip}</div>
+              </div>
             </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{fontSize:22,color:m.color,fontWeight:"bold",...GS,lineHeight:1}}>{m.yours}</div>
-              <div style={{fontSize:10,color:"#6b8cce",marginTop:4}}>Yours</div>
+            <div style={{fontSize:11,color:m.color,background:m.color+"18",border:`1px solid ${m.color}44`,borderRadius:20,padding:"3px 10px",fontWeight:"bold",...GS}}>
+              {m.standing}
             </div>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontSize:13,color:m.color,fontWeight:"bold",...GS}}>{m.label}</div>
-            <div style={{fontSize:11,color:"#6b8cce"}}>Top {100-m.pct}% of Canadians</div>
+
+          {/* What-if editable input */}
+          {editing&&(
+            <div style={{marginBottom:12,background:"#0d1b3e",borderRadius:8,padding:"10px 12px"}}>
+              <div style={{fontSize:9,color:"#6b8cce",marginBottom:6,letterSpacing:1}}>YOUR VALUE (EDIT TO EXPLORE)</div>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                {m.prefix&&<span style={{color:"#6b8cce",fontSize:13}}>{m.prefix}</span>}
+                <input type="number" inputMode="decimal" autoComplete="off" value={m.inputVal}
+                  onChange={e=>m.setInput(e.target.value)}
+                  style={{background:"none",border:"none",outline:"none",color:m.inputColor,fontSize:16,width:"100%",...GS}}/>
+                {m.suffix&&<span style={{color:"#6b8cce",fontSize:12}}>{m.suffix}</span>}
+              </div>
+            </div>
+          )}
+
+          {/* Your vs median */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+            {[
+              {label:"You",val:m.yours,color:m.color},
+              {label:"Median",val:m.median,color:"#6b8cce"},
+              {label:"Top 25%",val:m.top25,color:"#4a5a6a"},
+            ].map((col,j)=>(
+              <div key={j} style={{background:"#0d1b3e",borderRadius:8,padding:"8px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"#4a5a6a",marginBottom:3,letterSpacing:1}}>{col.label.toUpperCase()}</div>
+                <div style={{fontSize:13,color:col.color,fontWeight:j===0?"bold":"normal",...(j===0?GS:{})}}>{col.val}</div>
+              </div>
+            ))}
           </div>
-          <div style={{position:"relative",height:8,background:"#0d1b3e",borderRadius:4,overflow:"visible"}}>
-            <div style={{height:"100%",width:m.pct+"%",background:`linear-gradient(90deg,#1e3a5f,${m.color})`,borderRadius:4}}/>
+
+          {/* Percentile bar */}
+          <div style={{position:"relative",height:8,background:"#0d1b3e",borderRadius:4,overflow:"visible",marginBottom:6}}>
+            <div style={{height:"100%",width:m.pct+"%",background:`linear-gradient(135deg,#1e3a5f,${m.color})`,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
             <div style={{position:"absolute",top:-4,left:"50%",width:2,height:16,background:"#6b8cce33",borderRadius:1,transform:"translateX(-50%)"}}/>
-            <div style={{position:"absolute",top:-5,left:`calc(${Math.min(95,m.pct)}% - 7px)`,width:18,height:18,borderRadius:"50%",background:m.color,border:"2px solid #0a0f1e",boxShadow:`0 0 10px ${m.color}88`}}/>
+            <div style={{position:"absolute",top:-5,left:`calc(${Math.min(94,Math.max(6,m.pct))}% - 8px)`,width:18,height:18,borderRadius:"50%",background:m.color,border:"2px solid #0a0f1e",boxShadow:`0 0 10px ${m.color}88`,transition:"left 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
-            <span style={{fontSize:9,color:"#2a4080",letterSpacing:1}}>BOTTOM</span>
-            <span style={{fontSize:9,color:"#2a4080",letterSpacing:1}}>TOP 10%</span>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#2a4080"}}>
+            <span>BOTTOM</span>
+            <span>MEDIAN</span>
+            <span>TOP 10%</span>
           </div>
+          {getTip(m.label,m.standing)&&(
+            <div style={{marginTop:10,background:"#0d1b3e",borderRadius:8,padding:"8px 12px",fontSize:11,color:"#8fadd4",lineHeight:1.6,borderLeft:"2px solid "+m.color}}>
+              💡 {getTip(m.label,m.standing)}
+            </div>
+          )}
         </div>
       ))}
 
-      <div style={{background:"#0d1b3e",borderRadius:12,padding:"12px 16px",fontSize:10,color:"#6b8cce",lineHeight:1.7}}>
-        Benchmarks are approximate and based on 2024 Statistics Canada data. Individual circumstances vary significantly.
+      <div style={{background:"#0d1b3e",borderRadius:12,padding:"12px 16px",fontSize:10,color:"#6b8cce",lineHeight:1.7,marginBottom:12}}>
+        Benchmarks based on 2024 Statistics Canada data. Tap <strong>✏️ Edit</strong> to adjust any value and explore what-if scenarios.
       </div>
     </div>
   );
@@ -7312,8 +7652,8 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
               <Tooltip formatter={(v,n)=>[fmt(v),n]} contentStyle={{background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,...GS,fontSize:11}} itemStyle={{color:"#e8e4d9"}}/>
             </PieChart>
           </ResponsiveContainer>
-          {/* Legend — grouped buckets in sticky bar style */}
-          <div style={{display:"flex",gap:10,flexWrap:"wrap",marginTop:8,justifyContent:"center"}}>
+          {/* Legend — 2-col grid to avoid wrapping */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:10}}>
             {collapsedDonut.filter(d=>d.bucket!=="remaining"&&d.value>0).map((d,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:4}}>
                 <div style={{width:9,height:9,borderRadius:d.bucket==="subscription"?3:50,background:d._color}}/>
@@ -7334,7 +7674,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       )}
 
       {/* Sticky totals bar */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#0d1b3e,#111827)",borderTop:"1px solid #1e3a5f",padding:"10px 16px 10px",paddingBottom:"max(10px,env(safe-area-inset-bottom))",zIndex:200}}>
+      <div className="sticky-footer-fade" style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#0d1b3e,#111827)",borderTop:"1px solid #1e3a5f",padding:"10px 16px 10px",paddingBottom:"max(10px,env(safe-area-inset-bottom))",zIndex:200}}>
         <div style={{maxWidth:520,margin:"0 auto"}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,alignItems:"center"}}>
             {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subs 🔄",val:totalSub,color:"#a78bfa"},{label:"Variable 📊",val:totalEst,color:"#facc15"},{label:remaining>=0?"Left Over":"Over Budget",val:Math.abs(remaining),color:remaining>=0?"#4ade80":"#f87171"}].map(x=>(
@@ -7527,6 +7867,13 @@ function SavingsGoalCalc({prefill=null}) {
 
   return (
     <div>
+      {goals.length===0&&(
+        <div className="chart-empty" style={{flexDirection:"column",gap:12,padding:"32px 16px",background:"linear-gradient(135deg,#111827,#1a2235)",borderRadius:14,border:"1px dashed #1e3a5f",marginBottom:14}}>
+          <span style={{fontSize:36}}>🏦</span>
+          <span style={{color:"#8fadd4",fontSize:14,fontWeight:"bold",...GS}}>No savings goals yet</span>
+          <span style={{color:"#6b8cce",fontSize:12,textAlign:"center"}}>Add a goal to calculate how much to save each month</span>
+        </div>
+      )}
       {/* Goals dashboard grid */}
       {goals.length>1&&(
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
@@ -7596,7 +7943,7 @@ function SavingsGoalCalc({prefill=null}) {
                 <span style={{fontSize:11,color:"#6b8cce"}}>What if I save <span style={{color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(perMonth+extra)}/mo</span>?</span>
                 {extra>0&&<span style={{fontSize:11,color:"#4ade80"}}>Save {monthsSaved} months!</span>}
               </div>
-              <input type="range" min={0} max={Math.round(perMonth*3)} value={extraSlider}
+              <input type="range" min={0} max={Math.round(perMonth*3)} step={50} value={extraSlider}
                 onChange={e=>setExtraSlider(Number(e.target.value))}
                 style={{width:"100%",accentColor:"#4ade80",marginBottom:6}}/>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#6b8cce"}}>
