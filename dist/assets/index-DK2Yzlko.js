@@ -163,7 +163,7 @@ In order to be iterable, non-array objects must have a [Symbol.iterator]() metho
   }
 
   /* ── Page transitions ── */
-  .page-enter { animation: fadeIn 0.22s ease both; }
+  .page-enter { animation: fadeInUp 0.35s cubic-bezier(0.22,1,0.36,1) both; }
 
   /* ── Step cross-fade ── */
   .step-enter { animation: stepCrossFade 0.2s ease both; }
