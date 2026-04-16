@@ -144,8 +144,6 @@ const GLOBAL_CSS = `
 
   /* ── Page transitions ── */
   .page-enter { animation: fadeIn 0.22s ease both; }
-  .page-slide-in { animation: slideInRight 0.28s cubic-bezier(0.22,1,0.36,1) both; }
-  .page-slide-back { animation: slideInLeft 0.28s cubic-bezier(0.22,1,0.36,1) both; }
 
   /* ── Step cross-fade ── */
   .step-enter { animation: stepCrossFade 0.2s ease both; }
@@ -919,8 +917,6 @@ export default function App() {
     </div>
   );
 
-  const pageClass=pageDir==="forward"?"page-slide-in":"page-slide-back";
-
   return (
     <>
       <ToastContainer/>
@@ -932,10 +928,10 @@ export default function App() {
         </div>
       )}
       {page==="home"&&<Homepage onAppointment={()=>navigateTo("appointment")} onCheckup={()=>navigateTo("checkup")} onTools={()=>navigateTo("tools")} onProfile={()=>navigateTo("profile")} onSignIn={()=>setIsGuest(false)} dark={dark} setDark={setDark} theme={theme} userEmail={user?.email} displayName={displayName} latestScore={latestScore} isGuest={isGuest}/>}
-      {page==="appointment"&&<div className={pageClass}><Appointment data={data} setData={setData} onHome={()=>navigateBack("home")} onCheckup={()=>navigateTo("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} showToast={showToast}/></div>}
-      {page==="checkup"&&<div className={pageClass}><Checkup data={data} onHome={()=>navigateBack("home")} onAppointment={()=>navigateBack("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token}/></div>}
-      {page==="tools"&&<div className={pageClass}><IndividualTools onHome={()=>navigateBack("home")} data={data} totalInv={totalInv} theme={theme} user={user} token={token}/></div>}
-      {page==="profile"&&<div className={pageClass}><ProfilePage user={user} token={token} onHome={()=>navigateBack("home")} onSignOut={handleSignOut} data={data}/></div>}
+      {page==="appointment"&&<Appointment data={data} setData={setData} onHome={()=>navigateBack("home")} onCheckup={()=>navigateTo("checkup")} saveScore={saveScore} totalInv={totalInv} theme={theme} showToast={showToast}/>}
+      {page==="checkup"&&<Checkup data={data} onHome={()=>navigateBack("home")} onAppointment={()=>navigateBack("appointment")} totalInv={totalInv} scoreHistory={scoreHistory} saveScore={saveScore} theme={theme} user={user} token={token}/>}
+      {page==="tools"&&<IndividualTools onHome={()=>navigateBack("home")} data={data} totalInv={totalInv} theme={theme} user={user} token={token}/>}
+      {page==="profile"&&<ProfilePage user={user} token={token} onHome={()=>navigateBack("home")} onSignOut={handleSignOut} data={data}/>}
     </>
   );
 }
