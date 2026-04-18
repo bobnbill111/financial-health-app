@@ -1148,11 +1148,11 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
   },[]);
 
   return (
-    <div style={{minHeight:"100vh",background:theme.bg,position:"relative",overflow:"hidden",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",...GS,color:theme.text,transition:"background 0.4s"}}>
+    <div style={{minHeight:"100vh",background:theme.bg,position:"relative",overflow:"hidden",...GS,color:theme.text,transition:"background 0.4s"}}>
       <div style={{position:"absolute",inset:0,backgroundImage:`linear-gradient(${theme.gridLine} 1px,transparent 1px),linear-gradient(90deg,${theme.gridLine} 1px,transparent 1px)`,backgroundSize:"60px 60px",pointerEvents:"none"}}/>
       <div style={{position:"absolute",top:"50%",left:"50%",width:340,height:340,background:`radial-gradient(circle,${theme.glow} 0%,transparent 70%)`,pointerEvents:"none",animation:"hbglow 3.5s ease-in-out infinite"}}/>
 
-      {/* Profile icon / Guest sign-in — top left */}
+      {/* Profile — top left */}
       <div style={{position:"absolute",top:24,left:24,zIndex:10}}>
         {isGuest?(
           <button onClick={onSignIn} className="action-btn" style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #cc000066",borderRadius:10,padding:"8px 14px",color:"#cc0000",cursor:"pointer",fontSize:12,fontWeight:"bold",...GS}}>
@@ -1164,11 +1164,11 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
               {initials}
             </div>
             <div style={{textAlign:"left"}}>
-              <div style={{fontSize:13,color:"#e8e4d9",fontWeight:"bold",...GS}}>{name}</div>
+              <div style={{fontSize:13,color:theme.text,fontWeight:"bold",...GS}}>{name}</div>
               {latestScore&&(
                 <div style={{display:"flex",alignItems:"center",gap:4,marginTop:1}}>
                   <span style={{fontSize:11,color:latestScore.gradeColor,fontWeight:"bold",...GS}}>{latestScore.grade}</span>
-                  <span style={{fontSize:10,color:"#6b8cce"}}>{latestScore.score}/100</span>
+                  <span style={{fontSize:10,color:theme.textDim}}>{latestScore.score}/100</span>
                 </div>
               )}
             </div>
@@ -1187,34 +1187,69 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
         </button>
       </div>
 
-      <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:420,padding:"0 24px",display:"flex",flexDirection:"column",alignItems:"center"}}>
-        <div style={{...fade(0),marginBottom:24}}>
-          <svg width="140" height="140" viewBox="0 0 160 160" style={{animation:"heartbeat 3.5s ease-in-out infinite",display:"block"}}>
+      {/* Main content — centred */}
+      <div style={{position:"relative",zIndex:1,width:"100%",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 24px 40px"}}>
+
+        {/* Logo + title */}
+        <div style={{...fade(0),textAlign:"center",marginBottom:36}}>
+          <svg width="80" height="80" viewBox="0 0 160 160" style={{animation:"heartbeat 3.5s ease-in-out infinite",display:"block",margin:"0 auto 16px"}}>
             <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
             <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
             <rect x="52" y="8" width="56" height="144" rx="10" fill="url(#sh)" opacity="0.25"/>
             <defs><linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#ffffff"/><stop offset="100%" stopColor="transparent"/></linearGradient></defs>
           </svg>
-        </div>
-        <div style={{...fade(0.15),textAlign:"center",marginBottom:32}}>
           <h1 style={{fontSize:36,margin:"0 0 8px",color:theme.text,fontWeight:"normal",letterSpacing:1}}>Financial <span style={{color:theme.titleAccent}}>Health</span></h1>
           <div style={{fontSize:12,color:theme.textDim,letterSpacing:2,textTransform:"uppercase"}}>Your complete financial picture</div>
         </div>
 
-        <div style={{...fade(0.3),width:"100%",display:"flex",flexDirection:"column",gap:12}}>
+        {/* ── Desktop: 3 columns ── */}
+        <style>{`
+          @media (min-width: 700px) {
+            .fh-btn-grid { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 16px !important; max-width: 860px !important; align-items: stretch !important; }
+            .fh-btn-mobile { display: none !important; }
+            .fh-btn-desktop { display: flex !important; }
+          }
+          @media (max-width: 699px) {
+            .fh-btn-grid { display: flex !important; flex-direction: column !important; gap: 12px !important; max-width: 420px !important; }
+            .fh-btn-mobile { display: flex !important; }
+            .fh-btn-desktop { display: none !important; }
+          }
+        `}</style>
+
+        <div className="fh-btn-grid" style={{...fade(0.3),width:"100%"}}>
           {[
-            {label:"Financial Health Dashboard",sub:"View your dashboard — net worth, investments & goals",badge:"DASHBOARD",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
-            {label:"Check-Up Appointment",sub:"Enter or edit your financial information",badge:"EDIT INFO",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
-            {label:"Individual Tools",sub:"Budget, net worth, savings goals, simulators & more",badge:"TOOLS",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
+            {label:"Financial Health Dashboard",sub:"View your dashboard — net worth, investments & goals",badge:"DASHBOARD",icon:"📊",bc:theme.badgeCheckup,border:theme.btnCheckupBorder,bg:theme.btnCheckupBg,textColor:theme.btnCheckupText,fn:onCheckup},
+            {label:"Check-Up Appointment",sub:"Enter or edit your income, debts and budget details",badge:"EDIT INFO",icon:"📋",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
+            {label:"Individual Tools",sub:"Budget, retirement, tax, mortgage and 10 more calculators",badge:"TOOLS",icon:"🛠️",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
           ].map(btn=>(
-            <button key={btn.label} onClick={btn.fn}
-              className="action-btn"
-              style={{background:btn.bg,border:`1px solid ${btn.border}`,borderRadius:14,padding:"20px 24px",cursor:"pointer",textAlign:"center",color:btn.textColor,width:"100%",...GS}}>              <div style={{fontSize:17,fontWeight:"bold",color:btn.textColor,marginBottom:5}}>{btn.label}</div>
-              <div style={{fontSize:12,color:dark?"#8fadd4":theme.textMuted,lineHeight:1.5,marginBottom:10}}>{btn.sub}</div>
-              <div style={{display:"inline-block",fontSize:10,color:btn.bc,letterSpacing:1,border:`1px solid ${btn.bc}55`,borderRadius:20,padding:"3px 12px"}}>{btn.badge}</div>
+            <button key={btn.label} onClick={btn.fn} className="action-btn" style={{background:btn.bg,border:`1px solid ${btn.border}`,borderRadius:16,cursor:"pointer",color:btn.textColor,width:"100%",...GS,padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+
+              {/* Desktop layout — pinned rows so all cards align */}
+              <div className="fh-btn-desktop" style={{flexDirection:"column",alignItems:"center",padding:"32px 24px 28px",flex:1,width:"100%"}}>
+                {/* Icon — always at top */}
+                <div style={{fontSize:36,lineHeight:1,marginBottom:18}}>{btn.icon}</div>
+                {/* Title — fixed height row, always same vertical position */}
+                <div style={{fontSize:16,fontWeight:"bold",color:btn.textColor,...GS,textAlign:"center",lineHeight:1.3,marginBottom:12,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}}>{btn.label}</div>
+                {/* Description — grows to fill space */}
+                <div style={{fontSize:12,color:dark?"#8fadd4":theme.textMuted,lineHeight:1.7,textAlign:"center",flex:1}}>{btn.sub}</div>
+                {/* Badge — always pinned at bottom */}
+                <div style={{marginTop:20,display:"inline-block",fontSize:10,color:btn.bc,letterSpacing:1,border:`1px solid ${btn.bc}55`,borderRadius:20,padding:"4px 14px"}}>{btn.badge}</div>
+              </div>
+
+              {/* Mobile layout — horizontal row */}
+              <div className="fh-btn-mobile" style={{alignItems:"center",padding:"18px 20px",gap:16,flex:1,width:"100%"}}>
+                <div style={{fontSize:26,lineHeight:1,flexShrink:0}}>{btn.icon}</div>
+                <div style={{flex:1,textAlign:"left"}}>
+                  <div style={{fontSize:15,fontWeight:"bold",color:btn.textColor,marginBottom:3,...GS}}>{btn.label}</div>
+                  <div style={{fontSize:12,color:dark?"#8fadd4":theme.textMuted,lineHeight:1.5}}>{btn.sub}</div>
+                </div>
+                <div style={{display:"inline-block",fontSize:10,color:btn.bc,letterSpacing:1,border:`1px solid ${btn.bc}55`,borderRadius:20,padding:"4px 12px",flexShrink:0}}>{btn.badge}</div>
+              </div>
+
             </button>
           ))}
         </div>
+
         <div style={{...fade(0.5),marginTop:28,fontSize:10,color:theme.tagline,letterSpacing:2,textTransform:"uppercase"}}>Private · Secure · Instant</div>
       </div>
     </div>
@@ -7743,8 +7778,26 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       {/* Snapshot bar */}
       <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({income,cats})}/>
 
-      {/* View toggle + PDF button */}
-      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
+      {/* Responsive layout CSS */}
+      <style>{`
+        .budget-desktop-grid { display: block; }
+        .budget-col-wrap { display: block; }
+        .budget-tab-toggle { display: flex; }
+        @media (min-width: 860px) {
+          .budget-desktop-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
+          .budget-col-wrap { display: contents; }
+          .budget-tab-toggle { display: none !important; }
+          .budget-desktop-show { display: block !important; }
+          .budget-mobile-only { display: none !important; }
+        }
+        @media (max-width: 859px) {
+          .budget-desktop-show { display: none !important; }
+          .budget-mobile-only { display: block !important; }
+        }
+      `}</style>
+
+      {/* View toggle + PDF — mobile only */}
+      <div className="budget-tab-toggle budget-mobile-only" style={{gap:8,marginBottom:12,alignItems:"center"}}>
         <div style={{display:"flex",gap:4,flex:1,background:"#0d1b3e",borderRadius:10,padding:4}}>
           {[{id:"buckets",label:"📊 Buckets"},{id:"fixed",label:"🔒 Fixed"},{id:"subscriptions",label:"🔄 Subs"},{id:"investments",label:"📈 Invest"}].map(v=>(
             <button key={v.id} onClick={()=>setView(v.id)} className={`glow-btn${view===v.id?" active-tab":""}`} style={{flex:1,background:view===v.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px",color:view===v.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{v.label}</button>
@@ -7759,7 +7812,18 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
         />
       </div>
 
-      {/* Income */}
+      {/* Desktop header — PDF button */}
+      <div className="budget-desktop-show" style={{display:"none",justifyContent:"flex-end",marginBottom:12}}>
+        <BudgetPDFBtn
+          income={inc} total={total} remaining={remaining}
+          fixedCosts={fixedCosts} totalFixed={totalFixedMonthly}
+          subs={subs} totalSub={totalSubMonthly} subMonthly={subMonthly} FREQ_OPTIONS={FREQ_OPTIONS}
+          estimated={cats.filter(c=>c.bucket==="estimated")} totalEst={totalEst}
+          investments={investments} totalInv={totalInvMonthly} invMonthly={invMonthly} INV_ACCOUNTS={INV_ACCOUNTS} INV_FREQ={INV_FREQ}
+        />
+      </div>
+
+      {/* Income — full width always */}
       <Card>
         <SecTitle>Monthly Income</SecTitle>
         <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
@@ -7777,6 +7841,135 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
           {remaining>0&&<div style={{fontSize:11,color:"#4ade80",marginTop:6}}>{fmt(remaining)} unallocated</div>}
         </div>}
       </Card>
+
+      {/* Desktop 3-col grid */}
+      <div className="budget-desktop-grid">
+
+        {/* ── COLUMN 1: Fixed + Subscriptions ── */}
+        <div className="budget-desktop-show" style={{display:"none",flexDirection:"column",gap:0}}>
+          {(()=>{
+            const fixedBucket=BUCKETS.find(b=>b.key==="fixed");
+            const subBucket=BUCKETS.find(b=>b.key==="subscription");
+            return (<>
+              {/* Fixed desktop card */}
+              {(()=>{
+                const b=fixedBucket;
+                const bucketTotal=totalFixedMonthly;
+                const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
+                return (
+                  <Card style={{border:`1px solid ${b.color}33`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                      <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
+                    </div>
+                    {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
+                    {fixedCosts.length===0?(<div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No fixed costs added yet</div>):(
+                      <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                        {fixedCosts.map(f=>(<div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}><span style={{color:"#e8e4d9"}}>{f.name}</span><span style={{color:"#f87171",fontWeight:"bold",...GS}}>{fmt(Number(f.amount||0))}/mo</span></div>))}
+                        <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#6b8cce"}}>{fixedCosts.length} item{fixedCosts.length!==1?"s":""}</span><span style={{fontSize:13,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalFixedMonthly)}/mo</span></div>
+                      </div>
+                    )}
+                    <button onClick={()=>setView("fixed")} style={{width:"100%",background:"none",border:"1px dashed #f8717144",borderRadius:8,padding:"8px",color:"#f87171",cursor:"pointer",fontSize:12,...GS}}>🔒 Manage Fixed Costs →</button>
+                  </Card>
+                );
+              })()}
+              {/* Subscriptions desktop card */}
+              {(()=>{
+                const b=subBucket;
+                const bucketTotal=totalSubMonthly;
+                const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
+                return (
+                  <Card style={{border:`1px solid ${b.color}33`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                      <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
+                    </div>
+                    {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
+                    {subs.length===0?(<div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No subscriptions added yet</div>):(
+                      <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                        {subs.map(s=>(<div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}><span style={{color:"#e8e4d9"}}>{s.name}</span><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{color:"#6b8cce",fontSize:10}}>{FREQ_OPTIONS.find(f=>f.id===s.freq)?.label}</span><span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(subMonthly(s))}/mo</span></div></div>))}
+                        <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#6b8cce"}}>{subs.length} subscription{subs.length!==1?"s":""}</span><span style={{fontSize:13,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(totalSubMonthly)}/mo</span></div>
+                      </div>
+                    )}
+                    <button onClick={()=>setView("subscriptions")} style={{width:"100%",background:"none",border:"1px dashed #a78bfa44",borderRadius:8,padding:"8px",color:"#a78bfa",cursor:"pointer",fontSize:12,...GS}}>🔄 Manage Subscriptions →</button>
+                  </Card>
+                );
+              })()}
+            </>);
+          })()}
+        </div>
+
+        {/* ── COLUMN 2: Variable (estimated) ── */}
+        <div className="budget-desktop-show" style={{display:"none"}}>
+          {(()=>{
+            const b=BUCKETS.find(bk=>bk.key==="estimated");
+            const bucketCats=cats.filter(c=>c.bucket==="estimated");
+            const bucketTotal=totalEst;
+            const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
+            return (
+              <Card style={{border:`1px solid ${b.color}33`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
+                  <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
+                </div>
+                {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
+                {bucketCats.map((cat,i)=>{
+                  const globalIdx=cats.indexOf(cat);
+                  const itemColor=catsWithColors[globalIdx]?._color||b.color;
+                  return (
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"10px 12px"}}>
+                      <div style={{width:7,height:7,borderRadius:"50%",background:itemColor,flexShrink:0}}/>
+                      <input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,name:e.target.value}:c))} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{color:"#6b8cce",fontSize:13}}>$</span>
+                        <input type="number" inputMode="decimal" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,amount:e.target.value}:c))} style={{background:"none",border:"none",outline:"none",color:itemColor,fontSize:16,width:80,textAlign:"right",...GS}}/>
+                      </div>
+                      {inc>0&&Number(cat.amount)>0&&<span style={{fontSize:10,color:"#6b8cce",minWidth:36,textAlign:"right"}}>{((Number(cat.amount)/inc)*100).toFixed(0)}%</span>}
+                      <button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==globalIdx))} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:0}}>×</button>
+                    </div>
+                  );
+                })}
+                <div style={{display:"flex",gap:8}}>
+                  <input value={newNames["estimated"]} onChange={e=>setNewNames(p=>({...p,estimated:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addCat("estimated")} placeholder="Add variable expense..." style={{background:"#0d1b3e",border:"1px dashed #facc1544",borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:12,flex:1,outline:"none",...GS}}/>
+                  <button onClick={()=>addCat("estimated")} style={{background:"none",border:"1px solid #facc1544",borderRadius:8,padding:"7px 12px",color:"#facc15",cursor:"pointer",fontSize:12,...GS}}>+ Add</button>
+                </div>
+              </Card>
+            );
+          })()}
+        </div>
+
+        {/* ── COLUMN 3: Investments ── */}
+        <div className="budget-desktop-show" style={{display:"none"}}>
+          {(()=>{
+            const b=BUCKETS.find(bk=>bk.key==="investment");
+            const bucketTotal=totalInvMonthly;
+            const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
+            return (
+              <Card style={{border:`1px solid ${b.color}33`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                  <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
+                  <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
+                </div>
+                {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
+                {totalInvMonthly===0?(<div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No investment contributions set yet</div>):(
+                  <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                    {INV_ACCOUNTS.map(acct=>{
+                      const inv=investments.find(i=>i.id===acct.id);
+                      const monthly=inv?invMonthly(inv):0;
+                      if(monthly<=0) return null;
+                      return (<div key={acct.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}><span style={{color:"#e8e4d9"}}>{acct.icon} {acct.label.replace(" Contribution","")}</span><span style={{color:acct.color,fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</span></div>);
+                    })}
+                    <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#6b8cce"}}>Total investing</span><span style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalInvMonthly)}/mo</span></div>
+                    {inc>0&&<div style={{marginTop:6,fontSize:11,color:totalInvMonthly/inc>=0.20?"#4ade80":totalInvMonthly/inc>=0.10?"#facc15":"#f87171"}}>{totalInvMonthly/inc>=0.20?"✓ At or above 20% target":totalInvMonthly/inc>=0.10?"Getting there — aim for 20%":"Below 10% — increase contributions"}</div>}
+                  </div>
+                )}
+                <button onClick={()=>setView("investments")} style={{width:"100%",background:"none",border:"1px dashed #4ade8044",borderRadius:8,padding:"8px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>📈 Manage Investments →</button>
+              </Card>
+            );
+          })()}
+        </div>
+
+      </div>{/* end desktop grid */}
 
       {view==="buckets"&&BUCKETS.map(bucket=>{
         const bucketCats=(bucket.key==="subscription"||bucket.key==="fixed"||bucket.key==="investment")?[]:cats.filter(c=>c.bucket===bucket.key);
