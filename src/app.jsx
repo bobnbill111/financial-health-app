@@ -7775,26 +7775,8 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       {/* Snapshot bar */}
       <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({income,cats})}/>
 
-      {/* Responsive layout CSS */}
-      <style>{`
-        .budget-desktop-grid { display: block; }
-        .budget-col-wrap { display: block; }
-        .budget-tab-toggle { display: flex; }
-        @media (min-width: 860px) {
-          .budget-desktop-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; align-items: start; }
-          .budget-col-wrap { display: contents; }
-          .budget-tab-toggle { display: none !important; }
-          .budget-desktop-show { display: block !important; }
-          .budget-mobile-only { display: none !important; }
-        }
-        @media (max-width: 859px) {
-          .budget-desktop-show { display: none !important; }
-          .budget-mobile-only { display: block !important; }
-        }
-      `}</style>
-
-      {/* View toggle + PDF — mobile only */}
-      <div className="budget-tab-toggle budget-mobile-only" style={{gap:8,marginBottom:12,alignItems:"center"}}>
+      {/* View toggle + PDF button */}
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
         <div style={{display:"flex",gap:4,flex:1,background:"#0d1b3e",borderRadius:10,padding:4}}>
           {[{id:"buckets",label:"📊 Buckets"},{id:"fixed",label:"🔒 Fixed"},{id:"subscriptions",label:"🔄 Subs"},{id:"investments",label:"📈 Invest"}].map(v=>(
             <button key={v.id} onClick={()=>setView(v.id)} className={`glow-btn${view===v.id?" active-tab":""}`} style={{flex:1,background:view===v.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px",color:view===v.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{v.label}</button>
@@ -7809,18 +7791,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
         />
       </div>
 
-      {/* Desktop header — PDF button */}
-      <div className="budget-desktop-show" style={{display:"none",justifyContent:"flex-end",marginBottom:12}}>
-        <BudgetPDFBtn
-          income={inc} total={total} remaining={remaining}
-          fixedCosts={fixedCosts} totalFixed={totalFixedMonthly}
-          subs={subs} totalSub={totalSubMonthly} subMonthly={subMonthly} FREQ_OPTIONS={FREQ_OPTIONS}
-          estimated={cats.filter(c=>c.bucket==="estimated")} totalEst={totalEst}
-          investments={investments} totalInv={totalInvMonthly} invMonthly={invMonthly} INV_ACCOUNTS={INV_ACCOUNTS} INV_FREQ={INV_FREQ}
-        />
-      </div>
-
-      {/* Income — full width always */}
+      {/* Income */}
       <Card>
         <SecTitle>Monthly Income</SecTitle>
         <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
@@ -7838,135 +7809,6 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
           {remaining>0&&<div style={{fontSize:11,color:"#4ade80",marginTop:6}}>{fmt(remaining)} unallocated</div>}
         </div>}
       </Card>
-
-      {/* Desktop 3-col grid */}
-      <div className="budget-desktop-grid">
-
-        {/* ── COLUMN 1: Fixed + Subscriptions ── */}
-        <div className="budget-desktop-show" style={{display:"none",flexDirection:"column",gap:0}}>
-          {(()=>{
-            const fixedBucket=BUCKETS.find(b=>b.key==="fixed");
-            const subBucket=BUCKETS.find(b=>b.key==="subscription");
-            return (<>
-              {/* Fixed desktop card */}
-              {(()=>{
-                const b=fixedBucket;
-                const bucketTotal=totalFixedMonthly;
-                const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
-                return (
-                  <Card style={{border:`1px solid ${b.color}33`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                      <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
-                    </div>
-                    {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
-                    {fixedCosts.length===0?(<div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No fixed costs added yet</div>):(
-                      <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
-                        {fixedCosts.map(f=>(<div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}><span style={{color:"#e8e4d9"}}>{f.name}</span><span style={{color:"#f87171",fontWeight:"bold",...GS}}>{fmt(Number(f.amount||0))}/mo</span></div>))}
-                        <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#6b8cce"}}>{fixedCosts.length} item{fixedCosts.length!==1?"s":""}</span><span style={{fontSize:13,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalFixedMonthly)}/mo</span></div>
-                      </div>
-                    )}
-                    <button onClick={()=>setView("fixed")} style={{width:"100%",background:"none",border:"1px dashed #f8717144",borderRadius:8,padding:"8px",color:"#f87171",cursor:"pointer",fontSize:12,...GS}}>🔒 Manage Fixed Costs →</button>
-                  </Card>
-                );
-              })()}
-              {/* Subscriptions desktop card */}
-              {(()=>{
-                const b=subBucket;
-                const bucketTotal=totalSubMonthly;
-                const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
-                return (
-                  <Card style={{border:`1px solid ${b.color}33`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                      <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
-                      <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
-                    </div>
-                    {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
-                    {subs.length===0?(<div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No subscriptions added yet</div>):(
-                      <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
-                        {subs.map(s=>(<div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}><span style={{color:"#e8e4d9"}}>{s.name}</span><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{color:"#6b8cce",fontSize:10}}>{FREQ_OPTIONS.find(f=>f.id===s.freq)?.label}</span><span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(subMonthly(s))}/mo</span></div></div>))}
-                        <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#6b8cce"}}>{subs.length} subscription{subs.length!==1?"s":""}</span><span style={{fontSize:13,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(totalSubMonthly)}/mo</span></div>
-                      </div>
-                    )}
-                    <button onClick={()=>setView("subscriptions")} style={{width:"100%",background:"none",border:"1px dashed #a78bfa44",borderRadius:8,padding:"8px",color:"#a78bfa",cursor:"pointer",fontSize:12,...GS}}>🔄 Manage Subscriptions →</button>
-                  </Card>
-                );
-              })()}
-            </>);
-          })()}
-        </div>
-
-        {/* ── COLUMN 2: Variable (estimated) ── */}
-        <div className="budget-desktop-show" style={{display:"none"}}>
-          {(()=>{
-            const b=BUCKETS.find(bk=>bk.key==="estimated");
-            const bucketCats=cats.filter(c=>c.bucket==="estimated");
-            const bucketTotal=totalEst;
-            const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
-            return (
-              <Card style={{border:`1px solid ${b.color}33`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
-                </div>
-                {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
-                {bucketCats.map((cat,i)=>{
-                  const globalIdx=cats.indexOf(cat);
-                  const itemColor=catsWithColors[globalIdx]?._color||b.color;
-                  return (
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"10px 12px"}}>
-                      <div style={{width:7,height:7,borderRadius:"50%",background:itemColor,flexShrink:0}}/>
-                      <input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,name:e.target.value}:c))} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
-                      <div style={{display:"flex",alignItems:"center",gap:4}}>
-                        <span style={{color:"#6b8cce",fontSize:13}}>$</span>
-                        <input type="number" inputMode="decimal" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,amount:e.target.value}:c))} style={{background:"none",border:"none",outline:"none",color:itemColor,fontSize:16,width:80,textAlign:"right",...GS}}/>
-                      </div>
-                      {inc>0&&Number(cat.amount)>0&&<span style={{fontSize:10,color:"#6b8cce",minWidth:36,textAlign:"right"}}>{((Number(cat.amount)/inc)*100).toFixed(0)}%</span>}
-                      <button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==globalIdx))} aria-label="Remove" style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:0}}>×</button>
-                    </div>
-                  );
-                })}
-                <div style={{display:"flex",gap:8}}>
-                  <input value={newNames["estimated"]} onChange={e=>setNewNames(p=>({...p,estimated:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&addCat("estimated")} placeholder="Add variable expense..." style={{background:"#0d1b3e",border:"1px dashed #facc1544",borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:12,flex:1,outline:"none",...GS}}/>
-                  <button onClick={()=>addCat("estimated")} style={{background:"none",border:"1px solid #facc1544",borderRadius:8,padding:"7px 12px",color:"#facc15",cursor:"pointer",fontSize:12,...GS}}>+ Add</button>
-                </div>
-              </Card>
-            );
-          })()}
-        </div>
-
-        {/* ── COLUMN 3: Investments ── */}
-        <div className="budget-desktop-show" style={{display:"none"}}>
-          {(()=>{
-            const b=BUCKETS.find(bk=>bk.key==="investment");
-            const bucketTotal=totalInvMonthly;
-            const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
-            return (
-              <Card style={{border:`1px solid ${b.color}33`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                  <div><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}><span style={{fontSize:16}}>{b.icon}</span><div style={{fontSize:14,color:b.color,fontWeight:"bold",...GS}}>{b.label}</div></div><div style={{fontSize:11,color:"#6b8cce",marginLeft:24}}>{b.desc}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:16,color:b.color,fontWeight:"bold",...GS}}>{fmt(bucketTotal)}</div>{inc>0&&<div style={{fontSize:10,color:"#6b8cce"}}>{pct}% of income</div>}</div>
-                </div>
-                {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}><div style={{width:pct+"%",height:"100%",background:b.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/></div>}
-                {totalInvMonthly===0?(<div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No investment contributions set yet</div>):(
-                  <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
-                    {INV_ACCOUNTS.map(acct=>{
-                      const inv=investments.find(i=>i.id===acct.id);
-                      const monthly=inv?invMonthly(inv):0;
-                      if(monthly<=0) return null;
-                      return (<div key={acct.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}><span style={{color:"#e8e4d9"}}>{acct.icon} {acct.label.replace(" Contribution","")}</span><span style={{color:acct.color,fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</span></div>);
-                    })}
-                    <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:12,color:"#6b8cce"}}>Total investing</span><span style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalInvMonthly)}/mo</span></div>
-                    {inc>0&&<div style={{marginTop:6,fontSize:11,color:totalInvMonthly/inc>=0.20?"#4ade80":totalInvMonthly/inc>=0.10?"#facc15":"#f87171"}}>{totalInvMonthly/inc>=0.20?"✓ At or above 20% target":totalInvMonthly/inc>=0.10?"Getting there — aim for 20%":"Below 10% — increase contributions"}</div>}
-                  </div>
-                )}
-                <button onClick={()=>setView("investments")} style={{width:"100%",background:"none",border:"1px dashed #4ade8044",borderRadius:8,padding:"8px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>📈 Manage Investments →</button>
-              </Card>
-            );
-          })()}
-        </div>
-
-      </div>{/* end desktop grid */}
 
       {view==="buckets"&&BUCKETS.map(bucket=>{
         const bucketCats=(bucket.key==="subscription"||bucket.key==="fixed"||bucket.key==="investment")?[]:cats.filter(c=>c.bucket===bucket.key);
