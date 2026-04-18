@@ -7417,6 +7417,134 @@ function ToolWrapper({title,onBack,onHome,contentId,children}) {
 }
 
 // ─── WHAT-IF SIMULATOR ────────────────────────────────────────────────────────
+// ─── BUDGET PDF ───────────────────────────────────────────────────────────────
+function BudgetPDFBtn({income,total,remaining,fixedCosts,totalFixed,subs,totalSub,subMonthly,FREQ_OPTIONS,estimated,totalEst,investments,totalInv,invMonthly,INV_ACCOUNTS,INV_FREQ}) {
+  const [preparing,setPreparing]=useState(false);
+
+  const handlePrint=()=>{
+    setPreparing(true);
+    setTimeout(()=>{
+      setPreparing(false);
+      const date=new Date().toLocaleDateString("en-CA",{year:"numeric",month:"long",day:"numeric"});
+      const f=(n)=>"$"+Number(n||0).toLocaleString("en-CA",{minimumFractionDigits:2,maximumFractionDigits:2});
+      const pct=(n)=>income>0?((n/income)*100).toFixed(1)+"%":"—";
+
+      const sectionHeader=(title,color,total,pctStr)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid ${color};padding-bottom:6px;margin-bottom:12px;">
+          <div style="font-size:15px;font-weight:bold;color:${color}">${title}</div>
+          <div style="text-align:right">
+            <span style="font-size:15px;font-weight:bold;color:${color}">${f(total)}/mo</span>
+            <span style="font-size:11px;color:#888;margin-left:8px">${pctStr} of income</span>
+          </div>
+        </div>`;
+
+      const row=(label,amount,note="",color="#222")=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+          <div>
+            <span style="font-size:13px;color:#333">${label}</span>
+            ${note?`<span style="font-size:10px;color:#888;margin-left:8px">${note}</span>`:""}
+          </div>
+          <span style="font-size:13px;font-weight:bold;color:${color}">${f(amount)}</span>
+        </div>`;
+
+      const html=`<!DOCTYPE html><html><head><title>Budget Breakdown</title><style>
+        body{font-family:Georgia,serif;background:#fff;color:#222;padding:32px;max-width:640px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+        *{box-sizing:border-box;}
+        .section{background:#f9f9f9;border-radius:8px;padding:18px 20px;margin-bottom:20px;}
+        .summary-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;}
+        .summary-tile{background:#f9f9f9;border-radius:8px;padding:14px;text-align:center;}
+        @media print{body{zoom:0.85;}}
+      </style></head><body>
+        <div style="text-align:center;margin-bottom:28px;border-bottom:2px solid #cc0000;padding-bottom:20px;">
+          <h1 style="font-size:24px;margin:0 0 4px;color:#cc0000">Budget Breakdown</h1>
+          <div style="font-size:12px;color:#888">${date}</div>
+        </div>
+
+        <!-- Income summary -->
+        <div style="background:#f0f7f0;border-radius:8px;padding:16px 20px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase">Monthly Income</div>
+            <div style="font-size:28px;font-weight:bold;color:#22863a">${f(income)}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:#888">Allocated</div>
+            <div style="font-size:18px;font-weight:bold;color:${total>income?"#cc0000":"#22863a"}">${f(total)}</div>
+            <div style="font-size:12px;color:${remaining>=0?"#22863a":"#cc0000"}">${remaining>=0?"Left over: "+f(remaining):"Over budget: "+f(Math.abs(remaining))}</div>
+          </div>
+        </div>
+
+        <!-- Summary tiles -->
+        <div class="summary-grid">
+          ${[
+            {label:"Fixed Costs",val:totalFixed,color:"#cc3333"},
+            {label:"Subscriptions",val:totalSub,color:"#7c3aed"},
+            {label:"Variable",val:totalEst,color:"#b45309"},
+            {label:"Investments",val:totalInv,color:"#15803d"},
+            {label:"Total Out",val:total,color:total>income?"#cc0000":"#333"},
+            {label:"Remaining",val:Math.abs(remaining),color:remaining>=0?"#15803d":"#cc0000"},
+          ].map(x=>`<div class="summary-tile">
+            <div style="font-size:10px;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">${x.label}</div>
+            <div style="font-size:16px;font-weight:bold;color:${x.color}">${f(x.val)}</div>
+            <div style="font-size:10px;color:#aaa">${pct(x.val)}</div>
+          </div>`).join("")}
+        </div>
+
+        <!-- Fixed Costs -->
+        ${fixedCosts.length>0?`<div class="section">
+          ${sectionHeader("🔒 Fixed Costs","#cc3333",totalFixed,pct(totalFixed))}
+          ${fixedCosts.map(f2=>row(f2.name,Number(f2.amount||0),"","#cc3333")).join("")}
+        </div>`:""}
+
+        <!-- Subscriptions -->
+        ${subs.length>0?`<div class="section">
+          ${sectionHeader("🔄 Subscriptions","#7c3aed",totalSub,pct(totalSub))}
+          ${subs.map(s=>{
+            const freq=FREQ_OPTIONS.find(f2=>f2.id===s.freq)?.label||"Monthly";
+            return row(s.name,subMonthly(s),freq+" → "+f(subMonthly(s))+"/mo","#7c3aed");
+          }).join("")}
+        </div>`:""}
+
+        <!-- Variable Expenses -->
+        ${estimated.filter(c=>Number(c.amount||0)>0).length>0?`<div class="section">
+          ${sectionHeader("📊 Variable Expenses","#b45309",totalEst,pct(totalEst))}
+          ${estimated.filter(c=>Number(c.amount||0)>0).map(c=>row(c.name,Number(c.amount||0),"","#b45309")).join("")}
+        </div>`:""}
+
+        <!-- Investments -->
+        ${totalInv>0?`<div class="section">
+          ${sectionHeader("📈 Investments","#15803d",totalInv,pct(totalInv))}
+          ${INV_ACCOUNTS.map(acct=>{
+            const inv=investments.find(i=>i.id===acct.id);
+            const monthly=inv?invMonthly(inv):0;
+            if(monthly<=0) return "";
+            const freq=INV_FREQ.find(f2=>f2.id===inv.freq)?.label||"Monthly";
+            return row(acct.label,monthly,freq+" → "+f(monthly)+"/mo · "+f(monthly*12)+"/yr","#15803d");
+          }).join("")}
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #ddd;font-size:11px;color:#888">
+            Investment rate: <strong>${pct(totalInv)}</strong> of income${income>0&&totalInv/income>=0.20?" — ✓ At or above 20% target":income>0?" — Aim for 20% of income":""}
+          </div>
+        </div>`:""}
+
+        <div style="margin-top:28px;padding-top:16px;border-top:1px solid #ddd;font-size:10px;color:#aaa;text-align:center;">
+          Generated by FinHealth · ${date}
+        </div>
+      </body></html>`;
+
+      const w=window.open("","_blank");
+      w.document.write(html);
+      w.document.close();
+      setTimeout(()=>w.print(),400);
+    },300);
+  };
+
+  return (
+    <button onClick={handlePrint} disabled={preparing} className="action-btn"
+      style={{background:"none",border:"1px solid #1e3a5f",borderRadius:8,padding:"7px 12px",color:preparing?"#4a5a6a":"#6b8cce",cursor:preparing?"not-allowed":"pointer",fontSize:11,whiteSpace:"nowrap",...GS}}>
+      {preparing?"…":"↓ PDF"}
+    </button>
+  );
+}
+
 function StandaloneBudget({prefill=null,user,token,toolId}) {
   const [income,setIncome]=useState(prefill?.income||"");
   const [view,setView]=useState("buckets"); // "buckets" | "fixed" | "subscriptions"
@@ -7611,15 +7739,24 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
   );
 
   return (
-    <div style={{paddingBottom:100}}>
+    <div style={{paddingBottom:100}} id="budget-pdf-root">
       {/* Snapshot bar */}
       <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({income,cats})}/>
 
-      {/* View toggle */}
-      <div style={{display:"flex",gap:4,marginBottom:12,background:"#0d1b3e",borderRadius:10,padding:4}}>
-        {[{id:"buckets",label:"📊 Buckets"},{id:"fixed",label:"🔒 Fixed"},{id:"subscriptions",label:"🔄 Subs"},{id:"investments",label:"📈 Invest"}].map(v=>(
-          <button key={v.id} onClick={()=>setView(v.id)} className={`glow-btn${view===v.id?" active-tab":""}`} style={{flex:1,background:view===v.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px",color:view===v.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{v.label}</button>
-        ))}
+      {/* View toggle + PDF button */}
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
+        <div style={{display:"flex",gap:4,flex:1,background:"#0d1b3e",borderRadius:10,padding:4}}>
+          {[{id:"buckets",label:"📊 Buckets"},{id:"fixed",label:"🔒 Fixed"},{id:"subscriptions",label:"🔄 Subs"},{id:"investments",label:"📈 Invest"}].map(v=>(
+            <button key={v.id} onClick={()=>setView(v.id)} className={`glow-btn${view===v.id?" active-tab":""}`} style={{flex:1,background:view===v.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px",color:view===v.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{v.label}</button>
+          ))}
+        </div>
+        <BudgetPDFBtn
+          income={inc} total={total} remaining={remaining}
+          fixedCosts={fixedCosts} totalFixed={totalFixedMonthly}
+          subs={subs} totalSub={totalSubMonthly} subMonthly={subMonthly} FREQ_OPTIONS={FREQ_OPTIONS}
+          estimated={cats.filter(c=>c.bucket==="estimated")} totalEst={totalEst}
+          investments={investments} totalInv={totalInvMonthly} invMonthly={invMonthly} INV_ACCOUNTS={INV_ACCOUNTS} INV_FREQ={INV_FREQ}
+        />
       </div>
 
       {/* Income */}
