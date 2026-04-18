@@ -7419,8 +7419,108 @@ function ToolWrapper({title,onBack,onHome,contentId,children}) {
 // ─── WHAT-IF SIMULATOR ────────────────────────────────────────────────────────
 function StandaloneBudget({prefill=null,user,token,toolId}) {
   const [income,setIncome]=useState(prefill?.income||"");
-  const [view,setView]=useState("buckets"); // "buckets" | "5030"
-  const [period,setPeriod]=useState("monthly"); // "monthly" | "annual"
+  const [view,setView]=useState("buckets"); // "buckets" | "fixed" | "subscriptions"
+
+  // ── Subscription tracker state ─────────────────────────────────────────────
+  const FREQ_OPTIONS=[
+    {id:"weekly",   label:"Weekly",   factor:52/12},
+    {id:"biweekly", label:"Bi-weekly",factor:26/12},
+    {id:"monthly",  label:"Monthly",  factor:1},
+    {id:"annual",   label:"Annual",   factor:1/12},
+  ];
+  const initSubs=()=>{
+    try{const s=localStorage.getItem("fh_subscriptions");if(s)return JSON.parse(s);}catch{}
+    return [
+      {id:1,name:"Netflix",       amount:"18",  freq:"monthly"},
+      {id:2,name:"Spotify",       amount:"11",  freq:"monthly"},
+      {id:3,name:"Phone Bill",    amount:"60",  freq:"monthly"},
+    ];
+  };
+  const [subs,setSubs]=useState(initSubs);
+  const [newSub,setNewSub]=useState({name:"",amount:"",freq:"monthly"});
+
+  const saveSubs=(updated)=>{
+    setSubs(updated);
+    try{localStorage.setItem("fh_subscriptions",JSON.stringify(updated));}catch{}
+  };
+  const addSub=()=>{
+    if(!newSub.name.trim()||!newSub.amount) return;
+    saveSubs([...subs,{id:Date.now(),...newSub}]);
+    setNewSub({name:"",amount:"",freq:"monthly"});
+  };
+  const updateSub=(id,field,val)=>saveSubs(subs.map(s=>s.id===id?{...s,[field]:val}:s));
+  const deleteSub=(id)=>saveSubs(subs.filter(s=>s.id!==id));
+
+  const subMonthly=(s)=>{
+    const factor=FREQ_OPTIONS.find(f=>f.id===s.freq)?.factor||1;
+    return Number(s.amount||0)*factor;
+  };
+  const totalSubMonthly=subs.reduce((sum,s)=>sum+subMonthly(s),0);
+  const totalSubAnnual=totalSubMonthly*12;
+
+  // ── Fixed costs tracker state ──────────────────────────────────────────────
+  const initFixed=()=>{
+    try{const s=localStorage.getItem("fh_fixed_costs");if(s)return JSON.parse(s);}catch{}
+    return [
+      {id:1,name:"Rent / Mortgage", amount:""},
+      {id:2,name:"Car Payment",     amount:""},
+      {id:3,name:"Insurance",       amount:""},
+    ];
+  };
+  const [fixedCosts,setFixedCosts]=useState(initFixed);
+  const [newFixed,setNewFixed]=useState({name:"",amount:""});
+
+  const saveFixed=(updated)=>{
+    setFixedCosts(updated);
+    try{localStorage.setItem("fh_fixed_costs",JSON.stringify(updated));}catch{}
+  };
+  const addFixed=()=>{
+    if(!newFixed.name.trim()||!newFixed.amount) return;
+    saveFixed([...fixedCosts,{id:Date.now(),...newFixed}]);
+    setNewFixed({name:"",amount:""});
+  };
+  const updateFixed=(id,field,val)=>saveFixed(fixedCosts.map(f=>f.id===id?{...f,[field]:val}:f));
+  const deleteFixed=(id)=>saveFixed(fixedCosts.filter(f=>f.id!==id));
+
+  const totalFixedMonthly=fixedCosts.reduce((sum,f)=>sum+Number(f.amount||0),0);
+  const totalFixedAnnual=totalFixedMonthly*12;
+
+  // ── Investment tracker state ───────────────────────────────────────────────
+  const INV_FREQ=[
+    {id:"daily",     label:"Daily",      factor:365/12},
+    {id:"biweekly",  label:"Bi-weekly",  factor:26/12},
+    {id:"monthly",   label:"Monthly",    factor:1},
+    {id:"annual",    label:"Annual",     factor:1/12},
+  ];
+  const INV_ACCOUNTS=[
+    {id:"tfsa",    label:"TFSA Contribution",           color:"#4ade80", icon:"🇨🇦",
+     tip:"Tax-Free Savings Account — growth and withdrawals are tax-free. 2025 limit: $7,000"},
+    {id:"fhsa",    label:"FHSA Contribution",           color:"#22d3ee", icon:"🏠",
+     tip:"First Home Savings Account — tax-deductible contributions, tax-free growth. 2025 limit: $8,000/yr"},
+    {id:"nonreg",  label:"Non-Registered Contribution", color:"#facc15", icon:"📈",
+     tip:"Taxable investment account — no annual contribution limit, capital gains taxed at 50%"},
+    {id:"rrsp",    label:"Non-Matched RRSP",            color:"#a78bfa", icon:"🏦",
+     tip:"Contributions beyond any employer match. Deductible from taxable income. 2025 limit: $32,490"},
+  ];
+  const initInvestments=()=>{
+    try{const s=localStorage.getItem("fh_investments_budget");if(s)return JSON.parse(s);}catch{}
+    return INV_ACCOUNTS.map(a=>({id:a.id,amount:"",freq:"monthly"}));
+  };
+  const [investments,setInvestments]=useState(initInvestments);
+
+  const saveInvestments=(updated)=>{
+    setInvestments(updated);
+    try{localStorage.setItem("fh_investments_budget",JSON.stringify(updated));}catch{}
+  };
+  const updateInv=(id,field,val)=>saveInvestments(investments.map(inv=>inv.id===id?{...inv,[field]:val}:inv));
+
+  const invMonthly=(inv)=>{
+    const factor=INV_FREQ.find(f=>f.id===inv.freq)?.factor||1;
+    return Number(inv.amount||0)*factor;
+  };
+  const totalInvMonthly=investments.reduce((sum,inv)=>sum+invMonthly(inv),0);
+  const totalInvAnnual=totalInvMonthly*12;
+
   const BUCKETS = [
     {key:"fixed",label:"Fixed Costs",desc:"Same every month — non-negotiable",color:"#f87171",icon:"🔒",
       defaults:[{name:"Housing/Rent",amount:""},{name:"Insurance",amount:""},{name:"Car Payment",amount:""}]},
@@ -7428,6 +7528,8 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       defaults:[{name:"Phone Bill",amount:""},{name:"Netflix",amount:""},{name:"Gym",amount:""}]},
     {key:"estimated",label:"Estimated Costs",desc:"Variable — changes month to month",color:"#facc15",icon:"📊",
       defaults:[{name:"Groceries",amount:""},{name:"Transportation",amount:""},{name:"Dining Out",amount:""}]},
+    {key:"investment",label:"Investments",desc:"TFSA, FHSA, RRSP & Non-Reg contributions",color:"#4ade80",icon:"📈",
+      defaults:[]},
   ];
 
   const initCats = () => {
@@ -7443,9 +7545,14 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
   const [cats,setCats]=useState(initCats);
   const [newNames,setNewNames]=useState({fixed:"",subscription:"",estimated:""});
 
-  const totalBucket=(bucket)=>cats.filter(c=>c.bucket===bucket).reduce((s,c)=>s+Number(c.amount||0),0);
-  const totalFixed=totalBucket("fixed"),totalSub=totalBucket("subscription"),totalEst=totalBucket("estimated");
-  const total=totalFixed+totalSub+totalEst;
+  const totalBucket=(bucket)=>{
+    if(bucket==="subscription") return totalSubMonthly;
+    if(bucket==="fixed") return totalFixedMonthly;
+    if(bucket==="investment") return totalInvMonthly;
+    return cats.filter(c=>c.bucket===bucket).reduce((s,c)=>s+Number(c.amount||0),0);
+  };
+  const totalFixed=totalFixedMonthly,totalSub=totalSubMonthly,totalEst=totalBucket("estimated");
+  const total=totalFixed+totalSub+totalEst+totalInvMonthly;
 
   const addCat=(bucket)=>{
     const name=newNames[bucket].trim();
@@ -7474,7 +7581,7 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
   });
 
   const BUCKET_COLORS={"fixed":"#f87171","subscription":"#a78bfa","estimated":"#facc15","remaining":"#1e3a5f"};
-  const inc=period==="annual"?Number(income||0)/12:Number(income||0);
+  const inc=Number(income||0);
   const remaining=inc-total;
 
   const donutData=[
@@ -7484,10 +7591,11 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       bucket:c.bucket,
       _color:c._color,
     })),
+    totalInvMonthly>0?{name:"Investments",value:totalInvMonthly,bucket:"investment",_color:"#4ade80"}:null,
     remaining>0?{name:"Remaining",value:remaining,bucket:"remaining",_color:"#1e3a5f"}:null
   ].filter(Boolean);
 
-  // Collapse subscription segments into one for the donut
+  // Collapse subscription and fixed segments into one each for the donut
   const collapsedDonut=[];
   let subTotal=0;
   donutData.forEach(d=>{
@@ -7507,27 +7615,19 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       {/* Snapshot bar */}
       <SnapshotBar user={user} token={token} toolId={toolId} getInputs={()=>({income,cats})}/>
 
-      {/* View + Period toggles */}
-      <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <div style={{display:"flex",gap:4,flex:1,background:"#0d1b3e",borderRadius:10,padding:4}}>
-          {[{id:"buckets",label:"Buckets"},{id:"5030",label:"50/30/20"}].map(v=>(
-            <button key={v.id} onClick={()=>setView(v.id)} className={`glow-btn${view===v.id?" active-tab":""}`} style={{flex:1,background:view===v.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px",color:view===v.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>{v.label}</button>
-          ))}
-        </div>
-        <div style={{display:"flex",gap:4,background:"#0d1b3e",borderRadius:10,padding:4}}>
-          {[{id:"monthly",label:"Mo"},{id:"annual",label:"Yr"}].map(p=>(
-            <button key={p.id} onClick={()=>setPeriod(p.id)} className={`glow-btn${period===p.id?" active-tab":""}`} style={{background:period===p.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px 12px",color:period===p.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:12,...GS}}>{p.label}</button>
-          ))}
-        </div>
+      {/* View toggle */}
+      <div style={{display:"flex",gap:4,marginBottom:12,background:"#0d1b3e",borderRadius:10,padding:4}}>
+        {[{id:"buckets",label:"📊 Buckets"},{id:"fixed",label:"🔒 Fixed"},{id:"subscriptions",label:"🔄 Subs"},{id:"investments",label:"📈 Invest"}].map(v=>(
+          <button key={v.id} onClick={()=>setView(v.id)} className={`glow-btn${view===v.id?" active-tab":""}`} style={{flex:1,background:view===v.id?"#1a2235":"transparent",border:"none",borderRadius:8,padding:"7px",color:view===v.id?"#e8e4d9":"#6b8cce",cursor:"pointer",fontSize:11,...GS}}>{v.label}</button>
+        ))}
       </div>
 
       {/* Income */}
       <Card>
-        <SecTitle>{period==="monthly"?"Monthly":"Annual"} Income</SecTitle>
+        <SecTitle>Monthly Income</SecTitle>
         <div style={{display:"flex",alignItems:"center",background:"#0d1b3e",border:"1px solid #1e3a5f",borderRadius:8,padding:"10px 12px"}}>
           <span style={{color:"#6b8cce",marginRight:6,fontSize:14}}>$</span>
-          <input type="number" value={income} onChange={e=>setIncome(e.target.value)} placeholder={period==="monthly"?"5000":"60000"} style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
-          {period==="annual"&&Number(income||0)>0&&<span style={{color:"#6b8cce",fontSize:11,marginLeft:6,whiteSpace:"nowrap"}}>{fmt(Number(income)/12)}/mo</span>}
+          <input type="number" inputMode="decimal" autoComplete="off" value={income} onChange={e=>setIncome(e.target.value)} placeholder="5000" style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:16,width:"100%",...GS}}/>
         </div>
         {inc>0&&<div style={{marginTop:10}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
@@ -7541,37 +7641,8 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
         </div>}
       </Card>
 
-      {/* 50/30/20 View */}
-      {view==="5030"&&inc>0&&(
-        <Card>
-          <SecTitle>50/30/20 Rule Analysis</SecTitle>
-          <div style={{fontSize:11,color:"#6b8cce",marginBottom:14,lineHeight:1.6}}>The 50/30/20 rule: 50% Needs, 30% Wants, 20% Savings & Debt repayment.</div>
-          {[
-            {label:"Needs (50%)",target:0.5,actual:(totalFixed+totalEst)/inc,amount:totalFixed+totalEst,color:"#f87171",desc:"Housing, food, transport, utilities"},
-            {label:"Wants (30%)",target:0.3,actual:totalSub/inc,amount:totalSub,color:"#a78bfa",desc:"Dining, entertainment, subscriptions"},
-            {label:"Savings & Debt (20%)",target:0.2,actual:Math.max(0,remaining)/inc,amount:Math.max(0,remaining),color:"#4ade80",desc:"Investments, savings, debt payoff"},
-          ].map((row,i)=>{
-            const diff=row.actual-row.target;
-            const status=Math.abs(diff)<0.03?"On track":diff>0?"Over budget":"Under target";
-            const statusColor=Math.abs(diff)<0.03?"#4ade80":diff>0?"#f87171":"#facc15";
-            return (
-              <div key={i} style={{marginBottom:16,paddingBottom:i<2?16:0,borderBottom:i<2?"1px solid #1e3a5f":"none"}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                  <div><div style={{fontSize:13,color:row.color,fontWeight:"bold",...GS}}>{row.label}</div><div style={{fontSize:10,color:"#6b8cce"}}>{row.desc}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:14,color:"#e8e4d9",fontWeight:"bold",...GS}}>{fmt(Math.max(0,row.amount))}</div><div style={{fontSize:10,color:statusColor}}>{(row.actual*100).toFixed(0)}% · {status}</div></div>
-                </div>
-                <div style={{position:"relative",height:10,background:"#0d1b3e",borderRadius:5,overflow:"visible"}}>
-                  <div style={{height:"100%",width:Math.min(100,row.actual*100)+"%",background:row.color,borderRadius:5,opacity:0.8}}/>
-                  <div style={{position:"absolute",top:-2,left:(row.target*100)+"%",width:2,height:14,background:"#fff",borderRadius:1,transform:"translateX(-50%)",opacity:0.4}}/>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",marginTop:4,fontSize:9,color:"#2a4080"}}><span>0%</span><span>Target: {(row.target*100).toFixed(0)}%</span><span>100%</span></div>
-              </div>
-            );
-          })}
-        </Card>
-      )}
       {view==="buckets"&&BUCKETS.map(bucket=>{
-        const bucketCats=cats.filter(c=>c.bucket===bucket.key);
+        const bucketCats=(bucket.key==="subscription"||bucket.key==="fixed"||bucket.key==="investment")?[]:cats.filter(c=>c.bucket===bucket.key);
         const bucketTotal=totalBucket(bucket.key);
         const pct=inc>0?((bucketTotal/inc)*100).toFixed(1):"0";
         return (
@@ -7592,34 +7663,470 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
             {inc>0&&<div style={{background:"#0d1b3e",borderRadius:4,height:4,overflow:"hidden",marginBottom:14}}>
               <div style={{width:pct+"%",height:"100%",background:bucket.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
             </div>}
-            {bucketCats.map((cat,i)=>{
-              const globalIdx=cats.indexOf(cat);
-              const itemColor=catsWithColors[globalIdx]?._color||bucket.color;
-              return (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"10px 12px"}}>
-                  <div style={{width:7,height:7,borderRadius:"50%",background:itemColor,flexShrink:0}}/>
-                  <input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,name:e.target.value}:c))}
-                    style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
-                  <div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <span style={{color:"#6b8cce",fontSize:13}}>$</span>
-                    <input type="number" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,amount:e.target.value}:c))}
-                      style={{background:"none",border:"none",outline:"none",color:itemColor,fontSize:16,width:80,textAlign:"right",...GS}}/>
+
+            {/* Investment bucket — lump total with manage link */}
+            {bucket.key==="investment"?(
+              <div>
+                {totalInvMonthly===0?(
+                  <div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No investment contributions set yet</div>
+                ):(
+                  <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                    {INV_ACCOUNTS.map(acct=>{
+                      const inv=investments.find(i=>i.id===acct.id);
+                      const monthly=inv?invMonthly(inv):0;
+                      if(monthly<=0) return null;
+                      return (
+                        <div key={acct.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}>
+                          <span style={{color:"#e8e4d9"}}>{acct.icon} {acct.label.replace(" Contribution","")}</span>
+                          <span style={{color:acct.color,fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</span>
+                        </div>
+                      );
+                    })}
+                    <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                      <span style={{fontSize:12,color:"#6b8cce"}}>Total investing</span>
+                      <span style={{fontSize:13,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalInvMonthly)}/mo</span>
+                    </div>
                   </div>
-                  {inc>0&&Number(cat.amount)>0&&<span style={{fontSize:10,color:"#6b8cce",minWidth:36,textAlign:"right"}}>{((Number(cat.amount)/inc)*100).toFixed(0)}%</span>}
-                  <button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==globalIdx))} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:0}}>×</button>
+                )}
+                <button onClick={()=>setView("investments")} style={{width:"100%",background:"none",border:"1px dashed #4ade8044",borderRadius:8,padding:"8px",color:"#4ade80",cursor:"pointer",fontSize:12,...GS}}>
+                  📈 Manage Investments →
+                </button>
+              </div>
+
+            /* Fixed bucket — lump total with manage link */
+            ):bucket.key==="fixed"?(
+              <div>
+                {fixedCosts.length===0?(
+                  <div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No fixed costs added yet</div>
+                ):(
+                  <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                    {fixedCosts.map(f=>(
+                      <div key={f.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}>
+                        <span style={{color:"#e8e4d9"}}>{f.name}</span>
+                        <span style={{color:"#f87171",fontWeight:"bold",...GS}}>{fmt(Number(f.amount||0))}/mo</span>
+                      </div>
+                    ))}
+                    <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                      <span style={{fontSize:12,color:"#6b8cce"}}>{fixedCosts.length} fixed cost{fixedCosts.length!==1?"s":""}</span>
+                      <span style={{fontSize:13,color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalFixedMonthly)}/mo</span>
+                    </div>
+                  </div>
+                )}
+                <button onClick={()=>setView("fixed")} style={{width:"100%",background:"none",border:"1px dashed #f8717144",borderRadius:8,padding:"8px",color:"#f87171",cursor:"pointer",fontSize:12,...GS}}>
+                  🔒 Manage Fixed Costs →
+                </button>
+              </div>
+
+            /* Subscription bucket — lump total with manage link */
+            ):bucket.key==="subscription"?(
+              <div>
+                {subs.length===0?(
+                  <div style={{textAlign:"center",padding:"16px 0",color:"#6b8cce",fontSize:12}}>No subscriptions added yet</div>
+                ):(
+                  <div style={{background:"#0d1b3e",borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                    {subs.map(s=>(
+                      <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,fontSize:12}}>
+                        <span style={{color:"#e8e4d9"}}>{s.name}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{color:"#6b8cce",fontSize:10}}>{FREQ_OPTIONS.find(f=>f.id===s.freq)?.label}</span>
+                          <span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(subMonthly(s))}/mo</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{borderTop:"1px solid #1e3a5f",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between"}}>
+                      <span style={{fontSize:12,color:"#6b8cce"}}>{subs.length} subscription{subs.length!==1?"s":""}</span>
+                      <span style={{fontSize:13,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(totalSubMonthly)}/mo</span>
+                    </div>
+                  </div>
+                )}
+                <button onClick={()=>setView("subscriptions")} style={{width:"100%",background:"none",border:"1px dashed #a78bfa44",borderRadius:8,padding:"8px",color:"#a78bfa",cursor:"pointer",fontSize:12,...GS}}>
+                  🔄 Manage Subscriptions →
+                </button>
+              </div>
+            ):(
+              /* Variable/Estimated bucket — editable rows */
+              <>
+                {bucketCats.map((cat,i)=>{
+                  const globalIdx=cats.indexOf(cat);
+                  const itemColor=catsWithColors[globalIdx]?._color||bucket.color;
+                  return (
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,background:"#0d1b3e",borderRadius:10,padding:"10px 12px"}}>
+                      <div style={{width:7,height:7,borderRadius:"50%",background:itemColor,flexShrink:0}}/>
+                      <input value={cat.name} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,name:e.target.value}:c))}
+                        style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:13,flex:1,...GS}}/>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <span style={{color:"#6b8cce",fontSize:13}}>$</span>
+                        <input type="number" inputMode="decimal" value={cat.amount} onChange={e=>setCats(p=>p.map((c,idx)=>idx===globalIdx?{...c,amount:e.target.value}:c))}
+                          style={{background:"none",border:"none",outline:"none",color:itemColor,fontSize:16,width:80,textAlign:"right",...GS}}/>
+                      </div>
+                      {inc>0&&Number(cat.amount)>0&&<span style={{fontSize:10,color:"#6b8cce",minWidth:36,textAlign:"right"}}>{((Number(cat.amount)/inc)*100).toFixed(0)}%</span>}
+                      <button onClick={()=>setCats(p=>p.filter((_,idx)=>idx!==globalIdx))} aria-label="Remove"
+                        style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:0}}>×</button>
+                    </div>
+                  );
+                })}
+                <div style={{display:"flex",gap:8}}>
+                  <input value={newNames[bucket.key]} onChange={e=>setNewNames(p=>({...p,[bucket.key]:e.target.value}))}
+                    onKeyDown={e=>e.key==="Enter"&&addCat(bucket.key)}
+                    placeholder={`Add ${bucket.label.toLowerCase()} item...`}
+                    style={{background:"#0d1b3e",border:`1px dashed ${bucket.color}44`,borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:12,flex:1,outline:"none",...GS}}/>
+                  <button onClick={()=>addCat(bucket.key)} style={{background:"none",border:`1px solid ${bucket.color}44`,borderRadius:8,padding:"7px 12px",color:bucket.color,cursor:"pointer",fontSize:12,...GS}}>+ Add</button>
                 </div>
-              );
-            })}
-            <div style={{display:"flex",gap:8}}>
-              <input value={newNames[bucket.key]} onChange={e=>setNewNames(p=>({...p,[bucket.key]:e.target.value}))}
-                onKeyDown={e=>e.key==="Enter"&&addCat(bucket.key)}
-                placeholder={`Add ${bucket.label.toLowerCase()} item...`}
-                style={{background:"#0d1b3e",border:`1px dashed ${bucket.color}44`,borderRadius:8,padding:"7px 10px",color:"#e8e4d9",fontSize:12,flex:1,outline:"none",...GS}}/>
-              <button onClick={()=>addCat(bucket.key)} style={{background:"none",border:`1px solid ${bucket.color}44`,borderRadius:8,padding:"7px 12px",color:bucket.color,cursor:"pointer",fontSize:12,...GS}}>+ Add</button>
-            </div>
+              </>
+            )}
           </Card>
         );
       })}
+
+      {/* Fixed Costs tab */}
+      {view==="fixed"&&(
+        <div>
+          {/* Summary */}
+          <div style={{background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717144",borderRadius:16,padding:"20px 24px",marginBottom:14,textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>TOTAL FIXED COSTS</div>
+            <div style={{fontSize:44,color:"#f87171",fontWeight:"bold",...GS,lineHeight:1}}>{fmt(totalFixedMonthly)}</div>
+            <div style={{fontSize:12,color:"#6b8cce",marginTop:6}}>{fmt(totalFixedAnnual)} per year · {fixedCosts.length} item{fixedCosts.length!==1?"s":""}</div>
+            {inc>0&&<div style={{fontSize:11,color:"#f87171",marginTop:4}}>{((totalFixedMonthly/inc)*100).toFixed(1)}% of monthly income</div>}
+          </div>
+
+          {/* Fixed cost list */}
+          {fixedCosts.length>0&&(
+            <Card>
+              <SecTitle>Your Fixed Costs</SecTitle>
+              {fixedCosts.map((f,i)=>(
+                <div key={f.id} style={{marginBottom:i<fixedCosts.length-1?10:0,paddingBottom:i<fixedCosts.length-1?10:0,borderBottom:i<fixedCosts.length-1?"1px solid #1e3a5f":"none"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{flex:1}}>
+                      <input value={f.name} onChange={e=>updateFixed(f.id,"name",e.target.value)}
+                        style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}
+                        placeholder="Cost name"/>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4,background:"#0d1b3e",borderRadius:8,padding:"6px 10px"}}>
+                      <span style={{color:"#6b8cce",fontSize:12}}>$</span>
+                      <input type="number" inputMode="decimal" value={f.amount} onChange={e=>updateFixed(f.id,"amount",e.target.value)}
+                        style={{background:"none",border:"none",outline:"none",color:"#f87171",fontSize:15,width:80,textAlign:"right",...GS}}
+                        placeholder="0"/>
+                    </div>
+                    <button onClick={()=>deleteFixed(f.id)} aria-label="Remove"
+                      style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:"0 4px",minWidth:32}}>×</button>
+                  </div>
+                  {inc>0&&Number(f.amount)>0&&(
+                    <div style={{fontSize:11,color:"#6b8cce",marginTop:6,paddingLeft:2}}>
+                      {((Number(f.amount)/inc)*100).toFixed(1)}% of income · {fmt(Number(f.amount)*12)}/yr
+                    </div>
+                  )}
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* Add new fixed cost */}
+          <Card>
+            <SecTitle>Add Fixed Cost</SecTitle>
+            <div style={{marginBottom:10}}>
+              <Label>Name</Label>
+              <TxtInput value={newFixed.name} onChange={v=>setNewFixed(p=>({...p,name:v}))} placeholder="e.g. Rent, Car payment, Loan..."/>
+            </div>
+            <div style={{marginBottom:14}}>
+              <Label>Monthly Amount</Label>
+              <NumInput value={newFixed.amount} onChange={v=>setNewFixed(p=>({...p,amount:v}))} placeholder="0.00"/>
+            </div>
+            <button onClick={addFixed} disabled={!newFixed.name.trim()||!newFixed.amount}
+              className="action-btn"
+              style={{width:"100%",background:"linear-gradient(135deg,#1a0505,#0d1b3e)",border:"1px solid #f8717166",borderRadius:10,padding:"12px",color:"#f87171",fontSize:14,cursor:"pointer",...GS}}>
+              + Add Fixed Cost
+            </button>
+          </Card>
+
+          {fixedCosts.length>0&&inc>0&&(
+            <Card>
+              <SecTitle>Fixed vs Flexible</SecTitle>
+              <div style={{marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:12}}>
+                  <span style={{color:"#f87171"}}>Fixed Costs</span>
+                  <span style={{color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalFixedMonthly)} ({((totalFixedMonthly/inc)*100).toFixed(0)}%)</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4,fontSize:12}}>
+                  <span style={{color:"#a78bfa"}}>Subscriptions</span>
+                  <span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(totalSubMonthly)} ({inc>0?((totalSubMonthly/inc)*100).toFixed(0):0}%)</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:10,fontSize:12}}>
+                  <span style={{color:"#facc15"}}>Variable</span>
+                  <span style={{color:"#facc15",fontWeight:"bold",...GS}}>{fmt(totalEst)} ({inc>0?((totalEst/inc)*100).toFixed(0):0}%)</span>
+                </div>
+                <div style={{background:"#0d1b3e",borderRadius:6,height:12,overflow:"hidden",display:"flex"}}>
+                  <div style={{width:((totalFixedMonthly/inc)*100)+"%",background:"#f87171",transition:"width 0.5s"}}/>
+                  <div style={{width:((totalSubMonthly/inc)*100)+"%",background:"#a78bfa",transition:"width 0.5s"}}/>
+                  <div style={{width:((totalEst/inc)*100)+"%",background:"#facc15",transition:"width 0.5s"}}/>
+                </div>
+              </div>
+              <div style={{fontSize:11,color:"#6b8cce",marginTop:8}}>
+                Non-negotiable costs: <span style={{color:"#f87171",fontWeight:"bold",...GS}}>{fmt(totalFixedMonthly+totalSubMonthly)}/mo</span>
+                {" "}({((( totalFixedMonthly+totalSubMonthly)/inc)*100).toFixed(0)}% of income)
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Subscriptions tab */}
+      {view==="subscriptions"&&(
+        <div>
+          {/* Summary */}
+          <div style={{background:"linear-gradient(135deg,#1a0d2e,#0d1b3e)",border:"1px solid #a78bfa44",borderRadius:16,padding:"20px 24px",marginBottom:14,textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>TOTAL MONTHLY SUBSCRIPTIONS</div>
+            <div style={{fontSize:44,color:"#a78bfa",fontWeight:"bold",...GS,lineHeight:1}}>{fmt(totalSubMonthly)}</div>
+            <div style={{fontSize:12,color:"#6b8cce",marginTop:6}}>{fmt(totalSubAnnual)} per year · {subs.length} subscription{subs.length!==1?"s":""}</div>
+            {inc>0&&<div style={{fontSize:11,color:"#a78bfa",marginTop:4}}>{((totalSubMonthly/inc)*100).toFixed(1)}% of monthly income</div>}
+          </div>
+
+          {/* Subscription list */}
+          {subs.length>0&&(
+            <Card>
+              <SecTitle>Your Subscriptions</SecTitle>
+              {subs.map((s,i)=>{
+                const monthly=subMonthly(s);
+                const annual=monthly*12;
+                return (
+                  <div key={s.id} style={{marginBottom:i<subs.length-1?10:0,paddingBottom:i<subs.length-1?10:0,borderBottom:i<subs.length-1?"1px solid #1e3a5f":"none"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{flex:1}}>
+                        <input value={s.name} onChange={e=>updateSub(s.id,"name",e.target.value)}
+                          style={{background:"none",border:"none",outline:"none",color:"#e8e4d9",fontSize:14,width:"100%",...GS}}
+                          placeholder="Subscription name"/>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,background:"#0d1b3e",borderRadius:8,padding:"6px 10px"}}>
+                        <span style={{color:"#6b8cce",fontSize:12}}>$</span>
+                        <input type="number" inputMode="decimal" value={s.amount} onChange={e=>updateSub(s.id,"amount",e.target.value)}
+                          style={{background:"none",border:"none",outline:"none",color:"#a78bfa",fontSize:15,width:70,textAlign:"right",...GS}}
+                          placeholder="0"/>
+                      </div>
+                      <button onClick={()=>deleteSub(s.id)} aria-label="Remove"
+                        style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,padding:"0 4px",minWidth:32}}>×</button>
+                    </div>
+                    {/* Frequency selector */}
+                    <div style={{display:"flex",gap:4,marginTop:8}}>
+                      {FREQ_OPTIONS.map(f=>(
+                        <button key={f.id} onClick={()=>updateSub(s.id,"freq",f.id)}
+                          className="action-btn"
+                          style={{flex:1,background:s.freq===f.id?"#1a1040":"#0d1b3e",border:`1px solid ${s.freq===f.id?"#a78bfa66":"#1e3a5f"}`,borderRadius:6,padding:"5px 2px",color:s.freq===f.id?"#a78bfa":"#6b8cce",cursor:"pointer",fontSize:10,...GS}}>
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Monthly equivalent */}
+                    {Number(s.amount)>0&&(
+                      <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:11,color:"#6b8cce"}}>
+                        <span>= <span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</span></span>
+                        <span>{fmt(annual)}/yr</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+
+          {/* Add new subscription */}
+          <Card>
+            <SecTitle>Add Subscription</SecTitle>
+            <div style={{marginBottom:10}}>
+              <Label>Name</Label>
+              <TxtInput value={newSub.name} onChange={v=>setNewSub(p=>({...p,name:v}))} placeholder="e.g. Disney+, Hydro, Adobe..."/>
+            </div>
+            <div style={{marginBottom:10}}>
+              <Label>Amount</Label>
+              <NumInput value={newSub.amount} onChange={v=>setNewSub(p=>({...p,amount:v}))} placeholder="0.00"/>
+            </div>
+            <div style={{marginBottom:14}}>
+              <Label>Billing Frequency</Label>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+                {FREQ_OPTIONS.map(f=>(
+                  <button key={f.id} onClick={()=>setNewSub(p=>({...p,freq:f.id}))}
+                    className="action-btn"
+                    style={{background:newSub.freq===f.id?"#1a1040":"#0d1b3e",border:`1px solid ${newSub.freq===f.id?"#a78bfa88":"#1e3a5f"}`,borderRadius:8,padding:"8px 4px",color:newSub.freq===f.id?"#a78bfa":"#6b8cce",cursor:"pointer",fontSize:11,fontWeight:newSub.freq===f.id?"bold":"normal",...GS}}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              {newSub.amount&&<div style={{marginTop:8,fontSize:11,color:"#6b8cce"}}>
+                = <span style={{color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(Number(newSub.amount||0)*(FREQ_OPTIONS.find(f=>f.id===newSub.freq)?.factor||1))}/mo</span>
+                {" · "}{fmt(Number(newSub.amount||0)*(FREQ_OPTIONS.find(f=>f.id===newSub.freq)?.factor||1)*12)}/yr
+              </div>}
+            </div>
+            <button onClick={addSub} disabled={!newSub.name.trim()||!newSub.amount}
+              className="action-btn"
+              style={{width:"100%",background:"linear-gradient(135deg,#1a1040,#0d1b3e)",border:"1px solid #a78bfa66",borderRadius:10,padding:"12px",color:"#a78bfa",fontSize:14,cursor:"pointer",...GS}}>
+              + Add Subscription
+            </button>
+          </Card>
+
+          {subs.length>0&&(
+            <Card>
+              <SecTitle>Breakdown by Frequency</SecTitle>
+              {["monthly","annual","weekly","biweekly"].map(freq=>{
+                const freqSubs=subs.filter(s=>s.freq===freq);
+                if(freqSubs.length===0) return null;
+                const freqTotal=freqSubs.reduce((sum,s)=>sum+subMonthly(s),0);
+                return (
+                  <div key={freq} style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                      <span style={{fontSize:12,color:"#6b8cce"}}>{FREQ_OPTIONS.find(f=>f.id===freq)?.label} ({freqSubs.length})</span>
+                      <span style={{fontSize:12,color:"#a78bfa",fontWeight:"bold",...GS}}>{fmt(freqTotal)}/mo</span>
+                    </div>
+                    {freqSubs.map(s=>(
+                      <div key={s.id} style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#8fadd4",paddingLeft:12,marginBottom:3}}>
+                        <span>{s.name}</span>
+                        <span>{fmt(Number(s.amount))}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Investments tab */}
+      {view==="investments"&&(
+        <div>
+          {/* Summary */}
+          <div style={{background:"linear-gradient(135deg,#0d1a05,#0d1b3e)",border:"1px solid #4ade8044",borderRadius:16,padding:"20px 24px",marginBottom:14,textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#6b8cce",letterSpacing:3,marginBottom:6}}>TOTAL MONTHLY INVESTING</div>
+            <div style={{fontSize:44,color:"#4ade80",fontWeight:"bold",...GS,lineHeight:1}}>{fmt(totalInvMonthly)}</div>
+            <div style={{fontSize:12,color:"#6b8cce",marginTop:6}}>{fmt(totalInvAnnual)} per year</div>
+            {inc>0&&<div style={{fontSize:11,color:"#4ade80",marginTop:4}}>{((totalInvMonthly/inc)*100).toFixed(1)}% of monthly income</div>}
+            {inc>0&&totalInvMonthly>0&&(
+              <div style={{marginTop:10,fontSize:11,color:totalInvMonthly/inc>=0.20?"#4ade80":totalInvMonthly/inc>=0.10?"#facc15":"#f87171"}}>
+                {totalInvMonthly/inc>=0.20?"✓ At or above the 20% savings target":totalInvMonthly/inc>=0.10?"Getting there — aim for 20% of income":"Below 10% — consider increasing contributions"}
+              </div>
+            )}
+          </div>
+
+          {/* Per-account inputs */}
+          <Card>
+            <SecTitle>Contribution Schedule</SecTitle>
+            {INV_ACCOUNTS.map(acct=>{
+              const inv=investments.find(i=>i.id===acct.id)||{id:acct.id,amount:"",freq:"monthly"};
+              const monthly=invMonthly(inv);
+              const annual=monthly*12;
+              return (
+                <div key={acct.id} style={{marginBottom:20,paddingBottom:20,borderBottom:"1px solid #1e3a5f"}}>
+                  {/* Account header */}
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <span style={{fontSize:18}}>{acct.icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,color:acct.color,fontWeight:"bold",...GS}}>{acct.label}</div>
+                    </div>
+                    <InfoTip text={acct.tip}/>
+                  </div>
+
+                  {/* Amount input */}
+                  <div style={{display:"flex",alignItems:"center",gap:4,background:"#0d1b3e",border:`1px solid ${acct.color}44`,borderRadius:10,padding:"10px 14px",marginBottom:10}}>
+                    <span style={{color:"#6b8cce",fontSize:14,marginRight:2}}>$</span>
+                    <input type="number" inputMode="decimal" autoComplete="off"
+                      value={inv.amount} onChange={e=>updateInv(acct.id,"amount",e.target.value)}
+                      placeholder="0.00"
+                      style={{background:"none",border:"none",outline:"none",color:acct.color,fontSize:18,width:"100%",...GS}}/>
+                  </div>
+
+                  {/* Frequency selector */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:6}}>
+                    {INV_FREQ.map(f=>(
+                      <button key={f.id} onClick={()=>updateInv(acct.id,"freq",f.id)}
+                        className="action-btn"
+                        style={{background:inv.freq===f.id?"#0d2a1a":"#0d1b3e",border:`1px solid ${inv.freq===f.id?acct.color+"88":"#1e3a5f"}`,borderRadius:8,padding:"7px 4px",color:inv.freq===f.id?acct.color:"#6b8cce",cursor:"pointer",fontSize:11,fontWeight:inv.freq===f.id?"bold":"normal",...GS}}>
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Monthly equivalent */}
+                  {Number(inv.amount)>0&&(
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#6b8cce"}}>
+                      <span>= <span style={{color:acct.color,fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</span></span>
+                      <span>{fmt(annual)}/yr</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+
+          {/* Allocation breakdown */}
+          {totalInvMonthly>0&&(
+            <Card>
+              <SecTitle>Allocation Breakdown</SecTitle>
+              {INV_ACCOUNTS.map(acct=>{
+                const inv=investments.find(i=>i.id===acct.id)||{amount:"",freq:"monthly"};
+                const monthly=invMonthly(inv);
+                if(monthly<=0) return null;
+                const pct=totalInvMonthly>0?(monthly/totalInvMonthly*100).toFixed(0):0;
+                return (
+                  <div key={acct.id} style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span>{acct.icon}</span>
+                        <span style={{fontSize:12,color:"#e8e4d9"}}>{acct.label.replace(" Contribution","")}</span>
+                      </div>
+                      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                        <span style={{fontSize:10,color:"#6b8cce"}}>{pct}%</span>
+                        <span style={{fontSize:13,color:acct.color,fontWeight:"bold",...GS}}>{fmt(monthly)}/mo</span>
+                      </div>
+                    </div>
+                    <div style={{background:"#0d1b3e",borderRadius:4,height:6,overflow:"hidden"}}>
+                      <div style={{width:pct+"%",height:"100%",background:acct.color,borderRadius:4,transition:"width 0.5s cubic-bezier(0.34,1.56,0.64,1)"}}/>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{borderTop:"1px solid #1e3a5f",marginTop:12,paddingTop:12,display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,color:"#6b8cce"}}>Total monthly</span>
+                <span style={{fontSize:14,color:"#4ade80",fontWeight:"bold",...GS}}>{fmt(totalInvMonthly)}</span>
+              </div>
+            </Card>
+          )}
+
+          {/* 2025 limit guidance */}
+          <Card>
+            <SecTitle>2025 Contribution Limits</SecTitle>
+            {[
+              {label:"TFSA",limit:7000,color:"#4ade80"},
+              {label:"FHSA",limit:8000,color:"#22d3ee",note:"$40,000 lifetime"},
+              {label:"RRSP",limit:32490,color:"#a78bfa",note:"or 18% of prior yr income"},
+              {label:"Non-Reg",limit:null,color:"#facc15",note:"No limit"},
+            ].map((row,i)=>{
+              const inv=investments.find(v=>v.id===(row.label==="Non-Reg"?"nonreg":row.label.toLowerCase()));
+              const monthly=inv?invMonthly(inv):0;
+              const annual=monthly*12;
+              const pctUsed=row.limit?Math.min(100,(annual/row.limit)*100):null;
+              return (
+                <div key={i} style={{marginBottom:i<3?12:0,paddingBottom:i<3?12:0,borderBottom:i<3?"1px solid #1e3a5f":"none"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:pctUsed!==null?5:0}}>
+                    <div>
+                      <span style={{fontSize:12,color:row.color,fontWeight:"bold",...GS}}>{row.label}</span>
+                      {row.note&&<span style={{fontSize:10,color:"#6b8cce",marginLeft:8}}>{row.note}</span>}
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <span style={{fontSize:12,color:"#e8e4d9",...GS}}>{annual>0?fmt(annual):"-"}</span>
+                      {row.limit&&<span style={{fontSize:10,color:"#6b8cce",marginLeft:4}}>/ {fmt(row.limit)}</span>}
+                    </div>
+                  </div>
+                  {pctUsed!==null&&annual>0&&(
+                    <div style={{background:"#0d1b3e",borderRadius:4,height:5,overflow:"hidden"}}>
+                      <div style={{width:pctUsed+"%",height:"100%",background:pctUsed>=100?"#f87171":row.color,borderRadius:4,transition:"width 0.5s"}}/>
+                    </div>
+                  )}
+                  {pctUsed!==null&&annual>row.limit&&(
+                    <div style={{fontSize:10,color:"#f87171",marginTop:4}}>⚠️ Over {row.label} annual limit by {fmt(annual-row.limit)}</div>
+                  )}
+                </div>
+              );
+            })}
+          </Card>
+        </div>
+      )}
 
       {/* Donut chart - shown in both views */}
       {collapsedDonut.filter(d=>d.value>0).length>0&&(
@@ -7643,8 +8150,8 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
             ))}
           </div>
           {/* Bucket totals summary */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:12}}>
-            {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subscriptions 🔄",val:totalSub,color:"#a78bfa"},{label:"Estimated 📊",val:totalEst,color:"#facc15"}].filter(x=>x.val>0).map(x=>(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginTop:12}}>
+            {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subs 🔄",val:totalSub,color:"#a78bfa"},{label:"Variable 📊",val:totalEst,color:"#facc15"},{label:"Invest 📈",val:totalInvMonthly,color:"#4ade80"}].filter(x=>x.val>0).map(x=>(
               <div key={x.label} style={{background:"#0d1b3e",borderRadius:8,padding:"8px",textAlign:"center"}}>
                 <div style={{fontSize:9,color:"#6b8cce",marginBottom:3,...GS}}>{x.label}</div>
                 <div style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmt(x.val)}</div>
@@ -7657,11 +8164,11 @@ function StandaloneBudget({prefill=null,user,token,toolId}) {
       {/* Sticky totals bar */}
       <div className="sticky-footer-fade" style={{position:"fixed",bottom:0,left:0,right:0,background:"linear-gradient(135deg,#0d1b3e,#111827)",borderTop:"1px solid #1e3a5f",padding:"10px 16px 10px",paddingBottom:"max(10px,env(safe-area-inset-bottom))",zIndex:200}}>
         <div style={{maxWidth:520,margin:"0 auto"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,alignItems:"center"}}>
-            {[{label:"Fixed 🔒",val:totalFixed,color:"#f87171"},{label:"Subs 🔄",val:totalSub,color:"#a78bfa"},{label:"Variable 📊",val:totalEst,color:"#facc15"},{label:remaining>=0?"Left Over":"Over Budget",val:Math.abs(remaining),color:remaining>=0?"#4ade80":"#f87171"}].map(x=>(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:6,alignItems:"center"}}>
+            {[{label:"Fixed",val:totalFixed,color:"#f87171"},{label:"Subs",val:totalSub,color:"#a78bfa"},{label:"Variable",val:totalEst,color:"#facc15"},{label:"Invest",val:totalInvMonthly,color:"#4ade80"},{label:remaining>=0?"Left Over":"Over Budget",val:Math.abs(remaining),color:remaining>=0?"#4ade80":"#f87171"}].map(x=>(
               <div key={x.label} style={{textAlign:"center"}}>
                 <div style={{fontSize:9,color:"#6b8cce",marginBottom:2,...GS}}>{x.label}</div>
-                <div style={{fontSize:13,color:x.color,fontWeight:"bold",...GS}}>{fmtShort(x.val)}</div>
+                <div style={{fontSize:12,color:x.color,fontWeight:"bold",...GS}}>{fmtShort(x.val)}</div>
               </div>
             ))}
           </div>
