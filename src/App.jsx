@@ -1206,8 +1206,9 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
         <style>{`
           @media (min-width: 700px) {
             .fh-btn-grid { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 16px !important; max-width: 860px !important; align-items: stretch !important; }
+            .fh-btn-grid button { height: 100%; }
             .fh-btn-mobile { display: none !important; }
-            .fh-btn-desktop { display: flex !important; }
+            .fh-btn-desktop { display: flex !important; height: 100%; }
           }
           @media (max-width: 699px) {
             .fh-btn-grid { display: flex !important; flex-direction: column !important; gap: 12px !important; max-width: 420px !important; }
@@ -1222,22 +1223,18 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
             {label:"Check-Up Appointment",sub:"Enter or edit your income, debts and budget details",badge:"EDIT INFO",icon:"📋",bc:theme.badgeAppt,border:theme.btnApptBorder,bg:theme.btnApptBg,textColor:theme.btnApptText,fn:onAppointment},
             {label:"Individual Tools",sub:"Budget, retirement, tax, mortgage and 10 more calculators",badge:"TOOLS",icon:"🛠️",bc:theme.badgeTools,border:theme.btnToolsBorder,bg:theme.btnToolsBg,textColor:theme.btnToolsText,fn:onTools},
           ].map(btn=>(
-            <button key={btn.label} onClick={btn.fn} className="action-btn" style={{background:btn.bg,border:`1px solid ${btn.border}`,borderRadius:16,cursor:"pointer",color:btn.textColor,width:"100%",...GS,padding:0,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+            <button key={btn.label} onClick={btn.fn} className="action-btn" style={{background:btn.bg,border:`1px solid ${btn.border}`,borderRadius:16,cursor:"pointer",color:btn.textColor,width:"100%",...GS,padding:0,overflow:"hidden"}}>
 
-              {/* Desktop layout — pinned rows so all cards align */}
-              <div className="fh-btn-desktop" style={{flexDirection:"column",alignItems:"center",padding:"32px 24px 28px",flex:1,width:"100%"}}>
-                {/* Icon — always at top */}
-                <div style={{fontSize:36,lineHeight:1,marginBottom:18}}>{btn.icon}</div>
-                {/* Title — fixed height row, always same vertical position */}
-                <div style={{fontSize:16,fontWeight:"bold",color:btn.textColor,...GS,textAlign:"center",lineHeight:1.3,marginBottom:12,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}}>{btn.label}</div>
-                {/* Description — grows to fill space */}
-                <div style={{fontSize:12,color:dark?"#8fadd4":theme.textMuted,lineHeight:1.7,textAlign:"center",flex:1}}>{btn.sub}</div>
-                {/* Badge — always pinned at bottom */}
-                <div style={{marginTop:20,display:"inline-block",fontSize:10,color:btn.bc,letterSpacing:1,border:`1px solid ${btn.bc}55`,borderRadius:20,padding:"4px 14px"}}>{btn.badge}</div>
+              {/* Desktop layout — full height flex column with pinned rows */}
+              <div className="fh-btn-desktop" style={{flexDirection:"column",alignItems:"center",padding:"36px 24px 28px",width:"100%",height:"100%",boxSizing:"border-box"}}>
+                <div style={{fontSize:36,lineHeight:1,marginBottom:20}}>{btn.icon}</div>
+                <div style={{fontSize:16,fontWeight:"bold",color:btn.textColor,...GS,textAlign:"center",lineHeight:1.3,marginBottom:14,minHeight:44,display:"flex",alignItems:"center",justifyContent:"center"}}>{btn.label}</div>
+                <div style={{fontSize:12,color:dark?"#8fadd4":theme.textMuted,lineHeight:1.7,textAlign:"center",flexGrow:1}}>{btn.sub}</div>
+                <div style={{marginTop:24,display:"inline-block",fontSize:10,color:btn.bc,letterSpacing:1,border:`1px solid ${btn.bc}55`,borderRadius:20,padding:"4px 14px"}}>{btn.badge}</div>
               </div>
 
               {/* Mobile layout — horizontal row */}
-              <div className="fh-btn-mobile" style={{alignItems:"center",padding:"18px 20px",gap:16,flex:1,width:"100%"}}>
+              <div className="fh-btn-mobile" style={{alignItems:"center",padding:"18px 20px",gap:16,width:"100%",boxSizing:"border-box"}}>
                 <div style={{fontSize:26,lineHeight:1,flexShrink:0}}>{btn.icon}</div>
                 <div style={{flex:1,textAlign:"left"}}>
                   <div style={{fontSize:15,fontWeight:"bold",color:btn.textColor,marginBottom:3,...GS}}>{btn.label}</div>
