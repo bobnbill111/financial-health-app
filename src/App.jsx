@@ -1187,19 +1187,19 @@ function Homepage({onAppointment,onCheckup,onTools,onProfile,onSignIn,dark,setDa
         </button>
       </div>
 
-      {/* Main content — centred */}
-      <div style={{position:"relative",zIndex:1,width:"100%",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"80px 24px 40px"}}>
+      {/* Main content — top aligned */}
+      <div style={{position:"relative",zIndex:1,width:"100%",minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"90px 24px 40px"}}>
 
         {/* Logo + title */}
-        <div style={{...fade(0),textAlign:"center",marginBottom:36}}>
-          <svg width="80" height="80" viewBox="0 0 160 160" style={{animation:"heartbeat 3.5s ease-in-out infinite",display:"block",margin:"0 auto 16px"}}>
+        <div style={{...fade(0),textAlign:"center",marginBottom:24}}>
+          <svg width="56" height="56" viewBox="0 0 160 160" style={{animation:"heartbeat 3.5s ease-in-out infinite",display:"block",margin:"0 auto 12px"}}>
             <rect x="52" y="8" width="56" height="144" rx="10" fill="#cc0000"/>
             <rect x="8" y="52" width="144" height="56" rx="10" fill="#cc0000"/>
             <rect x="52" y="8" width="56" height="144" rx="10" fill="url(#sh)" opacity="0.25"/>
             <defs><linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="#ffffff"/><stop offset="100%" stopColor="transparent"/></linearGradient></defs>
           </svg>
-          <h1 style={{fontSize:36,margin:"0 0 8px",color:theme.text,fontWeight:"normal",letterSpacing:1}}>Financial <span style={{color:theme.titleAccent}}>Health</span></h1>
-          <div style={{fontSize:12,color:theme.textDim,letterSpacing:2,textTransform:"uppercase"}}>Your complete financial picture</div>
+          <h1 style={{fontSize:32,margin:"0 0 6px",color:theme.text,fontWeight:"normal",letterSpacing:1}}>Financial <span style={{color:theme.titleAccent}}>Health</span></h1>
+          <div style={{fontSize:11,color:theme.textDim,letterSpacing:2,textTransform:"uppercase"}}>Your complete financial picture</div>
         </div>
 
         {/* ── Desktop: 3 columns ── */}
